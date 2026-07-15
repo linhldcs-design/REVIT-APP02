@@ -41,10 +41,6 @@ namespace RevitAPP
                 .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
 
-            panel.AddPushButton<CheckForUpdatesCommand>("Cap Nhat")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
-
             panel.AddPushButton<HelloWorldCommand>("Hello World")
                 .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
