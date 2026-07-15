@@ -1,0 +1,10 @@
+<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>BeamRebarPro</Name>
+        <Assembly>BeamRebarPro\BeamRebarPro.dll</Assembly>
+        <AddInId>6C724E57-C632-4272-B8E2-54E904D9677E</AddInId>
+        <FullClassName>BeamRebarPro.Application</FullClassName>
+        <VendorId>Development</VendorId>
+        <VendorDescription></VendorDescription>
+    </AddIn>
+</RevitAddIns>

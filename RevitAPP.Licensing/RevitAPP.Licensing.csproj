@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- Multi-target: R23/R24 (Revit .NET Framework 4.8) + R25–R27 (Revit .NET 8). -->
+        <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+        <UseWindowsForms>false</UseWindowsForms>
+        <!-- Classlib thuần, khong ref Revit API. Dung chung boi RevitAPP (addin) va RevitMcpCommands (MCP tool).
+             Config khop RevitAPP (R25) de ProjectReference resolve; Debug/Release thuan cho unit test out-of-process. -->
+        <Configurations>Debug;Release;Debug.R22;Debug.R23;Debug.R24;Debug.R25;Debug.R26;Debug.R27;Release.R22;Release.R23;Release.R24;Release.R25;Release.R26;Release.R27</Configurations>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="System.Text.Json" Version="8.0.5"/>
+        <!-- Polyfill IsExternalInit (record/init) + cac API C# moi cho net48. -->
+        <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all"/>
+    </ItemGroup>
+
+    <!-- net48: HttpClient nam trong assembly System.Net.Http (khong tu ref). -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+        <Reference Include="System.Net.Http"/>
+    </ItemGroup>
+
+</Project>

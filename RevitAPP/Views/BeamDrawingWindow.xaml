@@ -1,0 +1,251 @@
+<Window x:Class="RevitAPP.Views.BeamDrawingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:RevitAPP.Views.Controls"
+        Title="Triển khai mặt cắt ngang dầm"
+        Width="1220" Height="760" MinWidth="1050" MinHeight="650"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Brush.Background}"
+        Foreground="{DynamicResource Brush.Text}"
+        FontFamily="{DynamicResource Font.Family}"
+        FontSize="{DynamicResource Font.Size.Body}">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RevitAPP;component/Resources/Themes/Theme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="PanelCard" TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="Padding" Value="{DynamicResource Spacing.Medium}"/>
+            </Style>
+            <Style x:Key="SectionHeader" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
+            <Style x:Key="FieldLabel" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+                <Setter Property="Margin" Value="0,0,0,4"/>
+            </Style>
+            <Style x:Key="DiagramCode" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="{DynamicResource Spacing.Large}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="270"/>
+            <ColumnDefinition Width="500"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Presets -->
+        <Border Grid.Column="0" Margin="0,0,8,0" Style="{DynamicResource PanelCard}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="TEMPLATE SETTING" Style="{DynamicResource SectionHeader}"/>
+                <TextBlock Grid.Row="1" Text="Setting Name" Style="{DynamicResource FieldLabel}"/>
+                <TextBox Grid.Row="2" Margin="0,0,0,8" Style="{DynamicResource TextBox.Standard}"
+                         Text="{Binding SettingName, UpdateSourceTrigger=PropertyChanged}"/>
+                <ListBox Grid.Row="3" Margin="0,0,0,8" ItemsSource="{Binding Presets}"
+                         SelectedItem="{Binding SelectedPreset}" DisplayMemberPath="SettingName"
+                         Background="{DynamicResource Brush.Background}" Foreground="{DynamicResource Brush.Text}"
+                         BorderBrush="{DynamicResource Brush.Border}"/>
+                <!-- Hàng nút CRUD: 3 nút đều, cao 30, cách đều 6px, chữ không bị cắt. -->
+                <UniformGrid Grid.Row="4" Columns="3" Margin="0,0,0,6" Height="30">
+                    <Button Content="Add" Margin="0,0,6,0" Style="{DynamicResource Button.Primary}"
+                            Command="{Binding AddPresetCommand}"/>
+                    <Button Content="Update" Margin="0,0,6,0" Style="{DynamicResource Button.Secondary}"
+                            Command="{Binding UpdatePresetCommand}"/>
+                    <Button Content="Delete" Style="{DynamicResource Button.Secondary}"
+                            Command="{Binding DeletePresetCommand}"/>
+                </UniformGrid>
+                <!-- Load/Export 1 hàng (2 nút rộng), Lên/Xuống 1 hàng riêng → chữ không bị cắt/chồng. -->
+                <UniformGrid Grid.Row="5" Columns="2" Height="30" Margin="0,0,0,6">
+                    <Button Content="Load" Margin="0,0,6,0" Style="{DynamicResource Button.Secondary}"
+                            Command="{Binding LoadPresetsCommand}"/>
+                    <Button Content="Export" Style="{DynamicResource Button.Secondary}"
+                            Command="{Binding ExportPresetsCommand}"/>
+                </UniformGrid>
+                <UniformGrid Grid.Row="6" Columns="2" Height="30">
+                    <Button Content="Lên" Margin="0,0,6,0" Style="{DynamicResource Button.Secondary}"
+                            Command="{Binding MovePresetUpCommand}"/>
+                    <Button Content="Xuống" Style="{DynamicResource Button.Secondary}"
+                            Command="{Binding MovePresetDownCommand}"/>
+                </UniformGrid>
+            </Grid>
+        </Border>
+
+        <!-- Cross-section diagram and dimension offsets -->
+        <Border Grid.Column="1" Margin="0,0,8,0" Style="{DynamicResource PanelCard}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="SƠ ĐỒ MẶT CẮT NGANG" Style="{DynamicResource SectionHeader}"/>
+                    <Border Background="{DynamicResource Brush.Background}" BorderBrush="{DynamicResource Brush.Border}"
+                            BorderThickness="1" Padding="{DynamicResource Spacing.Medium}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <controls:CrossSectionDiagramCanvas Grid.Column="0" Height="300"
+                                    Preview="{Binding SupportPreview}" Heading="GỐI" LeadersToLeft="True"
+                                    LongitudinalLabel="{Binding SelectedEndLongitudinalMraType}"
+                                    ReinforceLabel="{Binding SelectedEndReinforceL2MraType}"
+                                    StirrupLabel="{Binding SelectedEndStirrupTagType}"
+                                    ConcreteBrush="{DynamicResource Brush.Text}"
+                                    AccentBrush="{DynamicResource Brush.Accent}"
+                                    AnnotationBrush="{DynamicResource Brush.TextSecondary}"/>
+                                <controls:CrossSectionDiagramCanvas Grid.Column="1" Height="300"
+                                    Preview="{Binding MidSpanPreview}" Heading="NHỊP"
+                                    LongitudinalLabel="{Binding SelectedMidLongitudinalMraType}"
+                                    ReinforceLabel="{Binding SelectedMidReinforceL2MraType}"
+                                    StirrupLabel="{Binding SelectedMidStirrupTagType}"
+                                    ConcreteBrush="{DynamicResource Brush.Text}"
+                                    AccentBrush="{DynamicResource Brush.Accent}"
+                                    AnnotationBrush="{DynamicResource Brush.TextSecondary}"/>
+                            </Grid>
+                            <TextBlock Margin="0,4,0,0" TextAlignment="Center" FontSize="10"
+                                       Foreground="{DynamicResource Brush.TextSecondary}" TextWrapping="Wrap"
+                                       Text="Khung theo tỉ lệ dầm thật • leader nối tới type đang chọn • đai đọc từ model"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="DIM SPACING FACTOR" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Margin="0,0,0,8" Style="{DynamicResource TextBox.Standard}"
+                             Text="{Binding SpacingFactorText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="DISTANCE DIM TO SIDE BEAM (DS1) — mm" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Margin="0,0,0,8" Style="{DynamicResource TextBox.Standard}"
+                             Text="{Binding DistanceToSideBeamText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="DISTANCE DIM TO BOT FACE — mm" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Margin="0,0,0,8" Style="{DynamicResource TextBox.Standard}"
+                             Text="{Binding DistanceToBotFaceText, UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Text="TÊN VIEW MẶT CẮT" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Style="{DynamicResource TextBox.Standard}"
+                             Text="{Binding CrossSectionViewName, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Cross-section settings only -->
+        <Border Grid.Column="2" Style="{DynamicResource PanelCard}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="CẤU HÌNH MẶT CẮT NGANG" Style="{DynamicResource SectionHeader}"/>
+                    <TextBlock Text="ANNOTATION THEO TYPE THẬT TRONG PROJECT"
+                               Style="{DynamicResource SectionHeader}"/>
+                    <TextBlock Text="GỐI — Multi-Rebar Annotation thép dọc"
+                               Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding MultiRebarAnnotationTypeOptions}"
+                              SelectedItem="{Binding SelectedEndLongitudinalMraType}"
+                              ToolTip="Target hiện tại dùng BS-A2_SL &amp; DK (MCN)-P."/>
+                    <TextBlock Text="GỐI — Rebar Tag thép đai" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding RebarTagOptions}"
+                              SelectedItem="{Binding SelectedEndStirrupTagType}"
+                              ToolTip="Target hiện tại dùng A2_P_RT_DK&amp;KC_BOT."/>
+                    <TextBlock Text="GỐI — Tag thép tăng cường lớp 1 (1 cây)" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding RebarTagOptions}"
+                              SelectedItem="{Binding SelectedEndReinforceL1MraType}"
+                              ToolTip="Rebar Tag cho thép tăng cường lớp 1 (thường 1 cây, dùng IndependentTag) ở GỐI."/>
+                    <TextBlock Text="GỐI — Multi-Rebar Annotation thép tăng cường lớp 2 (≥2 cây)" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,12" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding MultiRebarAnnotationTypeOptions}"
+                              SelectedItem="{Binding SelectedEndReinforceL2MraType}"
+                              ToolTip="MRA type cho thép tăng cường lớp 2 (≥2 cây) ở GỐI. Bỏ trống = dùng MRA thép chủ."/>
+
+                    <TextBlock Text="NHỊP — Multi-Rebar Annotation thép dọc"
+                               Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding MultiRebarAnnotationTypeOptions}"
+                              SelectedItem="{Binding SelectedMidLongitudinalMraType}"/>
+                    <TextBlock Text="NHỊP — Rebar Tag thép đai" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding RebarTagOptions}"
+                              SelectedItem="{Binding SelectedMidStirrupTagType}"/>
+                    <TextBlock Text="NHỊP — Tag thép tăng cường lớp 1 (1 cây)" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding RebarTagOptions}"
+                              SelectedItem="{Binding SelectedMidReinforceL1MraType}"
+                              ToolTip="Rebar Tag cho thép tăng cường lớp 1 (thường 1 cây, dùng IndependentTag) ở NHỊP."/>
+                    <TextBlock Text="NHỊP — Multi-Rebar Annotation thép tăng cường lớp 2 (≥2 cây)" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,12" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding MultiRebarAnnotationTypeOptions}"
+                              SelectedItem="{Binding SelectedMidReinforceL2MraType}"
+                              ToolTip="MRA type cho thép tăng cường lớp 2 (≥2 cây) ở NHỊP. Bỏ trống = dùng MRA thép chủ."/>
+
+                    <TextBlock Text="DETAIL ITEM THAM CHIẾU" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,12" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding BreakLineOptions}" SelectedItem="{Binding SelectedBreakLine}"
+                              ToolTip="View mẫu đang dùng @BS-Break Line _Nhieu ty le: 1-10. Chưa tự đặt trong output cross-only."/>
+
+                    <CheckBox Content="SPOT ELEVATION" Margin="0,0,0,6" FontWeight="SemiBold"
+                              Style="{DynamicResource CheckBox.Standard}" IsChecked="{Binding SpotEnabled}"/>
+                    <ComboBox Margin="0,0,0,12" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding SpotTypeOptions}" SelectedItem="{Binding SelectedSpotType}"/>
+
+                    <CheckBox Content="DIMENSION" Margin="0,0,0,6" FontWeight="SemiBold"
+                              Style="{DynamicResource CheckBox.Standard}" IsChecked="{Binding DimensionEnabled}"/>
+                    <ComboBox Margin="0,0,0,12" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding DimensionTypeOptions}" SelectedItem="{Binding SelectedCrossDimType}"/>
+
+                    <TextBlock Text="VIEW TEMPLATE" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding ViewTemplateOptions}" SelectedItem="{Binding SelectedCrossViewTemplate}"/>
+                    <TextBlock Text="VIEWPORT" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding ViewportTypeOptions}" SelectedItem="{Binding SelectedCrossViewport}"/>
+                    <TextBlock Text="SECTION TYPE" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,6" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding SectionTypeOptions}" SelectedItem="{Binding SelectedCrossSectionType}"/>
+                    <TextBlock Text="SCALE" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Margin="0,0,0,12" Style="{DynamicResource TextBox.Standard}"
+                             Text="{Binding CrossScaleText, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <TextBlock Text="SHEET CÓ SẴN TRONG PROJECT" Style="{DynamicResource FieldLabel}"/>
+                    <ComboBox Margin="0,0,0,8" Style="{DynamicResource ComboBox.Standard}"
+                              ItemsSource="{Binding ExistingSheetOptions}"
+                              SelectedItem="{Binding SelectedExistingSheet}"
+                              IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True"
+                              MaxDropDownHeight="260"
+                              ToolTip="Gõ số sheet hoặc tên sheet, sau đó chọn đúng sheet trong danh sách."/>
+                    <TextBlock Text="SHEET NUMBER" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Margin="0,0,0,6" Style="{DynamicResource TextBox.Standard}" IsReadOnly="True"
+                             Text="{Binding SheetNumber}"/>
+                    <TextBlock Text="SHEET NAME" Style="{DynamicResource FieldLabel}"/>
+                    <TextBox Style="{DynamicResource TextBox.Standard}" IsReadOnly="True"
+                             Text="{Binding SheetName}"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="Tạo mặt cắt ngang" MinWidth="145" Style="{DynamicResource Button.Primary}"
+                    Command="{Binding OkCommand}"/>
+            <Button Content="Huỷ" MinWidth="90" Margin="8,0,0,0" Style="{DynamicResource Button.Secondary}"
+                    Command="{Binding CancelCommand}"/>
+        </StackPanel>
+    </Grid>
+</Window>

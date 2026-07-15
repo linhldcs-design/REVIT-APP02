@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>RevitAPP.Installer</AssemblyName>
+    <ApplicationIcon>Resources\RevitAPP.ico</ApplicationIcon>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Resources\RevitAPP.ico"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RevitAPP.Core\RevitAPP.Core.csproj"/>
+    <ProjectReference Include="..\RevitAPP.Licensing\RevitAPP.Licensing.csproj"/>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
+  </ItemGroup>
+</Project>

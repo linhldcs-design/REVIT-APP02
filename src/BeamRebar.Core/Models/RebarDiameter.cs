@@ -1,0 +1,20 @@
+namespace BeamRebar.Core.Models;
+
+/// <summary>
+///     Đường kính cốt thép thông dụng theo TCVN (mm). Dùng cho cả thép dọc (D12–D32) và đai (D6–D10).
+///     Lưu trữ là số nguyên mm để khớp tên RebarBarType trong Revit ("D16", "D6"...).
+/// </summary>
+public readonly record struct RebarDiameter(int Millimeters)
+{
+    /// <summary>Các đường kính chuẩn TCVN dùng trong UI ComboBox.</summary>
+    public static readonly IReadOnlyList<RebarDiameter> Standard =
+    [
+        new(6), new(8), new(10), new(12), new(14), new(16),
+        new(18), new(20), new(22), new(25), new(28), new(32)
+    ];
+
+    /// <summary>Tên hiển thị + khớp tên RebarBarType trong document, vd "D16".</summary>
+    public override string ToString() => $"D{Millimeters}";
+
+    public double Feet => Millimeters / 304.8;
+}

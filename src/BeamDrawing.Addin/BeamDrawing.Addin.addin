@@ -1,0 +1,10 @@
+<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>BeamDrawing</Name>
+        <Assembly>BeamDrawing.Addin\BeamDrawing.Addin.dll</Assembly>
+        <AddInId>D7B4A471-3023-403A-A390-415A5823A00D</AddInId>
+        <FullClassName>BeamDrawing.Addin.Application</FullClassName>
+        <VendorId>Development</VendorId>
+        <VendorDescription></VendorDescription>
+    </AddIn>
+</RevitAddIns>

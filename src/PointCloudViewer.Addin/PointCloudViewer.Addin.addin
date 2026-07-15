@@ -1,0 +1,14 @@
+<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>PointCloudViewer.Addin</Name>
+        <Assembly>PointCloudViewer.Addin\PointCloudViewer.Addin.dll</Assembly>
+        <AddInId>59834F7B-57E6-4CD5-A653-01C2B40E8B99</AddInId>
+        <FullClassName>PointCloudViewer.Addin.Application</FullClassName>
+        <VendorId>Development</VendorId>
+        <VendorDescription></VendorDescription>
+    </AddIn>
+    <ManifestSettings>
+        <UseRevitContext>False</UseRevitContext>
+        <ContextName>PointCloudViewer.Addin</ContextName>
+    </ManifestSettings>
+</RevitAddIns>

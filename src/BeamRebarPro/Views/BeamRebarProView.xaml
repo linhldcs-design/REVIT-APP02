@@ -1,0 +1,253 @@
+<Window
+    x:Class="BeamRebarPro.Views.BeamRebarProView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:viewModel="clr-namespace:BeamRebarPro.ViewModels"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance viewModel:BeamRebarProViewModel}"
+    WindowStartupLocation="CenterScreen"
+    Title="Quick Setting"
+    Height="525"
+    Width="1025"
+    MinHeight="525"
+    MinWidth="1025"
+    Background="#F6F7F8">
+    <Window.Resources>
+        <Style TargetType="TextBlock" x:Key="Label">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Foreground" Value="#1F2933" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="4,0" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+        </Style>
+        <Style TargetType="Button" x:Key="GearButton">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="Foreground" Value="#D00000" />
+            <Setter Property="Content" Value="⚙" />
+        </Style>
+        <Style TargetType="Ellipse" x:Key="BarDot">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Fill" Value="#D82932" />
+            <Setter Property="Stroke" Value="#111111" />
+            <Setter Property="StrokeThickness" Value="1.4" />
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#0AAE94" Height="8" />
+
+        <Grid Margin="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="290" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,2,8,0">
+                <TextBlock Text="A. Please Fill-in rebar quantity and diameter" Margin="0,0,0,12" />
+                <!-- Sơ đồ mặt cắt dầm + đánh số 1-7: dùng ảnh PNG gốc để khớp form mẫu 100%. -->
+                <Image Source="/BeamRebarPro;component/Resources/Images/BeamSectionDiagram.png"
+                       Stretch="Uniform" Width="285" HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <Grid Grid.Row="0" Grid.Column="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <StackPanel Margin="0,4,0,8">
+                            <TextBlock Text="1. Fill Top Additional Bar. Fill 0 if does not need it :" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding TopAdditionalEnabled}" VerticalAlignment="Center" Margin="8,0,12,0" />
+                                <ComboBox Width="48" ItemsSource="{Binding CountOptions}" SelectedItem="{Binding TopAdditionalCount}" IsEnabled="{Binding TopAdditionalEnabled}" />
+                                <TextBlock Text="x" Style="{StaticResource Label}" />
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding TopAdditionalDiameterMm}" IsEnabled="{Binding TopAdditionalEnabled}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock Text="Edge hook (mm):" Style="{StaticResource Label}" />
+                                <TextBox Width="58" Text="{Binding TopAdditionalEdgeHookDownLengthMm}" IsEnabled="{Binding TopAdditionalEnabled}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="2. Fill Main Top 1 Rebar :" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox Width="48" ItemsSource="{Binding CountOptions}" SelectedItem="{Binding MainTopCount}" />
+                                <TextBlock Text="x" Style="{StaticResource Label}" />
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding MainTopDiameterMm}" />
+                                <CheckBox Content="Hook 135" IsChecked="{Binding MainHookEnabled}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock Text="Bend down (mm):" Style="{StaticResource Label}" />
+                                <TextBox Width="58" Text="{Binding MainTopBendDownLengthMm}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="3. Fill Top Additional Bar Layer 2. Fill 0 if does not need it :" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding TopAdditionalLayer2Enabled}" VerticalAlignment="Center" Margin="8,0,12,0" />
+                                <ComboBox Width="48" ItemsSource="{Binding CountOptions}" SelectedItem="{Binding TopAdditionalLayer2Count}" IsEnabled="{Binding TopAdditionalLayer2Enabled}" />
+                                <TextBlock Text="x" Style="{StaticResource Label}" />
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding TopAdditionalLayer2DiameterMm}" IsEnabled="{Binding TopAdditionalLayer2Enabled}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="4. Fill Bot Additional Bar Layer 2. Fill 0 if does not need it :" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding BottomAdditionalLayer2Enabled}" VerticalAlignment="Center" Margin="8,0,12,0" />
+                                <ComboBox Width="48" ItemsSource="{Binding CountOptions}" SelectedItem="{Binding BottomAdditionalLayer2Count}" IsEnabled="{Binding BottomAdditionalLayer2Enabled}" />
+                                <TextBlock Text="x" Style="{StaticResource Label}" />
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding BottomAdditionalLayer2DiameterMm}" IsEnabled="{Binding BottomAdditionalLayer2Enabled}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="5. Fill Stirrup Diameter - Spacing - Distribution type:" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding StirrupDiameterMm}" />
+                                <RadioButton Content="A1 :" GroupName="StirrupMode" IsChecked="{Binding StirrupUniform}" VerticalAlignment="Center" Margin="8,0,4,0" />
+                                <TextBox Width="50" Text="{Binding StirrupSpacingEndMm}" />
+                                <TextBlock Text="L :" Style="{StaticResource Label}" />
+                                <TextBox Width="58" Text="1000" IsEnabled="False" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Width="70" />
+                                <RadioButton Content="A1 :" GroupName="StirrupMode" IsChecked="{Binding StirrupTwoEnds}" VerticalAlignment="Center" Margin="8,0,4,0" />
+                                <TextBox Width="50" Text="{Binding StirrupSpacingEndMm}" />
+                                <TextBlock Text="A2 :" Style="{StaticResource Label}" />
+                                <TextBox Width="50" Text="{Binding StirrupSpacingMidMm}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock Text="First to column:" Style="{StaticResource Label}" />
+                                <TextBox Width="50" Text="{Binding StirrupFirstDistanceMm}" />
+                                <TextBlock Text="mm" Style="{StaticResource Label}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="6. Fill Main Bottom 1 Rebar :" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox Width="48" ItemsSource="{Binding CountOptions}" SelectedItem="{Binding MainBottomCount}" />
+                                <TextBlock Text="x" Style="{StaticResource Label}" />
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding MainBottomDiameterMm}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Margin="0,0,0,8">
+                            <TextBlock Text="7. Fill Bottom Additional Bar. Fill 0 if does not need it :" Margin="0,0,0,5" />
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding BottomAdditionalEnabled}" VerticalAlignment="Center" Margin="8,0,12,0" />
+                                <ComboBox Width="48" ItemsSource="{Binding CountOptions}" SelectedItem="{Binding BottomAdditionalCount}" IsEnabled="{Binding BottomAdditionalEnabled}" />
+                                <TextBlock Text="x" Style="{StaticResource Label}" />
+                                <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding BottomAdditionalDiameterMm}" IsEnabled="{Binding BottomAdditionalEnabled}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid Grid.Column="1" Margin="12,4,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="86" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="42" />
+                        </Grid.ColumnDefinitions>
+                        <CheckBox Grid.Row="0" Grid.Column="0" IsChecked="{Binding CreateDrawingSheetEnabled}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="4" Text="8. Check this if you want to create drawing sheet" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Sheet Number:" Style="{StaticResource Label}" Margin="0,8,6,0" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SheetNumber}" Margin="0,8,10,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Sheet Name:" Style="{StaticResource Label}" Margin="0,8,6,0" />
+                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding SheetName}" Margin="0,8,10,0" />
+                        <Button Grid.Row="1" Grid.Column="4" Content="🔎" Foreground="#EF8A8A" FontSize="18" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="View Template" Style="{StaticResource Label}" Margin="0,8,6,0" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" ItemsSource="{Binding ViewTemplateOptions}" SelectedItem="{Binding ViewTemplateName}" Margin="0,8,10,0" />
+                        <Button Grid.Row="2" Grid.Column="4" Style="{StaticResource GearButton}" Margin="0,8,0,0" />
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                        <TextBlock Text="9. If beams work like a support (columns) please select them" Margin="0,0,0,5" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource GearButton}" Command="{Binding SelectSupportBeamsCommand}" />
+                            <TextBox Text="{Binding SupportBeamSummary, Mode=OneWay}" IsReadOnly="True" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Margin="0,0,0,12">
+                        <TextBlock Text="10. If there are some secondary beams please select it!" Margin="0,0,0,5" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource GearButton}" Command="{Binding SelectSecondaryBeamsCommand}" />
+                            <TextBox Text="{Binding SecondaryBeamSummary, Mode=OneWay}" IsReadOnly="True" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="3" Margin="0,0,0,12">
+                        <TextBlock Text="11. If you want to create rebars for multiple beams at the same time please click this button" TextWrapping="Wrap" Margin="0,0,0,5" />
+                        <Button Content="Multi beams" Command="{Binding MultiBeamsCommand}" HorizontalAlignment="Right" Width="84" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="4" Margin="0,0,0,12">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource GearButton}" Command="{Binding MoreSettingsCommand}" />
+                            <TextBlock Text="12. Click this button if you want to do more setting" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <Border Grid.Row="5" BorderBrush="#D8DEE4" BorderThickness="1" Background="White" Padding="8" Visibility="Collapsed">
+                        <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <Button Content="Go to Detail Rebar Forms" Command="{Binding GoToDetailRebarFormsCommand}" />
+                <Button Content="Create Rebars Immediately" Command="{Binding CreateRebarCommand}" />
+                <Button Content="Close" Click="CloseButton_Click" Width="80" />
+            </StackPanel>
+        </Grid>
+    </DockPanel>
+</Window>

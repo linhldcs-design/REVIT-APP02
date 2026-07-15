@@ -1,0 +1,32 @@
+THOA THUAN SU DUNG PHAN MEM — RevitAPP: Bo cong cu ve thep (Rebar Tools)
+==========================================================================
+
+Ban quyen (C) 2026. Moi quyen duoc bao luu.
+
+1. CAP PHEP
+   Phan mem nay (gom add-in RevitAPP va 4 cong cu ve thep: cot, dam, mong don, tuong)
+   duoc cap phep su dung, KHONG phai ban dut. Quyen su dung gan voi tai khoan Google
+   da duoc cap phep va con thoi han hieu luc.
+
+2. KICH HOAT
+   Nguoi dung phai dang nhap bang tai khoan Google da duoc cap quyen thong qua nut
+   "License" tren thanh ribbon RevitAPP. Cong cu ve thep chi hoat dong khi license hop le.
+
+3. GIOI HAN
+   - Khong sao chep, phan phoi lai, dich nguoc (decompile), hoac sua doi phan mem.
+   - Khong chia se tai khoan da cap phep cho ben thu ba khong duoc uy quyen.
+   - Moi tai khoan chi danh cho nguoi dung/to chuc da dang ky.
+
+4. HET HAN VA THU HOI
+   Quyen su dung tu dong het khi qua ngay het han. Nha cung cap co the thu hoi quyen
+   bat cu luc nao neu vi pham thoa thuan.
+
+5. MIEN TRU TRACH NHIEM
+   Phan mem duoc cung cap "nhu hien co", khong bao hanh duoi bat ky hinh thuc nao.
+   Nha cung cap khong chiu trach nhiem cho bat ky thiet hai nao phat sinh tu viec su dung.
+
+6. KET NOI MANG
+   Phan mem ket noi Internet de xac thuc license (qua dich vu Google). Khi khong co mang,
+   phan mem cho phep su dung trong thoi gian gia han cache (7 ngay) ke tu lan xac thuc cuoi.
+
+Bang viec cai dat va su dung phan mem, ban dong y voi cac dieu khoan tren.

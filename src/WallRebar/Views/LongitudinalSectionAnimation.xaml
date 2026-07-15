@@ -1,0 +1,88 @@
+<UserControl x:Class="WallRebar.Views.LongitudinalSectionAnimation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="640" Height="330" Background="Transparent" SnapsToDevicePixels="True">
+            <Rectangle Canvas.Left="175" Canvas.Top="82" Width="365" Height="190"
+                       Fill="#FFD8D8D8" Stroke="#FF111111" StrokeThickness="1"/>
+
+            <TextBlock Text="{Binding CoverStartEndMm, StringFormat={}{0:0}}"
+                       Canvas.Left="35" Canvas.Top="62" FontSize="10"/>
+            <Line X1="42" Y1="78" X2="100" Y2="78" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="42,78 50,74 50,82" Fill="#FF111111"/>
+            <Polygon Points="100,78 92,74 92,82" Fill="#FF111111"/>
+
+            <Line X1="175" Y1="68" X2="540" Y2="68" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="175,68 183,64 183,72" Fill="#FF111111"/>
+            <Polygon Points="540,68 532,64 532,72" Fill="#FF111111"/>
+            <TextBlock Text="{Binding WallLengthMm, StringFormat=Length:{0:0}}"
+                       Canvas.Left="330" Canvas.Top="52" FontSize="10"/>
+
+            <Path Stroke="#FF111111" StrokeThickness="1" Fill="Transparent" Data="M150,18 C174,34 180,60 175,68"/>
+            <Polygon Points="175,68 168,63 176,60" Fill="#FF111111"/>
+            <TextBlock Text="{Binding HorizontalOffsetStartMm, StringFormat=Start:{0:0}}"
+                       Canvas.Left="112" Canvas.Top="16" FontSize="9"/>
+
+            <Path Stroke="#FF111111" StrokeThickness="1" Fill="Transparent" Data="M574,18 C548,34 544,60 540,68"/>
+            <Polygon Points="540,68 548,63 538,60" Fill="#FF111111"/>
+            <TextBlock Text="{Binding HorizontalOffsetEndMm, StringFormat=End:{0:0}}"
+                       Canvas.Left="548" Canvas.Top="16" FontSize="9"/>
+
+            <Canvas>
+                <Line X1="110" Y1="98" X2="600" Y2="98" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="110" Y1="138" X2="600" Y2="138" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="110" Y1="178" X2="600" Y2="178" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="110" Y1="218" X2="600" Y2="218" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="110" Y1="258" X2="600" Y2="258" Stroke="#FFE60000" StrokeThickness="2"/>
+            </Canvas>
+
+            <Canvas>
+                <Line X1="190" Y1="82" X2="190" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="245" Y1="82" X2="245" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="300" Y1="82" X2="300" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="355" Y1="82" X2="355" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="410" Y1="82" X2="410" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="465" Y1="82" X2="465" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+                <Line X1="520" Y1="82" X2="520" Y2="272" Stroke="#FFE60000" StrokeThickness="2"/>
+            </Canvas>
+
+            <Canvas Visibility="{Binding ShowAdditionalRebarPreview, Converter={StaticResource BoolToVisibility}}">
+                <Line X1="220" Y1="150" X2="220" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+                <Line X1="275" Y1="150" X2="275" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+                <Line X1="330" Y1="150" X2="330" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+                <Line X1="385" Y1="150" X2="385" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+                <Line X1="440" Y1="150" X2="440" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+                <Line X1="495" Y1="150" X2="495" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+            </Canvas>
+
+            <Rectangle Canvas.Left="42" Canvas.Top="82" Width="55" Height="190"
+                       Fill="#FFD8D8D8" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="36" Y1="82" X2="36" Y2="272" Stroke="#FF00AEEF" StrokeThickness="2"/>
+
+            <Line X1="22" Y1="150" X2="22" Y2="272" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="22,150 18,158 26,158" Fill="#FF111111"/>
+            <Polygon Points="22,272 18,264 26,264" Fill="#FF111111"/>
+            <Path Stroke="#FF111111" StrokeThickness="1" Fill="Transparent" Data="M22,272 C-6,285 0,315 22,320"/>
+            <Polygon Points="22,320 14,314 24,312" Fill="#FF111111"/>
+
+            <Ellipse Panel.ZIndex="2" Canvas.Left="55" Canvas.Top="100" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            <Ellipse Panel.ZIndex="2" Canvas.Left="78" Canvas.Top="100" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            <Path Stroke="#FF00AEEF" StrokeThickness="3" Fill="Transparent"
+                  Panel.ZIndex="1"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                  Data="M50,112 L90,112 M50,112 C44,112 44,96 50,96 L62,96 M90,112 C96,112 96,96 90,96 L78,96"/>
+            <Ellipse Canvas.Left="55" Canvas.Top="158" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            <Ellipse Canvas.Left="78" Canvas.Top="158" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            <Ellipse Panel.ZIndex="2" Canvas.Left="55" Canvas.Top="230" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            <Ellipse Panel.ZIndex="2" Canvas.Left="78" Canvas.Top="230" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            <Path Stroke="#FF00AEEF" StrokeThickness="3" Fill="Transparent"
+                  Panel.ZIndex="1"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                  Data="M50,242 L90,242 M50,242 C44,242 44,226 50,226 L62,226 M90,242 C96,242 96,226 90,226 L78,226"/>
+        </Canvas>
+    </Viewbox>
+</UserControl>

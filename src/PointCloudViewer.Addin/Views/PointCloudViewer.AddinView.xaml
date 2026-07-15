@@ -1,0 +1,122 @@
+<Window
+    x:Class="PointCloudViewer.Addin.Views.PointCloudViewer_AddinView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:viewModel="clr-namespace:PointCloudViewer.Addin.ViewModels"
+    xmlns:models="clr-namespace:PointCloudViewer.Core.Models;assembly=PointCloudViewer.Core"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance viewModel:PointCloudViewer_AddinViewModel}"
+    ResizeMode="NoResize"
+    WindowStartupLocation="CenterScreen"
+    Title="Point Cloud Settings"
+    Height="360"
+    Width="520"
+    Background="#F3F4F6">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="ModeButtonStyle" TargetType="RadioButton">
+            <Setter Property="Width" Value="92" />
+            <Setter Property="Height" Value="56" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="#1F2937" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#374151" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </Window.Resources>
+
+    <Border Padding="24" Background="#F9FAFB">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal">
+                <RadioButton
+                    Content="RGB"
+                    IsChecked="{Binding IsRgbMode, Mode=OneWay}"
+                    Command="{Binding SetModeCommand}"
+                    CommandParameter="{x:Static models:VisualizationMode.Rgb}"
+                    Style="{StaticResource ModeButtonStyle}" />
+                <RadioButton
+                    Content="Normal"
+                    IsChecked="{Binding IsNormalMode, Mode=OneWay}"
+                    Command="{Binding SetModeCommand}"
+                    CommandParameter="{x:Static models:VisualizationMode.Normal}"
+                    Style="{StaticResource ModeButtonStyle}" />
+                <RadioButton
+                    Content="X-ray"
+                    IsChecked="{Binding IsXRayMode, Mode=OneWay}"
+                    Command="{Binding SetModeCommand}"
+                    CommandParameter="{x:Static models:VisualizationMode.XRay}"
+                    Style="{StaticResource ModeButtonStyle}" />
+                <RadioButton
+                    Content="Color Map"
+                    IsChecked="{Binding IsColorMapMode, Mode=OneWay}"
+                    Command="{Binding SetModeCommand}"
+                    CommandParameter="{x:Static models:VisualizationMode.ColorMap}"
+                    Style="{StaticResource ModeButtonStyle}" />
+            </StackPanel>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="54" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="38" />
+                    <RowDefinition Height="38" />
+                    <RowDefinition Height="38" />
+                    <RowDefinition Height="38" />
+                    <RowDefinition Height="38" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="Point size" Style="{StaticResource LabelStyle}" />
+                <Slider Grid.Column="1" Minimum="{Binding MinPointSize}" Maximum="{Binding MaxPointSize}" Value="{Binding PointSize, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Column="2" Text="{Binding PointSize, StringFormat={}{0:F0}}" Style="{StaticResource ValueStyle}" />
+
+                <TextBlock Grid.Row="1" Text="Brightness" Style="{StaticResource LabelStyle}" />
+                <Slider Grid.Row="1" Grid.Column="1" Minimum="{Binding MinBrightness}" Maximum="{Binding MaxBrightness}" Value="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding UsesBrightnessContrast}" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Brightness, StringFormat={}{0:F0}}" Style="{StaticResource ValueStyle}" />
+
+                <TextBlock Grid.Row="2" Text="Contrast" Style="{StaticResource LabelStyle}" />
+                <Slider Grid.Row="2" Grid.Column="1" Minimum="{Binding MinContrast}" Maximum="{Binding MaxContrast}" Value="{Binding Contrast, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding UsesBrightnessContrast}" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding Contrast, StringFormat={}{0:F0}}" Style="{StaticResource ValueStyle}" />
+
+                <TextBlock Grid.Row="3" Text="Transparency" Style="{StaticResource LabelStyle}" />
+                <Slider Grid.Row="3" Grid.Column="1" Minimum="{Binding MinTransparency}" Maximum="{Binding MaxTransparency}" Value="{Binding Transparency, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding Transparency, StringFormat={}{0:F0}}" Style="{StaticResource ValueStyle}" />
+
+                <TextBlock Grid.Row="4" Text="X-ray contrast" Style="{StaticResource LabelStyle}" />
+                <Slider Grid.Row="4" Grid.Column="1" Minimum="{Binding MinXRayContrast}" Maximum="{Binding MaxXRayContrast}" Value="{Binding XRayContrast, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding UsesXRayContrast}" />
+                <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding XRayContrast, StringFormat={}{0:F0}}" Style="{StaticResource ValueStyle}" />
+            </Grid>
+
+            <TextBlock Grid.Row="4" Text="{Binding Status}" Foreground="#4B5563" TextWrapping="Wrap" />
+
+            <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Reset to defaults" Command="{Binding ResetCommand}" MinWidth="120" Height="32" Margin="0,0,8,0" />
+                <Button Content="Update" Command="{Binding RequestUpdateCommand}" MinWidth="88" Height="32" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

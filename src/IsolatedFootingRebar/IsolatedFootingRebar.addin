@@ -1,0 +1,10 @@
+<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>IsolatedFootingRebar</Name>
+        <Assembly>IsolatedFootingRebar\IsolatedFootingRebar.dll</Assembly>
+        <AddInId>CD93759C-D335-414B-BF1F-B0A9119E921D</AddInId>
+        <FullClassName>IsolatedFootingRebar.Application</FullClassName>
+        <VendorId>Development</VendorId>
+        <VendorDescription></VendorDescription>
+    </AddIn>
+</RevitAddIns>

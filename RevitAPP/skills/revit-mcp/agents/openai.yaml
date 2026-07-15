@@ -1,0 +1,4 @@
+interface:
+  display_name: "Revit MCP"
+  short_description: "Automate Revit through the local MCP socket."
+  default_prompt: "Use Revit MCP to inspect or modify the current Revit view."

@@ -1,0 +1,72 @@
+name: Release RevitAPP
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        revit: [22, 23, 24, 25, 26, 27]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          "VERSION=$v" >> $env:GITHUB_ENV
+      - name: Build RevitAPP
+        run: dotnet build RevitAPP/RevitAPP.csproj -c Release.R${{ matrix.revit }} -p:Version=${{ env.VERSION }} -p:DeployAddin=false -p:LaunchRevit=false
+      - name: Build updater self-contained
+        run: dotnet publish RevitAPP.Updater/RevitAPP.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o updater
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = "RevitAPP/bin/Release.R${{ matrix.revit }}"
+          $pkg = "package/RevitAPP"
+          New-Item -ItemType Directory -Force $pkg | Out-Null
+          Copy-Item "$out/RevitAPP.dll" $pkg
+          Get-ChildItem $out -Filter 'RevitAPP.*.json' | Copy-Item -Destination $pkg
+          Copy-Item 'updater/RevitAPP.Updater.exe' $pkg
+          Compress-Archive -Path 'package/*' -DestinationPath "RevitAPP-R${{ matrix.revit }}-$env:VERSION.zip"
+          $hash=(Get-FileHash "RevitAPP-R${{ matrix.revit }}-$env:VERSION.zip" -Algorithm SHA256).Hash
+          @{ year="20${{ matrix.revit }}"; file="RevitAPP-R${{ matrix.revit }}-$env:VERSION.zip"; sha256=$hash } | ConvertTo-Json | Set-Content "asset-${{ matrix.revit }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: revit-${{ matrix.revit }}
+          path: |
+            RevitAPP-R${{ matrix.revit }}-${{ env.VERSION }}.zip
+            asset-${{ matrix.revit }}.json
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create update manifest
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $packages=@{}
+          Get-ChildItem artifacts -Filter 'asset-*.json' | ForEach-Object {
+            $a=Get-Content $_ | ConvertFrom-Json
+            $packages[$a.year]=@{ url="https://github.com/${{ github.repository }}/releases/download/v$version/$($a.file)"; sha256=$a.sha256 }
+          }
+          @{ version=$version; notes="RevitAPP $version"; packages=$packages } | ConvertTo-Json -Depth 5 | Set-Content artifacts/latest.json
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/*.zip
+            artifacts/latest.json

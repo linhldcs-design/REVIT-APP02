@@ -1,0 +1,32 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Color tokens — light palette khớp ảnh "Isolated Footing v1.1" (nền xám sáng, accent teal, tab active đỏ). -->
+    <Color x:Key="Color.Background">#FFF0F0F0</Color>
+    <Color x:Key="Color.Surface">#FFFFFFFF</Color>
+    <Color x:Key="Color.SurfaceAlt">#FFF7F7F7</Color>
+    <Color x:Key="Color.Border">#FFD0D0D0</Color>
+    <Color x:Key="Color.Foreground.Primary">#FF1F1F1F</Color>
+    <Color x:Key="Color.Foreground.Secondary">#FF606060</Color>
+    <Color x:Key="Color.Accent">#FF13A085</Color>
+    <Color x:Key="Color.Accent.Foreground">#FFFFFFFF</Color>
+    <Color x:Key="Color.TabActive">#FFC0392B</Color>
+    <Color x:Key="Color.TabActive.Foreground">#FFFFFFFF</Color>
+    <Color x:Key="Color.Diagram.Concrete">#FFE4E4E4</Color>
+    <Color x:Key="Color.Diagram.Rebar">#FFD21F1F</Color>
+
+    <SolidColorBrush x:Key="Brush.Background" Color="{DynamicResource Color.Background}"/>
+    <SolidColorBrush x:Key="Brush.Surface" Color="{DynamicResource Color.Surface}"/>
+    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="{DynamicResource Color.SurfaceAlt}"/>
+    <SolidColorBrush x:Key="Brush.Border" Color="{DynamicResource Color.Border}"/>
+    <SolidColorBrush x:Key="Brush.Foreground.Primary" Color="{DynamicResource Color.Foreground.Primary}"/>
+    <SolidColorBrush x:Key="Brush.Foreground.Secondary" Color="{DynamicResource Color.Foreground.Secondary}"/>
+    <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}"/>
+    <SolidColorBrush x:Key="Brush.Accent.Foreground" Color="{DynamicResource Color.Accent.Foreground}"/>
+    <SolidColorBrush x:Key="Brush.TabActive" Color="{DynamicResource Color.TabActive}"/>
+    <SolidColorBrush x:Key="Brush.TabActive.Foreground" Color="{DynamicResource Color.TabActive.Foreground}"/>
+    <SolidColorBrush x:Key="Brush.Diagram.Concrete" Color="{DynamicResource Color.Diagram.Concrete}"/>
+    <SolidColorBrush x:Key="Brush.Diagram.Rebar" Color="{DynamicResource Color.Diagram.Rebar}"/>
+
+</ResourceDictionary>

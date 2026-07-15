@@ -1,0 +1,10 @@
+<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>SheetAlign</Name>
+        <Assembly>SheetAlign.Addin\SheetAlign.Addin.dll</Assembly>
+        <AddInId>B2F4C8A1-6D3E-4A7B-9C12-3E5F8A0D1B42</AddInId>
+        <FullClassName>SheetAlign.Addin.Application</FullClassName>
+        <VendorId>Development</VendorId>
+        <VendorDescription>Cong cu can chinh view trong sheets theo luoi truc</VendorDescription>
+    </AddIn>
+</RevitAddIns>

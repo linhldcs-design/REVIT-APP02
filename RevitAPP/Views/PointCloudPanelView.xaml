@@ -1,0 +1,136 @@
+<UserControl x:Class="RevitAPP.Views.PointCloudPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource Brush.Background}"
+             FontFamily="{DynamicResource Font.Family}"
+             FontSize="{DynamicResource Font.Size.Body}"
+             Foreground="{DynamicResource Brush.Text}"
+             MinWidth="280">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RevitAPP;component/Resources/Themes/Theme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="{DynamicResource Spacing.Large}">
+
+            <!-- Header + refresh -->
+            <DockPanel Margin="0,0,0,12">
+                <TextBlock Text="Hiển thị Point Cloud" Style="{StaticResource TextBlock.Header}"/>
+                <Button DockPanel.Dock="Right" Content="Tải lại" HorizontalAlignment="Right"
+                        Style="{StaticResource Button.Secondary}" Command="{Binding RefreshCommand}"/>
+            </DockPanel>
+
+            <!-- Status / empty state -->
+            <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,0,0,8"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}"/>
+
+            <!-- Instance + native color mode -->
+            <StackPanel Visibility="{Binding HasPointClouds, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Point Cloud" Style="{StaticResource TextBlock.Label}"/>
+                <ComboBox Style="{StaticResource ComboBox.Standard}" Margin="0,0,0,12"
+                          ItemsSource="{Binding PointClouds}" SelectedItem="{Binding SelectedPointCloud}"
+                          DisplayMemberPath="Display"/>
+
+                <TextBlock Text="Chế độ màu (native)" Style="{StaticResource TextBlock.Label}"/>
+                <ComboBox Style="{StaticResource ComboBox.Standard}" Margin="0,0,0,8"
+                          ItemsSource="{Binding ColorModes}" SelectedItem="{Binding SelectedColorMode}"
+                          DisplayMemberPath="Display"/>
+
+                <StackPanel Visibility="{Binding IsFixedColorMode, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
+                    <TextBlock Text="Màu cố định" Style="{StaticResource TextBlock.Label}"/>
+                    <ItemsControl x:Name="SwatchHost">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+
+                <Button Content="Áp dụng màu" Style="{StaticResource Button.Primary}"
+                        HorizontalAlignment="Left" Command="{Binding ApplyColorModeCommand}" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- ===== Custom render (DirectContext3D) — slider như hình ===== -->
+            <Border Margin="0,16,0,0" Padding="12" CornerRadius="4"
+                    Background="{DynamicResource Brush.Surface}"
+                    Visibility="{Binding HasPointClouds, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <CheckBox Style="{StaticResource CheckBox.Standard}" Margin="0,0,0,10"
+                              Content="Custom render (chỉnh được kích thước/độ trong suốt)"
+                              IsChecked="{Binding CustomRenderEnabled, Mode=OneWay}"
+                              Command="{Binding ToggleCustomRenderCommand}"/>
+
+                    <!-- Point size -->
+                    <DockPanel Margin="0,0,0,2">
+                        <TextBlock Text="Kích thước điểm" Style="{StaticResource TextBlock.Label}"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding PointSize, StringFormat=N0}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </DockPanel>
+                    <Slider Style="{StaticResource Slider.Standard}" Minimum="1" Maximum="100"
+                            Value="{Binding PointSize}" IsEnabled="{Binding CanAdjustSliders}" Margin="0,0,0,8"/>
+
+                    <!-- Brightness -->
+                    <DockPanel Margin="0,0,0,2">
+                        <TextBlock Text="Độ sáng" Style="{StaticResource TextBlock.Label}"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Brightness, StringFormat=N0}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </DockPanel>
+                    <Slider Style="{StaticResource Slider.Standard}" Minimum="-100" Maximum="100"
+                            Value="{Binding Brightness}" IsEnabled="{Binding CanAdjustSliders}" Margin="0,0,0,8"/>
+
+                    <!-- Transparency -->
+                    <DockPanel Margin="0,0,0,2">
+                        <TextBlock Text="Độ trong suốt" Style="{StaticResource TextBlock.Label}"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Transparency, StringFormat=N0}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    </DockPanel>
+                    <Slider Style="{StaticResource Slider.Standard}" Minimum="0" Maximum="100"
+                            Value="{Binding Transparency}" IsEnabled="{Binding CanAdjustSliders}" Margin="0,0,0,8"/>
+
+                    <!-- Contrast (disabled — API không hỗ trợ) -->
+                    <TextBlock Text="Tương phản (Revit không hỗ trợ)" Style="{StaticResource TextBlock.Label}"/>
+                    <Slider Style="{StaticResource Slider.Standard}" Minimum="0" Maximum="100" Value="0"
+                            IsEnabled="False" Margin="0,0,0,8"
+                            ToolTip="Revit API không cho chỉnh tương phản point cloud."/>
+
+                    <!-- X-ray contrast (disabled) -->
+                    <TextBlock Text="X-ray (Revit không hỗ trợ)" Style="{StaticResource TextBlock.Label}"/>
+                    <Slider Style="{StaticResource Slider.Standard}" Minimum="0" Maximum="100" Value="0"
+                            IsEnabled="False" Margin="0,0,0,10"
+                            ToolTip="Revit API không cho chỉnh X-ray point cloud."/>
+
+                    <CheckBox Style="{StaticResource CheckBox.Standard}" Content="Dùng màu gốc (RGB)"
+                              IsChecked="{Binding UseOriginalColor}" IsEnabled="{Binding CanAdjustSliders}" Margin="0,0,0,10"/>
+
+                    <Button Content="Reset to defaults" Style="{StaticResource Button.Secondary}"
+                            HorizontalAlignment="Left" Command="{Binding ResetToDefaultsCommand}"
+                            IsEnabled="{Binding CanAdjustSliders}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Scans list -->
+            <StackPanel Margin="0,16,0,0"
+                        Visibility="{Binding HasPointClouds, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Scans" Style="{StaticResource TextBlock.Label}"/>
+                <ListBox ItemsSource="{Binding Scans}" MaxHeight="160"
+                         Background="{DynamicResource Brush.Background}"
+                         BorderBrush="{DynamicResource Brush.Border}" Foreground="{DynamicResource Brush.Text}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Style="{StaticResource CheckBox.Standard}" Content="{Binding Name}"
+                                      IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                      Command="{Binding DataContext.ToggleScanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      CommandParameter="{Binding}"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

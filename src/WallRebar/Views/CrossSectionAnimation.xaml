@@ -1,0 +1,81 @@
+<UserControl x:Class="WallRebar.Views.CrossSectionAnimation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="170" Height="430" Background="Transparent" SnapsToDevicePixels="True">
+            <Rectangle Canvas.Left="66" Canvas.Top="72" Width="48" Height="280"
+                       Fill="#FFD8D8D8" Stroke="#FF111111" StrokeThickness="1"/>
+            <Path Stroke="#FFE60000" StrokeThickness="2" Data="M66,22 L106,22 L106,72"/>
+            <Path Stroke="#FFE60000" StrokeThickness="2" Data="M66,352 L66,402 L106,402"/>
+
+            <Line X1="38" Y1="72" X2="38" Y2="352" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="34" Y1="72" X2="66" Y2="72" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="34" Y1="352" X2="66" Y2="352" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="38,72 34,80 42,80" Fill="#FF111111"/>
+            <Polygon Points="38,352 34,344 42,344" Fill="#FF111111"/>
+            <TextBlock Text="{Binding WallHeightMm, StringFormat=Height:{0:0}}"
+                       Canvas.Left="7" Canvas.Top="228" FontSize="10">
+                <TextBlock.LayoutTransform>
+                    <RotateTransform Angle="-90"/>
+                </TextBlock.LayoutTransform>
+            </TextBlock>
+
+            <Line X1="114" Y1="72" X2="142" Y2="72" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="114" Y1="112" X2="142" Y2="112" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="134" Y1="72" X2="134" Y2="112" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="134,112 130,104 138,104" Fill="#FF111111"/>
+
+            <Line X1="114" Y1="352" X2="142" Y2="352" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="114" Y1="402" X2="142" Y2="402" Stroke="#FF111111" StrokeThickness="1"/>
+            <Line X1="134" Y1="352" X2="134" Y2="402" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="134,352 130,360 138,360" Fill="#FF111111"/>
+
+            <Line X1="66" Y1="414" X2="114" Y2="414" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="66,414 74,410 74,418" Fill="#FF111111"/>
+            <Polygon Points="114,414 106,410 106,418" Fill="#FF111111"/>
+
+            <Canvas Panel.ZIndex="2">
+                <Ellipse Canvas.Left="78" Canvas.Top="94" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="94" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="78" Canvas.Top="134" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="134" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="78" Canvas.Top="174" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="174" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="78" Canvas.Top="214" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="214" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="78" Canvas.Top="254" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="254" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="78" Canvas.Top="294" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="294" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="78" Canvas.Top="334" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+                <Ellipse Canvas.Left="96" Canvas.Top="334" Width="7" Height="7" Fill="#FFE60000" Stroke="#FF111111"/>
+            </Canvas>
+
+            <Canvas Panel.ZIndex="1">
+                <Path Stroke="#FF00AEEF" StrokeThickness="3" Fill="Transparent"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Data="M72,144 L108,144 M72,144 C66,144 66,130 72,130 L84,130 M108,144 C114,144 114,130 108,130 L96,130"/>
+                <Path Stroke="#FF00AEEF" StrokeThickness="3" Fill="Transparent"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Data="M72,224 L108,224 M72,224 C66,224 66,210 72,210 L84,210 M108,224 C114,224 114,210 108,210 L96,210"/>
+                <Path Stroke="#FF00AEEF" StrokeThickness="3" Fill="Transparent"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Data="M72,304 L108,304 M72,304 C66,304 66,290 72,290 L84,290 M108,304 C114,304 114,290 108,290 L96,290"/>
+            </Canvas>
+
+            <Line X1="66" Y1="180" X2="114" Y2="180" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="66,180 74,176 74,184" Fill="#FF111111"/>
+            <Polygon Points="114,180 106,176 106,184" Fill="#FF111111"/>
+
+            <Line X1="114" Y1="130" X2="166" Y2="130" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="114,130 122,126 122,134" Fill="#FF111111"/>
+
+            <Line X1="114" Y1="220" X2="166" Y2="220" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="114,220 122,216 122,224" Fill="#FF111111"/>
+
+            <Line X1="114" Y1="296" X2="166" Y2="296" Stroke="#FF111111" StrokeThickness="1"/>
+            <Polygon Points="114,296 122,292 122,300" Fill="#FF111111"/>
+        </Canvas>
+    </Viewbox>
+</UserControl>

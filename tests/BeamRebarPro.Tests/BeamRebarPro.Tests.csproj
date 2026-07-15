@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1"/>
+        <PackageReference Include="xunit" Version="2.9.2"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2"/>
+    </ItemGroup>
+
+    <!--
+        Project addin target Revit (không reference trực tiếp được out-of-process). Link TRỰC TIẾP các
+        file logic thuần (không dùng Autodesk.Revit) để test đúng code thật, không bản sao. Khi thêm file
+        Core thuần mới, glob tự nhận; file chạm Revit API loại trừ tường minh bên dưới.
+    -->
+    <ItemGroup>
+        <Compile Include="..\..\src\BeamRebarPro\Models\**\*.cs">
+            <Link>Core\Models\%(RecursiveDir)%(Filename)%(Extension)</Link>
+        </Compile>
+        <Compile Include="..\..\src\BeamRebarPro\Services\SpanModelBuilder.cs">
+            <Link>Core\Services\SpanModelBuilder.cs</Link>
+        </Compile>
+        <Compile Include="..\..\src\BeamRebarPro\Services\QuickSettingValidator.cs">
+            <Link>Core\Services\QuickSettingValidator.cs</Link>
+        </Compile>
+        <Compile Include="..\..\src\BeamRebarPro\Services\QuickSettingFactory.cs">
+            <Link>Core\Services\QuickSettingFactory.cs</Link>
+        </Compile>
+    </ItemGroup>
+
+</Project>

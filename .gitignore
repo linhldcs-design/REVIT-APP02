@@ -1,0 +1,45 @@
+﻿#IDE folders
+*.idea/
+*.vs/
+*.vscode/
+
+#Project-specific folders
+*obj/
+*bin/
+
+#Build output folder
+/output/
+/artifacts/
+/_build/
+/exports/
+/install/
+/install-online/
+/install-rebar/
+/install-sheetalign/
+/source/
+
+#Local agent, package and IDE state
+/.agents/
+/.antigravitycli/
+/.claude/
+/.codex/
+/.dotnet/
+/.nuget-local/
+/.nuke/
+/.run/
+/.vs/
+
+#Scratch files
+/.gitignore.tmp
+/.sourcyroot
+/rebar-check.txt
+/temp_*
+*.log
+
+#User-specific files
+*.user
+tools/license-appsscript/deployed-config.local.json
+**/deployed-config.local.json
+**/appsettings.local.json
+**/*.pfx
+**/*.snk

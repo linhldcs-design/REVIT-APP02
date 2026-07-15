@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net48;net8.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+        <!-- Khớp config với Addin (R25) để ProjectReference resolve; thêm Debug/Release thuần cho test out-of-process. -->
+        <Configurations>Debug;Release;Debug.R22;Debug.R23;Debug.R24;Debug.R25;Debug.R26;Debug.R27;Release.R22;Release.R23;Release.R24;Release.R25;Release.R26;Release.R27</Configurations>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all"/>
+    </ItemGroup>
+
+</Project>

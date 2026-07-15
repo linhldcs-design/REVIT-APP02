@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PointCloudViewer.Addin/PointCloudViewer.Addin.csproj" />
+    <Project Path="src/PointCloudViewer.Core/PointCloudViewer.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PointCloudViewer.Core.Tests/PointCloudViewer.Core.Tests.csproj" />
+  </Folder>
+</Solution>

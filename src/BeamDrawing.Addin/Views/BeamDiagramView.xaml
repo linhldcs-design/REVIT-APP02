@@ -1,0 +1,17 @@
+<UserControl x:Class="BeamDrawing.Addin.Views.BeamDiagramView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Cột giữa hiển thị ảnh sơ đồ dầm (do user cung cấp, đặt tại
+        Resources/Icons/BeamDiagram.png). Dùng ảnh nền giúp khớp 100% bản chuẩn
+        thay vì vẽ tay từng nét. Ảnh thiếu → hiện hướng dẫn.
+    -->
+    <Grid Background="White">
+        <Image Source="/BeamDrawing.Addin;component/Resources/Icons/BeamDiagram.png"
+               Stretch="Uniform" Margin="8"
+               RenderOptions.BitmapScalingMode="HighQuality"/>
+        <TextBlock Text="Đặt ảnh sơ đồ tại Resources/Icons/BeamDiagram.png"
+                   Foreground="#999" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontSize="12" Panel.ZIndex="-1"/>
+    </Grid>
+</UserControl>

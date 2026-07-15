@@ -1,0 +1,10 @@
+<RevitAddIns>
+    <AddIn Type="Application">
+        <Name>FootingDrawing</Name>
+        <Assembly>FootingDrawing.Addin\FootingDrawing.Addin.dll</Assembly>
+        <AddInId>01671F77-4B0D-4B38-A46E-5CFA6A8C364F</AddInId>
+        <FullClassName>FootingDrawing.Addin.Application</FullClassName>
+        <VendorId>Development</VendorId>
+        <VendorDescription></VendorDescription>
+    </AddIn>
+</RevitAddIns>

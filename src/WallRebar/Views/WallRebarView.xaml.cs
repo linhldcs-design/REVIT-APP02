@@ -1,0 +1,32 @@
+using System.IO;
+using System.Windows.Threading;
+using WallRebar.ViewModels;
+
+namespace WallRebar.Views;
+
+public sealed partial class WallRebarView
+{
+    public WallRebarView(WallRebarViewModel viewModel)
+    {
+        DataContext = viewModel;
+        InitializeComponent();
+        viewModel.RequestClose += Close;
+        Dispatcher.UnhandledException += OnDispatcherUnhandledException;
+        Closed += (_, _) =>
+        {
+            viewModel.RequestClose -= Close;
+            Dispatcher.UnhandledException -= OnDispatcherUnhandledException;
+        };
+    }
+
+    private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "WallRebar");
+        Directory.CreateDirectory(dir);
+        File.AppendAllText(Path.Combine(dir, "ui-errors.log"),
+            $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {e.Exception}\n\n");
+        e.Handled = true;
+    }
+}
