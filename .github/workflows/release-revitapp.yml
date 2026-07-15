@@ -84,3 +84,4 @@ jobs:
           files: |
             artifacts/*.zip
             artifacts/latest.json
+            artifacts/RevitAPP.Installer.exe
