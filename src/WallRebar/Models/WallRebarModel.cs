@@ -19,8 +19,10 @@ public sealed record WallRebarModel
 
     // --- Móc đầu thanh dọc (Cross Section: Hook Type trên & dưới) ---
     public HookType TopHookType { get; init; } = HookType.Closed;
+    public HookBendDirection TopHookDirection { get; init; } = HookBendDirection.Inward;
     public double TopHookLengthMm { get; init; } = 100;
     public HookType BottomHookType { get; init; } = HookType.Closed;
+    public HookBendDirection BottomHookDirection { get; init; } = HookBendDirection.Inward;
     public double BottomHookLengthMm { get; init; } = 200;
 
     // --- Offset theo chiều cao (Cross Section) ---

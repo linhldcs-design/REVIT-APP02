@@ -66,9 +66,15 @@ public sealed class WallMeshCreator
         var p1 = frame.PointAt(alongStart, zTop, thicknessOffsetFeet);
 
         // Móc bẻ qua bề dày (vào trong bê tông). bendDir = ±DirThickness.
-        var bendDir = frame.DirThickness * hookBendSign;
+        var inwardBendDir = frame.DirThickness * hookBendSign;
+        var bottomBendDir = model.BottomHookDirection == HookBendDirection.Inward
+            ? inwardBendDir
+            : -inwardBendDir;
+        var topBendDir = model.TopHookDirection == HookBendDirection.Inward
+            ? inwardBendDir
+            : -inwardBendDir;
         var curves = BuildBarWithEndHooks(p0, p1, model.BottomHookType, model.BottomHookLengthMm / 304.8,
-            model.TopHookType, model.TopHookLengthMm / 304.8, bendDir);
+            bottomBendDir, model.TopHookType, model.TopHookLengthMm / 304.8, topBendDir);
 
         var normal = frame.DirAlong; // phương rải các thanh dọc
         if (!TryCreate(host, normal, curves, config, layoutFeet, "thép dọc", warnings))
@@ -121,7 +127,8 @@ public sealed class WallMeshCreator
     ///     móc + đoạn quặp (Closed) clamp để KHÔNG vượt quá thân thanh → tránh CreateFromCurves "Can't solve
     ///     Rebar Shape" với input quá lớn (vd hook length &gt; chiều cao tường).</summary>
     private static IList<Curve> BuildBarWithEndHooks(XYZ pBottom, XYZ pTop,
-        HookType bottomHook, double bottomLenFeet, HookType topHook, double topLenFeet, XYZ bendDir)
+        HookType bottomHook, double bottomLenFeet, XYZ bottomBendDir,
+        HookType topHook, double topLenFeet, XYZ topBendDir)
     {
         var curves = new List<Curve>();
         var barLen = pBottom.DistanceTo(pTop);
@@ -133,7 +140,7 @@ public sealed class WallMeshCreator
         // Móc chân (đầu pBottom).
         if (bottomHook != HookType.Straight && bottomLenFeet > 1e-6)
         {
-            var bend = pBottom + bendDir * bottomLenFeet;
+            var bend = pBottom + bottomBendDir * bottomLenFeet;
             if (bottomHook == HookType.Closed)
             {
                 var lip = Math.Min(bottomLenFeet * 0.5, maxLip);
@@ -147,7 +154,7 @@ public sealed class WallMeshCreator
         // Móc đỉnh (đầu pTop).
         if (topHook != HookType.Straight && topLenFeet > 1e-6)
         {
-            var bend = pTop + bendDir * topLenFeet;
+            var bend = pTop + topBendDir * topLenFeet;
             curves.Add(Line.CreateBound(pTop, bend));
             if (topHook == HookType.Closed)
             {

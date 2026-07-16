@@ -127,6 +127,9 @@
                     <TextBlock Text="Top Offset:" Canvas.Left="184" Canvas.Top="88"/>
                     <TextBox Style="{StaticResource NumBox}" Width="70" Canvas.Left="248" Canvas.Top="80" Text="{Binding TopOffsetMm}"/>
                     <TextBlock Text="mm" Canvas.Left="322" Canvas.Top="88"/>
+                    <TextBlock Text="Bẻ:" Canvas.Left="12" Canvas.Top="88"/>
+                    <ComboBox Width="112" Height="30" Canvas.Left="42" Canvas.Top="80"
+                              ItemsSource="{Binding HookDirectionOptions}" SelectedItem="{Binding TopHookDirection}"/>
 
                     <TextBlock Text="D" Canvas.Left="150" Canvas.Top="250"/>
                     <ComboBox Width="72" Height="30" Canvas.Left="166" Canvas.Top="242"
@@ -152,6 +155,9 @@
                     <TextBlock Text="Bottom Offset:" Canvas.Left="168" Canvas.Top="422"/>
                     <TextBox Style="{StaticResource NumBox}" Width="72" Canvas.Left="252" Canvas.Top="414" Text="{Binding BottomOffsetMm}"/>
                     <TextBlock Text="mm" Canvas.Left="328" Canvas.Top="422"/>
+                    <TextBlock Text="Bẻ:" Canvas.Left="12" Canvas.Top="422"/>
+                    <ComboBox Width="112" Height="30" Canvas.Left="42" Canvas.Top="414"
+                              ItemsSource="{Binding HookDirectionOptions}" SelectedItem="{Binding BottomHookDirection}"/>
 
                     <TextBlock Text="Hook Type:" Canvas.Left="12" Canvas.Top="494"/>
                     <ComboBox Width="86" Height="60" Canvas.Left="78" Canvas.Top="474"

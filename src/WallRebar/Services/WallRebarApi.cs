@@ -24,8 +24,10 @@ public sealed record WallRebarApiOptions
 
     /// <summary>"Closed" | "Half" | "Straight" (không phân biệt hoa thường). Khác → Closed.</summary>
     public string TopHookType { get; init; } = "Closed";
+    public string TopHookDirection { get; init; } = "Inward";
     public double TopHookLengthMm { get; init; } = 100;
     public string BottomHookType { get; init; } = "Closed";
+    public string BottomHookDirection { get; init; } = "Inward";
     public double BottomHookLengthMm { get; init; } = 200;
 
     public double TopOffsetMm { get; init; }
@@ -85,8 +87,10 @@ public static class WallRebarApi
                 SpacingMm = options.TieSpacingMm
             },
             TopHookType = ParseHook(options.TopHookType),
+            TopHookDirection = ParseHookDirection(options.TopHookDirection),
             TopHookLengthMm = options.TopHookLengthMm,
             BottomHookType = ParseHook(options.BottomHookType),
+            BottomHookDirection = ParseHookDirection(options.BottomHookDirection),
             BottomHookLengthMm = options.BottomHookLengthMm,
             TopOffsetMm = options.TopOffsetMm,
             BottomOffsetMm = options.BottomOffsetMm,
@@ -107,4 +111,9 @@ public static class WallRebarApi
         "straight" => HookType.Straight,
         _ => HookType.Closed
     };
+
+    private static HookBendDirection ParseHookDirection(string? value) =>
+        value?.Trim().ToLowerInvariant() == "outward"
+            ? HookBendDirection.Outward
+            : HookBendDirection.Inward;
 }
