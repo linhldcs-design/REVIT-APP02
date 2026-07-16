@@ -40,8 +40,10 @@ public sealed partial class WallRebarViewModel : ObservableObject
 
     // --- Cross Section: Hook trên/dưới ---
     [ObservableProperty] private HookType _topHookType = HookType.Closed;
+    [ObservableProperty] private HookBendDirection _topHookDirection = HookBendDirection.Inward;
     [ObservableProperty] private double _topHookLengthMm = 100;
     [ObservableProperty] private HookType _bottomHookType = HookType.Closed;
+    [ObservableProperty] private HookBendDirection _bottomHookDirection = HookBendDirection.Inward;
     [ObservableProperty] private double _bottomHookLengthMm = 200;
     [ObservableProperty] private double _topOffsetMm;
     [ObservableProperty] private double _bottomOffsetMm = 250;
@@ -87,6 +89,8 @@ public sealed partial class WallRebarViewModel : ObservableObject
 
     public IReadOnlyList<int> DiameterOptions { get; } = RebarDiameter.Standard.Select(d => d.Millimeters).ToList();
     public IReadOnlyList<HookType> HookTypeOptions { get; } = [HookType.Closed, HookType.Half, HookType.Straight];
+    public IReadOnlyList<HookBendDirection> HookDirectionOptions { get; } =
+        [HookBendDirection.Inward, HookBendDirection.Outward];
     public bool ShowAdditionalRebarPreview =>
         DrawAdditionalRebar && (DrawAdditionalRebarInterior || DrawAdditionalRebarExterior);
 
@@ -187,8 +191,10 @@ public sealed partial class WallRebarViewModel : ObservableObject
         Horizontal = new WallLayerConfig { Diameter = new RebarDiameter(HorizontalDiameterMm), SpacingMm = HorizontalSpacingMm },
         Tie = new WallLayerConfig { Diameter = new RebarDiameter(TieDiameterMm), SpacingMm = TieSpacingMm },
         TopHookType = TopHookType,
+        TopHookDirection = TopHookDirection,
         TopHookLengthMm = TopHookLengthMm,
         BottomHookType = BottomHookType,
+        BottomHookDirection = BottomHookDirection,
         BottomHookLengthMm = BottomHookLengthMm,
         TopOffsetMm = TopOffsetMm,
         BottomOffsetMm = BottomOffsetMm,
@@ -211,8 +217,10 @@ public sealed partial class WallRebarViewModel : ObservableObject
         TieDiameterMm = m.Tie.Diameter.Millimeters;
         TieSpacingMm = m.Tie.SpacingMm;
         TopHookType = m.TopHookType;
+        TopHookDirection = m.TopHookDirection;
         TopHookLengthMm = m.TopHookLengthMm;
         BottomHookType = m.BottomHookType;
+        BottomHookDirection = m.BottomHookDirection;
         BottomHookLengthMm = m.BottomHookLengthMm;
         TopOffsetMm = m.TopOffsetMm;
         BottomOffsetMm = m.BottomOffsetMm;
