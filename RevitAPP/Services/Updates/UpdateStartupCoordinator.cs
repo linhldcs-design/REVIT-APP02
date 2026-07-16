@@ -7,12 +7,18 @@ namespace RevitAPP.Services.Updates;
 
 public static class UpdateStartupCoordinator
 {
+#if !DEBUG
     private static readonly object Sync = new();
     private static UpdateCheckResult? _result;
     private static bool _handled;
+#endif
 
     public static void Start(UIControlledApplication application)
     {
+#if DEBUG
+        // Local development builds must not be replaced by the latest public release on startup.
+        return;
+#else
         application.Idling += OnIdling;
         var revitYear = application.ControlledApplication.VersionNumber;
         _ = Task.Run(async () =>
@@ -30,8 +36,10 @@ public static class UpdateStartupCoordinator
                 Log.Warning(ex, "Automatic RevitAPP update check failed");
             }
         });
+#endif
     }
 
+#if !DEBUG
     private static void OnIdling(object? sender, IdlingEventArgs args)
     {
         UpdateCheckResult? result;
@@ -53,4 +61,5 @@ public static class UpdateStartupCoordinator
         if (dialog.Show() == TaskDialogResult.CommandLink1 && result.PendingPath != null)
             RevitAppUpdateService.LaunchInstaller(result.PendingPath);
     }
+#endif
 }
