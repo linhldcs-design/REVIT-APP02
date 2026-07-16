@@ -7,7 +7,7 @@ namespace WallRebar.Services.Rebar;
 /// <summary>
 ///     Tạo một lưới thép phẳng tại MỘT mặt tường (mặt A hoặc mặt B): thanh dọc (theo chiều cao) + thanh ngang
 ///     (theo chiều dài), rải đều theo bước. Lưới đặt cách mặt tường một <c>thicknessOffset</c> (feet).
-///     Móc đầu thanh dọc bẻ vào trong bê tông (qua bề dày) theo <see cref="HookType"/>.
+///     Móc đầu thanh dọc bẻ vào trong hoặc ra ngoài theo cấu hình từng đầu thanh.
 /// </summary>
 public sealed class WallMeshCreator
 {
@@ -21,7 +21,7 @@ public sealed class WallMeshCreator
     }
 
     /// <param name="thicknessOffsetFeet">Khoảng cách từ mặt A (gốc) tới lưới, qua bề dày.</param>
-    /// <param name="hookBendSign">+1: móc bẻ theo +DirThickness; -1: theo -DirThickness (vào trong bê tông).</param>
+    /// <param name="hookBendSign">Hướng vào trong của mặt lưới: +1 theo +DirThickness; -1 theo -DirThickness.</param>
     public WallMeshCreationResult Create(Element host, WallFrame frame, WallRebarModel model,
         double thicknessOffsetFeet, int hookBendSign, List<string> warnings)
     {
@@ -67,12 +67,13 @@ public sealed class WallMeshCreator
 
         // Móc bẻ qua bề dày (vào trong bê tông). bendDir = ±DirThickness.
         var inwardBendDir = frame.DirThickness * hookBendSign;
-        var bottomBendDir = model.BottomHookDirection == HookBendDirection.Inward
-            ? inwardBendDir
-            : -inwardBendDir;
-        var topBendDir = model.TopHookDirection == HookBendDirection.Inward
-            ? inwardBendDir
-            : -inwardBendDir;
+        // Safe fallback: preset cũ/hỏng có giá trị enum ngoài miền vẫn bẻ vào trong.
+        var bottomBendDir = model.BottomHookDirection == HookBendDirection.Outward
+            ? -inwardBendDir
+            : inwardBendDir;
+        var topBendDir = model.TopHookDirection == HookBendDirection.Outward
+            ? -inwardBendDir
+            : inwardBendDir;
         var curves = BuildBarWithEndHooks(p0, p1, model.BottomHookType, model.BottomHookLengthMm / 304.8,
             bottomBendDir, model.TopHookType, model.TopHookLengthMm / 304.8, topBendDir);
 

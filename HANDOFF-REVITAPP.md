@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.0.1`
+- Release đang phát hành: `v1.0.2`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -38,6 +38,7 @@
 - Test gần nhất: 140/140 đạt.
 - GitHub Actions của Release `v1.0.0`: thành công toàn bộ.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
+- Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Các commit phát hành gần nhất:
   - `aa1d25a` — attach installer executable to releases
   - `37f6391` — publish standalone installer in releases
