@@ -9,6 +9,109 @@ public sealed record WireToolCall(string? Id, string Name, JObject Arguments, bo
 /// <summary>Pure request/response mapping for the supported LLM providers.</summary>
 public static class ChatWireProtocol
 {
+    public static JObject ToAnthropicMessage(ChatMessage message)
+    {
+        var blocks = new JArray();
+        foreach (var block in message.Content)
+        {
+            switch (block.Kind)
+            {
+                case ContentKind.Text:
+                    blocks.Add(new JObject { ["type"] = "text", ["text"] = block.Text ?? string.Empty });
+                    break;
+                case ContentKind.Image:
+                    blocks.Add(new JObject
+                    {
+                        ["type"] = "image",
+                        ["source"] = new JObject
+                        {
+                            ["type"] = "base64",
+                            ["media_type"] = block.MimeType ?? "image/png",
+                            ["data"] = block.Base64Data ?? string.Empty
+                        }
+                    });
+                    break;
+                case ContentKind.ToolResult:
+                    blocks.Add(new JObject
+                    {
+                        ["type"] = "tool_result",
+                        ["tool_use_id"] = block.CallId ?? string.Empty,
+                        ["content"] = block.ResultJson ?? string.Empty
+                    });
+                    break;
+                case ContentKind.ToolCall:
+                    blocks.Add(new JObject
+                    {
+                        ["type"] = "tool_use",
+                        ["id"] = block.CallId ?? string.Empty,
+                        ["name"] = block.ToolName ?? string.Empty,
+                        ["input"] = block.Arguments ?? new JObject()
+                    });
+                    break;
+            }
+        }
+        return new JObject { ["role"] = message.Role, ["content"] = blocks };
+    }
+
+    public static JObject ToGeminiContent(ChatMessage message)
+    {
+        var parts = new JArray();
+        foreach (var block in message.Content)
+        {
+            switch (block.Kind)
+            {
+                case ContentKind.Text:
+                    parts.Add(new JObject { ["text"] = block.Text ?? string.Empty });
+                    break;
+                case ContentKind.Image:
+                    parts.Add(new JObject
+                    {
+                        ["inlineData"] = new JObject
+                        {
+                            ["mimeType"] = block.MimeType ?? "image/png",
+                            ["data"] = block.Base64Data ?? string.Empty
+                        }
+                    });
+                    break;
+                case ContentKind.ToolCall:
+                    parts.Add(new JObject
+                    {
+                        ["functionCall"] = new JObject
+                        {
+                            ["name"] = block.ToolName ?? string.Empty,
+                            ["args"] = block.Arguments ?? new JObject()
+                        }
+                    });
+                    break;
+                case ContentKind.ToolResult:
+                    parts.Add(new JObject
+                    {
+                        ["functionResponse"] = new JObject
+                        {
+                            ["name"] = block.ToolName ?? string.Empty,
+                            ["response"] = WrapGeminiResult(block.ResultJson ?? string.Empty)
+                        }
+                    });
+                    break;
+            }
+        }
+        var role = message.Role == ChatMessage.Assistant ? "model" : "user";
+        return new JObject { ["role"] = role, ["parts"] = parts };
+    }
+
+    public static JObject WrapGeminiResult(string resultJson)
+    {
+        try
+        {
+            var parsed = JToken.Parse(resultJson);
+            return parsed is JObject obj ? obj : new JObject { ["result"] = parsed };
+        }
+        catch
+        {
+            return new JObject { ["result"] = resultJson };
+        }
+    }
+
     public static JObject BuildAnthropicRequest(
         string model, int maxTokens, string systemPrompt, JArray messages, IReadOnlyList<ToolSchema> tools)
     {
@@ -62,7 +165,30 @@ public static class ChatWireProtocol
 
         var wire = new JObject { ["role"] = message.Role };
         var text = message.PlainText();
-        wire["content"] = string.IsNullOrEmpty(text) ? null : text;
+        var images = message.Content.Where(block => block.Kind == ContentKind.Image).ToList();
+        if (images.Count == 0)
+        {
+            wire["content"] = string.IsNullOrEmpty(text) ? null : text;
+        }
+        else
+        {
+            var content = new JArray();
+            if (!string.IsNullOrEmpty(text))
+                content.Add(new JObject { ["type"] = "text", ["text"] = text });
+            foreach (var image in images)
+            {
+                content.Add(new JObject
+                {
+                    ["type"] = "image_url",
+                    ["image_url"] = new JObject
+                    {
+                        ["url"] = $"data:{image.MimeType};base64,{image.Base64Data}",
+                        ["detail"] = "auto"
+                    }
+                });
+            }
+            wire["content"] = content;
+        }
         var calls = message.Content.Where(block => block.Kind == ContentKind.ToolCall).ToList();
         if (calls.Count > 0)
         {

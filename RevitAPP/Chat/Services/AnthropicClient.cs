@@ -34,7 +34,7 @@ public sealed class AnthropicClient : LlmClientBase, ILlmClient
         ToolExecutor executor,
         CancellationToken ct)
     {
-        var messages = new JArray(history.Select(ToWireMessage));
+        var messages = new JArray(history.Select(ChatWireProtocol.ToAnthropicMessage));
         for (var round = 0; round < MaxToolRounds; round++)
         {
             var body = ChatWireProtocol.BuildAnthropicRequest(
@@ -87,36 +87,4 @@ public sealed class AnthropicClient : LlmClientBase, ILlmClient
         return string.Join("\n", parts);
     }
 
-    private static JObject ToWireMessage(ChatMessage message)
-    {
-        var blocks = new JArray();
-        foreach (var block in message.Content)
-        {
-            switch (block.Kind)
-            {
-                case ContentKind.Text:
-                    blocks.Add(new JObject { ["type"] = "text", ["text"] = block.Text ?? string.Empty });
-                    break;
-                case ContentKind.ToolResult:
-                    blocks.Add(new JObject
-                    {
-                        ["type"] = "tool_result",
-                        ["tool_use_id"] = block.CallId ?? string.Empty,
-                        ["content"] = block.ResultJson ?? string.Empty
-                    });
-                    break;
-                case ContentKind.ToolCall:
-                    blocks.Add(new JObject
-                    {
-                        ["type"] = "tool_use",
-                        ["id"] = block.CallId ?? string.Empty,
-                        ["name"] = block.ToolName ?? string.Empty,
-                        ["input"] = block.Arguments ?? new JObject()
-                    });
-                    break;
-            }
-        }
-
-        return new JObject { ["role"] = message.Role, ["content"] = blocks };
-    }
 }

@@ -7,6 +7,9 @@
         xmlns:v="clr-namespace:RevitAPP.Chat.Views"
         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
         Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}">
+    <Window.InputBindings>
+        <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteImageCommand}" />
+    </Window.InputBindings>
     <Window.Resources>
         <v:RoleAlignmentConverter x:Key="RoleAlignmentConverter" />
         <v:ErrorBrushConverter x:Key="ErrorBrushConverter" />
@@ -19,6 +22,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Thanh trên -->
@@ -28,6 +32,7 @@
 
         <!-- Transcript -->
         <Border Grid.Row="1" BorderThickness="1"
+                v:ImageDropBehavior.Command="{Binding DropImagesCommand}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                 <ItemsControl ItemsSource="{Binding Messages}">
@@ -36,8 +41,21 @@
                             <Border Margin="0,4" Padding="8,6" CornerRadius="6"
                                     HorizontalAlignment="{Binding Role, Converter={StaticResource RoleAlignmentConverter}}"
                                     Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="360"
-                                           Foreground="{Binding IsError, Converter={StaticResource ErrorBrushConverter}}" />
+                                <StackPanel MaxWidth="360">
+                                    <ItemsControl ItemsSource="{Binding Images}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Image Source="{Binding}" Width="110" Height="82" Stretch="Uniform"
+                                                       Margin="0,0,6,6" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                               Foreground="{Binding IsError, Converter={StaticResource ErrorBrushConverter}}" />
+                                </StackPanel>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -53,15 +71,42 @@
                        Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
         </StackPanel>
 
+        <!-- Ảnh chờ gửi -->
+        <ItemsControl Grid.Row="3" ItemsSource="{Binding PendingImages}" Margin="0,6,0,0">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="0,0,8,4" Padding="4" BorderThickness="1" CornerRadius="4"
+                            BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+                        <Grid>
+                            <Image Source="{Binding Preview}" Width="72" Height="54" Stretch="Uniform" />
+                            <Button Content="×" Width="20" Height="20" Padding="0"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Command="{Binding DataContext.RemoveImageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- Ô nhập -->
-        <Grid Grid.Row="3" Margin="0,8,0,0">
+        <Grid Grid.Row="4" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBox Grid.Column="0" Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}"
+            <Button Grid.Column="0" Content="Ảnh…" Width="58" Margin="0,0,8,0"
+                    ToolTip="Chọn ảnh; cũng có thể Ctrl+V hoặc kéo thả ảnh vào hội thoại"
+                    Command="{Binding AttachImageCommand}"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+
+            <TextBox Grid.Column="1" Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}"
                      IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
                      VerticalContentAlignment="Center" Padding="6"
                      AcceptsReturn="False">
@@ -70,10 +115,10 @@
                 </TextBox.InputBindings>
             </TextBox>
 
-            <Button Grid.Column="1" Content="Gửi" Margin="8,0,0,0" Width="72"
+            <Button Grid.Column="2" Content="Gửi" Margin="8,0,0,0" Width="72"
                     Command="{Binding SendCommand}"
                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
-            <Button Grid.Column="2" Content="Hủy" Margin="8,0,0,0" Width="72"
+            <Button Grid.Column="3" Content="Hủy" Margin="8,0,0,0" Width="72"
                     Command="{Binding CancelCommand}"
                     IsEnabled="{Binding IsBusy}" />
         </Grid>

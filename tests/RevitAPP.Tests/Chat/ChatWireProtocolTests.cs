@@ -74,4 +74,25 @@ public sealed class ChatWireProtocolTests
         Assert.Null(calls.Single().Id);
         Assert.Equal(4, (int?)calls.Single().Arguments["barsX"]);
     }
+
+    [Fact]
+    public void VisionImage_IsMappedForAllThreeProviders()
+    {
+        var message = ChatMessage.FromUser("Kiểm tra ảnh", new[]
+        {
+            ContentBlock.FromImage("image/png", "YWJj", "view.png")
+        });
+
+        var openAi = ChatWireProtocol.ToOpenAiMessages(message).Single();
+        Assert.Equal("image_url", (string?)openAi["content"]?[1]?["type"]);
+        Assert.Equal("data:image/png;base64,YWJj", (string?)openAi["content"]?[1]?["image_url"]?["url"]);
+
+        var anthropic = ChatWireProtocol.ToAnthropicMessage(message);
+        Assert.Equal("image", (string?)anthropic["content"]?[1]?["type"]);
+        Assert.Equal("YWJj", (string?)anthropic["content"]?[1]?["source"]?["data"]);
+
+        var gemini = ChatWireProtocol.ToGeminiContent(message);
+        Assert.Equal("image/png", (string?)gemini["parts"]?[1]?["inlineData"]?["mimeType"]);
+        Assert.Equal("YWJj", (string?)gemini["parts"]?[1]?["inlineData"]?["data"]);
+    }
 }

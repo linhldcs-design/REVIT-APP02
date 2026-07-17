@@ -4,6 +4,7 @@
 
 ### AI Chat Panel + native tool control
 
+- Added multimodal image chat for OpenAI, Claude, and Gemini: paste from Clipboard, choose files, or drag/drop PNG/JPEG/BMP images; preview/remove before sending, resize to 1600 px, and keep image bytes in session memory only.
 - Enforced the shared license gate on every functional RevitAPP ribbon button and on ribbon commands invoked through Chat AI; the License button remains accessible for activation and renewal.
 - Fixed incomplete "select all" operations by adding a native category selector that reports the exact selected count and does not pass element ids through the bounded MCP filter response.
 - Expanded Chat to 48 tools: all 15 RevitAPP ribbon buttons are callable, a native selector handles complete categories, and four background Excel tools can discover open workbooks, find, inspect, and read `.xls/.xlsx/.xlsm/.xlsb/.csv` files without blocking the Revit UI.

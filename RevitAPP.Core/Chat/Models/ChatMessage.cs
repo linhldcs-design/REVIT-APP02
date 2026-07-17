@@ -5,6 +5,7 @@ namespace RevitAPP.Chat.Models;
 public enum ContentKind
 {
     Text,
+    Image,
     ToolCall,
     ToolResult
 }
@@ -15,9 +16,15 @@ public sealed record ContentBlock(
     string? CallId = null,
     string? ToolName = null,
     JObject? Arguments = null,
-    string? ResultJson = null)
+    string? ResultJson = null,
+    string? MimeType = null,
+    string? Base64Data = null,
+    string? FileName = null)
 {
     public static ContentBlock FromText(string text) => new(ContentKind.Text, Text: text);
+
+    public static ContentBlock FromImage(string mimeType, string base64Data, string? fileName = null) =>
+        new(ContentKind.Image, MimeType: mimeType, Base64Data: base64Data, FileName: fileName);
 
     public static ContentBlock ToolCall(string? callId, string toolName, JObject arguments) =>
         new(ContentKind.ToolCall, CallId: callId, ToolName: toolName, Arguments: arguments);
@@ -32,6 +39,14 @@ public sealed record ChatMessage(string Role, IReadOnlyList<ContentBlock> Conten
     public const string Assistant = "assistant";
 
     public static ChatMessage FromUserText(string text) => new(User, new[] { ContentBlock.FromText(text) });
+
+    public static ChatMessage FromUser(string text, IEnumerable<ContentBlock> images)
+    {
+        var content = new List<ContentBlock>();
+        if (!string.IsNullOrWhiteSpace(text)) content.Add(ContentBlock.FromText(text));
+        content.AddRange(images.Where(block => block.Kind == ContentKind.Image));
+        return new ChatMessage(User, content);
+    }
 
     public static ChatMessage FromAssistantText(string text) => new(Assistant, new[] { ContentBlock.FromText(text) });
 

@@ -16,6 +16,7 @@ public static class ChatHost
     private static ChatToolRegistry? _toolRegistry;
     private static ChatToolEventHandler? _bridge;
     private static ChatMemoryStore? _memoryStore;
+    private static ChatImageService? _imageService;
 
     public static void Start()
     {
@@ -24,6 +25,7 @@ public static class ChatHost
         _toolRegistry ??= new ChatToolRegistry();
         _bridge ??= new ChatToolEventHandler(_toolRegistry);
         _memoryStore ??= new ChatMemoryStore();
+        _imageService ??= new ChatImageService();
     }
 
     /// <summary>Bridge singleton — ChatCommand gán ExternalEvent (tạo trong API context) cho nó.</summary>
@@ -43,10 +45,13 @@ public static class ChatHost
         if (typeof(T) == typeof(ChatMemoryStore))
             return (T)(object)(_memoryStore ??= new ChatMemoryStore());
 
+        if (typeof(T) == typeof(ChatImageService))
+            return (T)(object)(_imageService ??= new ChatImageService());
+
         if (typeof(T) == typeof(ChatViewModel))
             return (T)(object)new ChatViewModel(
                 GetService<ChatSettingsStore>(), GetService<ChatToolRegistry>(), Bridge,
-                GetService<ChatMemoryStore>());
+                GetService<ChatMemoryStore>(), GetService<ChatImageService>());
 
         throw new InvalidOperationException($"No service of type {typeof(T).FullName} is registered.");
     }

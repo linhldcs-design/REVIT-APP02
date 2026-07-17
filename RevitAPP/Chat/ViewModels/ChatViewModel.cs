@@ -28,6 +28,7 @@ public sealed partial class ChatViewModel : ObservableObject
     private readonly ChatToolRegistry _registry;
     private readonly ChatToolEventHandler _bridge;
     private readonly ChatMemoryStore _memory;
+    private readonly ChatImageService _images;
     private readonly Dispatcher _dispatcher;
     private readonly List<ChatMessage> _history = new();
     private readonly HashSet<long> _lastCreatedRebarIds = new();
@@ -45,28 +46,35 @@ public sealed partial class ChatViewModel : ObservableObject
         ChatSettingsStore settingsStore,
         ChatToolRegistry registry,
         ChatToolEventHandler bridge,
-        ChatMemoryStore memory)
+        ChatMemoryStore memory,
+        ChatImageService images)
     {
         _settingsStore = settingsStore;
         _registry = registry;
         _bridge = bridge;
         _memory = memory;
+        _images = images;
         _dispatcher = Dispatcher.CurrentDispatcher;
         Title = $"Chat AI · {_registry.Schemas.Count} tools";
         RefreshActiveKey();
     }
 
     public ObservableCollection<ChatBubble> Messages { get; } = new();
+    public ObservableCollection<ChatImageAttachment> PendingImages { get; } = new();
 
     [RelayCommand]
     private async Task SendAsync()
     {
         var text = Input?.Trim();
-        if (string.IsNullOrEmpty(text) || IsBusy) return;
+        if ((string.IsNullOrEmpty(text) && PendingImages.Count == 0) || IsBusy) return;
+
+        text = string.IsNullOrEmpty(text) ? "Hãy phân tích ảnh này." : text;
 
         Input = string.Empty;
-        AddBubble(new ChatBubble(ChatBubble.User, text!));
-        if (TryHandleMemoryCommand(text!)) return;
+        var pendingImages = PendingImages.ToList();
+        AddBubble(new ChatBubble(ChatBubble.User,
+            text!, Images: pendingImages.Select(image => image.Preview).ToList()));
+        if (pendingImages.Count == 0 && TryHandleMemoryCommand(text!)) return;
 
         var settings = _settingsStore.Load();
         if (!settings.HasKeyFor(settings.ActiveProvider))
@@ -76,7 +84,10 @@ public sealed partial class ChatViewModel : ObservableObject
             return;
         }
 
-        _history.Add(ChatMessage.FromUserText(text!));
+        var imageBlocks = pendingImages.Select(image =>
+            ContentBlock.FromImage(image.MimeType, image.Base64Data, image.FileName));
+        _history.Add(ChatMessage.FromUser(text!, imageBlocks));
+        PendingImages.Clear();
         _currentUserText = text!;
 
         IsBusy = true;
@@ -150,6 +161,53 @@ public sealed partial class ChatViewModel : ObservableObject
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    [RelayCommand]
+    private void AttachImage()
+    {
+        foreach (var file in _images.PickFiles()) AddImageFile(file);
+    }
+
+    [RelayCommand]
+    private void PasteImage()
+    {
+        try
+        {
+            if (Clipboard.ContainsImage()) AddImage(_images.FromClipboard());
+            else if (Clipboard.ContainsText()) Input += Clipboard.GetText();
+            else AddBubble(new ChatBubble(ChatBubble.Assistant, "Clipboard không có ảnh hoặc văn bản.", IsError: true));
+        }
+        catch (Exception ex)
+        {
+            AddBubble(new ChatBubble(ChatBubble.Assistant, ex.Message, IsError: true));
+        }
+    }
+
+    [RelayCommand]
+    private void DropImages(string[] files)
+    {
+        foreach (var file in files) AddImageFile(file);
+    }
+
+    [RelayCommand]
+    private void RemoveImage(ChatImageAttachment image) => PendingImages.Remove(image);
+
+    private void AddImageFile(string file)
+    {
+        try { AddImage(_images.FromFile(file)); }
+        catch (Exception ex) { AddBubble(new ChatBubble(ChatBubble.Assistant, ex.Message, IsError: true)); }
+    }
+
+    private void AddImage(ChatImageAttachment image)
+    {
+        if (PendingImages.Count >= ChatImageService.MaxImages)
+        {
+            AddBubble(new ChatBubble(ChatBubble.Assistant,
+                $"Mỗi tin nhắn tối đa {ChatImageService.MaxImages} ảnh.", IsError: true));
+            return;
+        }
+        PendingImages.Add(image);
+    }
 
     [RelayCommand]
     private void OpenSettings()

@@ -257,7 +257,7 @@ Pure logic lives in `Models/*` and `Services/FootingMath.cs`, which are linked i
 
 ## 12. AI Chat Panel
 
-The ribbon opens a modeless WPF chat panel that can call Anthropic Claude, OpenAI, or Google Gemini. Provider settings and API keys are stored per user with Windows DPAPI.
+The ribbon opens a modeless WPF chat panel that can call Anthropic Claude, OpenAI, or Google Gemini. Provider settings and API keys are stored per user with Windows DPAPI. User messages can include up to three resized images from Clipboard, file picker, or drag/drop; provider adapters map the same neutral image block to OpenAI data URLs, Anthropic base64 image sources, and Gemini inline data. Image bytes stay in session history and are not persisted to advanced memory.
 
 ```text
 Ribbon -> modeless ChatWindow -> provider client

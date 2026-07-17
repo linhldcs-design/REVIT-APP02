@@ -31,7 +31,7 @@ public sealed class GeminiClient : LlmClientBase, ILlmClient
         ToolExecutor executor,
         CancellationToken ct)
     {
-        var contents = new JArray(history.Select(ToWireContent));
+        var contents = new JArray(history.Select(ChatWireProtocol.ToGeminiContent));
         var url = $"{BaseUrl}/models/{Uri.EscapeDataString(_model)}:generateContent";
 
         for (var round = 0; round < MaxToolRounds; round++)
@@ -63,7 +63,7 @@ public sealed class GeminiClient : LlmClientBase, ILlmClient
                     ["functionResponse"] = new JObject
                     {
                         ["name"] = part.Name,
-                        ["response"] = WrapResult(result)
+                        ["response"] = ChatWireProtocol.WrapGeminiResult(result)
                     }
                 });
             }
@@ -74,21 +74,6 @@ public sealed class GeminiClient : LlmClientBase, ILlmClient
         return "Đã đạt giới hạn số bước gọi công cụ. Vui lòng thử lại với yêu cầu cụ thể hơn.";
     }
 
-    private static JObject WrapResult(string resultJson)
-    {
-        // Gemini yêu cầu response là object. Nếu tool trả JSON object thì dùng luôn, ngược lại bọc lại.
-        try
-        {
-            var parsed = JToken.Parse(resultJson);
-            if (parsed is JObject obj) return obj;
-            return new JObject { ["result"] = parsed };
-        }
-        catch
-        {
-            return new JObject { ["result"] = resultJson };
-        }
-    }
-
     private static string ExtractText(JArray parts)
     {
         var texts = parts
@@ -97,41 +82,4 @@ public sealed class GeminiClient : LlmClientBase, ILlmClient
         return string.Join("\n", texts);
     }
 
-    private static JObject ToWireContent(ChatMessage message)
-    {
-        var parts = new JArray();
-        foreach (var block in message.Content)
-        {
-            switch (block.Kind)
-            {
-                case ContentKind.Text:
-                    parts.Add(new JObject { ["text"] = block.Text ?? string.Empty });
-                    break;
-                case ContentKind.ToolCall:
-                    parts.Add(new JObject
-                    {
-                        ["functionCall"] = new JObject
-                        {
-                            ["name"] = block.ToolName ?? string.Empty,
-                            ["args"] = block.Arguments ?? new JObject()
-                        }
-                    });
-                    break;
-                case ContentKind.ToolResult:
-                    parts.Add(new JObject
-                    {
-                        ["functionResponse"] = new JObject
-                        {
-                            ["name"] = block.ToolName ?? string.Empty,
-                            ["response"] = WrapResult(block.ResultJson ?? string.Empty)
-                        }
-                    });
-                    break;
-            }
-        }
-
-        // Gemini dùng role "model" cho assistant, "user" cho user + function response.
-        var role = message.Role == ChatMessage.Assistant ? "model" : "user";
-        return new JObject { ["role"] = role, ["parts"] = parts };
-    }
 }

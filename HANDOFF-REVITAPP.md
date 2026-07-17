@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.1.1`
+- Release đang phát hành: `v1.1.2`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -41,6 +41,7 @@
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
 - Thay đổi cho `v1.1.1`: sửa chọn toàn bộ phần tử bằng tool native và áp dụng license gate cho mọi nút chức năng RevitAPP; nút License vẫn mở để kích hoạt/gia hạn.
+- Thay đổi cho `v1.1.2`: Chat AI hỗ trợ chọn ảnh, dán ảnh từ clipboard và kéo thả ảnh; ảnh được chuẩn hóa trước khi gửi và chuyển đúng định dạng vision cho OpenAI, Anthropic và Gemini.
 - Các commit phát hành gần nhất:
   - `aa1d25a` — attach installer executable to releases
   - `37f6391` — publish standalone installer in releases
