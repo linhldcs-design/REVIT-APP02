@@ -23,6 +23,7 @@ public class PointCloudPocCommand : ExternalCommand
 
     public override void Execute()
     {
+        if (!LicenseCommandGate.Ensure("Point Cloud POC")) return;
         var uiDoc = Application.ActiveUIDocument;
         var doc = uiDoc.Document;
 

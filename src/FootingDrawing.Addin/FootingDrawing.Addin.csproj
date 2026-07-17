@@ -37,6 +37,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\FootingDrawing.Core\FootingDrawing.Core.csproj"/>
+        <ProjectReference Include="..\..\RevitAPP.Licensing\RevitAPP.Licensing.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

@@ -7,6 +7,7 @@ using FootingDrawing.Addin.Views;
 using FootingDrawing.Core.Models;
 using Nice3point.Revit.Toolkit.External;
 using Serilog;
+using RevitAPP.Licensing;
 
 namespace FootingDrawing.Addin.Commands;
 
@@ -20,6 +21,9 @@ public sealed class FootingDrawingCommand : ExternalCommand
 {
     public override void Execute()
     {
+        var (licenseOk, licenseMessage) = LicenseService.EnsureValid();
+        if (!licenseOk) { TaskDialog.Show("Bản Vẽ Móng", licenseMessage); return; }
+
         Host.Start();
         var uiDocument = Application.ActiveUIDocument;
         if (uiDocument is null) return;

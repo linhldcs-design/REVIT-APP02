@@ -23,6 +23,7 @@ public class FootingSectionDrawingCommand : ExternalCommand
 {
     public override void Execute()
     {
+        if (!LicenseCommandGate.Ensure("Mặt Cắt Móng")) return;
         var uiDocument = Application.ActiveUIDocument;
         var document = uiDocument.Document;
 

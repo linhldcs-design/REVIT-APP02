@@ -8,7 +8,7 @@ public sealed class RibbonCommandTool : IChatTool
 {
     private readonly Action _execute;
 
-    public RibbonCommandTool(string name, string description, Action execute)
+    public RibbonCommandTool(string name, string description, Action execute, bool requiresLicense = true)
     {
         Name = name;
         Schema = new ToolSchema(name, description, new JObject
@@ -17,12 +17,13 @@ public sealed class RibbonCommandTool : IChatTool
             ["properties"] = new JObject()
         });
         _execute = execute;
+        RequiresLicense = requiresLicense;
     }
 
     public string Name { get; }
     public ToolSchema Schema { get; }
     public bool RequiresTransaction => false;
-    public bool RequiresLicense => false;
+    public bool RequiresLicense { get; }
 
     public object Execute(JObject input, ChatToolContext ctx)
     {

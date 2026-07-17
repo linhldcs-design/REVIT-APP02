@@ -21,6 +21,7 @@ public class BeamDrawingCommand : ExternalCommand
 {
     public override void Execute()
     {
+        if (!LicenseCommandGate.Ensure("Bản Vẽ Dầm")) return;
         var uiDocument = Application.ActiveUIDocument;
         var document = uiDocument.Document;
 

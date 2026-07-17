@@ -16,6 +16,7 @@ namespace RevitAPP.Commands
     {
         public override void Execute()
         {
+            if (!LicenseCommandGate.Ensure("Căn Chỉnh View")) return;
             var document = Application.ActiveUIDocument.Document;
             var service = new SheetAlignmentService();
 

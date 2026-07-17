@@ -28,6 +28,7 @@ public sealed class ChatToolRegistry
             new DrawBeamDrawingTool(),
             new GetSelectedElementsTool(),
             new GetCurrentViewInfoTool(),
+            new SelectAllByCategoryTool(),
             new GetOpenExcelWorkbooksTool(),
             new FindExcelFilesTool(),
             new InspectExcelFileTool(),
@@ -84,7 +85,7 @@ public sealed class ChatToolRegistry
 
     private static IEnumerable<IChatTool> CreateRibbonCommandTools()
     {
-        yield return Ribbon("open_license", "Mở đúng cửa sổ License của nút RevitAPP License.", () => new LicenseCommand().Execute());
+        yield return Ribbon("open_license", "Mở đúng cửa sổ License của nút RevitAPP License.", () => new LicenseCommand().Execute(), requiresLicense: false);
         yield return Ribbon("run_hello_world", "Chạy đúng nút RevitAPP Hello World.", () => new HelloWorldCommand().Execute());
         yield return Ribbon("open_translate_text", "Mở quy trình Dịch Text của RevitAPP; dùng TextNote đang chọn hoặc cho phép pick.", () => new TranslateTextCommand().Execute());
         yield return Ribbon("open_renumber_schedule", "Mở cửa sổ Đánh Số Schedule của RevitAPP.", () => new RenumberScheduleCommand().Execute());
@@ -102,8 +103,8 @@ public sealed class ChatToolRegistry
             "Đại diện nút Chat AI: cửa sổ Chat hiện tại đã ở phía trước; không mở lồng thêm cửa sổ.");
     }
 
-    private static RibbonCommandTool Ribbon(string name, string description, Action action) =>
-        new(name, description, action);
+    private static RibbonCommandTool Ribbon(string name, string description, Action action, bool requiresLicense = true) =>
+        new(name, description, action, requiresLicense);
 
     private static RevitMcpProxyTool Proxy(string name, string method, string description,
         bool write = false, bool dangerous = false) =>

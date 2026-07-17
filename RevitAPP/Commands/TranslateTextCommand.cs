@@ -14,6 +14,7 @@ namespace RevitAPP.Commands
     {
         public override void Execute()
         {
+            if (!LicenseCommandGate.Ensure("Dịch Text")) return;
             var uiDocument = Application.ActiveUIDocument;
             var document = uiDocument.Document;
 

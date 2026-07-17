@@ -11,6 +11,7 @@ public class TogglePointCloudPanelCommand : ExternalCommand
 {
     public override void Execute()
     {
+        if (!LicenseCommandGate.Ensure("Point Cloud")) return;
         var pane = UiApplication.GetDockablePane(PointCloudPanelRegistry.PaneId);
         if (pane.IsShown())
             pane.Hide();

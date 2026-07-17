@@ -13,6 +13,7 @@ namespace RevitAPP.Commands
     {
         public override void Execute()
         {
+            if (!LicenseCommandGate.Ensure("Hello World")) return;
             TaskDialog.Show("RevitAI", "Hello World from your first Revit add-in!");
         }
     }

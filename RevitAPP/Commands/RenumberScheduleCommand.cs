@@ -14,6 +14,7 @@ namespace RevitAPP.Commands
     {
         public override void Execute()
         {
+            if (!LicenseCommandGate.Ensure("Đánh Số Schedule")) return;
             var uiDocument = Application.ActiveUIDocument;
             var document = uiDocument.Document;
             var schedules = GetScheduleOptions(document);

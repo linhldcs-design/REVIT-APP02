@@ -6,6 +6,7 @@ using Nice3point.Revit.Toolkit.External;
 using RevitAPP.Chat.ViewModels;
 using RevitAPP.Chat.Views;
 using RevitAPP.Chat.Services;
+using RevitAPP.Commands;
 
 namespace RevitAPP.Chat;
 
@@ -22,6 +23,7 @@ public class ChatCommand : ExternalCommand
 
     public override void Execute()
     {
+        if (!LicenseCommandGate.Ensure("Chat AI")) return;
         // Host có thể chưa Start nếu load qua Add-in Manager (OnStartup không chạy) → đảm bảo khởi tạo.
         ChatHost.Start();
 

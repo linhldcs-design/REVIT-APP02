@@ -4,7 +4,9 @@
 
 ### AI Chat Panel + native tool control
 
-- Expanded Chat to 47 tools: all 15 RevitAPP ribbon buttons are callable, and four background Excel tools can discover open workbooks, find, inspect, and read `.xls/.xlsx/.xlsm/.xlsb/.csv` files without blocking the Revit UI.
+- Enforced the shared license gate on every functional RevitAPP ribbon button and on ribbon commands invoked through Chat AI; the License button remains accessible for activation and renewal.
+- Fixed incomplete "select all" operations by adding a native category selector that reports the exact selected count and does not pass element ids through the bounded MCP filter response.
+- Expanded Chat to 48 tools: all 15 RevitAPP ribbon buttons are callable, a native selector handles complete categories, and four background Excel tools can discover open workbooks, find, inspect, and read `.xls/.xlsx/.xlsm/.xlsb/.csv` files without blocking the Revit UI.
 - Added encrypted advanced local memory: project-scoped conversations/tool outcomes, pinned global preferences, relevant-memory retrieval across sessions, 500-entry bound and deduplication, API-key redaction, direct memory-management chat commands, and tracking of Rebar ids created by the most recent draw action.
 - Expanded the Chat AI registry from 7 to 28 tools by loading the 21 installed Revit MCP command objects directly in-process. Commands reuse their own `ExternalEvent`; Chat no longer depends on the MCP TCP server or port 8080. Added write/delete/C# confirmation gates and prompt routing for selection, deletion, visibility, creation, tagging, dimensions, quantities, and model analysis.
 
