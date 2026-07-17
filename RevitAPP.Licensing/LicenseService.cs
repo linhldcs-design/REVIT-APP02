@@ -39,11 +39,11 @@ public sealed class LicenseService
     /// <summary>Dang nhap Google + verify. Goi tu ribbon UI (co browser). Tra ve state sau khi dang nhap.</summary>
     public async Task<LicenseState> SignInAsync(CancellationToken ct = default)
     {
-        var email = await _oauth.SignInAsync(ct);
+        var email = await _oauth.SignInAsync(ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(email))
             return LicenseState.NotSignedIn();
 
-        var result = await _verifier.VerifyAsync(email!, ct);
+        var result = await _verifier.VerifyAsync(email!, ct).ConfigureAwait(false);
         if (!result.Allowed)
         {
             // Ghi cache "khong duoc phep" de UI hien ly do, nhung khong cho dung.
@@ -79,7 +79,9 @@ public sealed class LicenseService
     {
         try
         {
-            var state = Instance.GetStateAsync().GetAwaiter().GetResult();
+            // Revit calls this method on its UI thread. Run the async verification on the thread pool
+            // so an expired cache cannot deadlock while an HTTP continuation waits for Revit's context.
+            var state = Task.Run(() => Instance.GetStateAsync()).GetAwaiter().GetResult();
             if (state.IsValid) return (true, string.Empty);
             return (false,
                 $"Chua kich hoat ban quyen: {state.Reason}.\n\n" +
@@ -113,7 +115,7 @@ public sealed class LicenseService
         // Qua grace (hoac lan truoc bi denied) -> re-verify online.
         try
         {
-            var result = await _verifier.VerifyAsync(data.Email!, ct);
+            var result = await _verifier.VerifyAsync(data.Email!, ct).ConfigureAwait(false);
             _cache.Write(new LicenseCacheData
             {
                 Email = data.Email,

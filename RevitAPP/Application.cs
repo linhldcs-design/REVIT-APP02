@@ -1,4 +1,5 @@
 ﻿using Nice3point.Revit.Toolkit.External;
+using RevitAPP.Chat;
 using RevitAPP.Commands;
 using BeamRebarStartupCommand = BeamRebarPro.Commands.StartupCommand;
 using FootingDrawingCommand = FootingDrawing.Addin.Commands.FootingDrawingCommand;
@@ -23,6 +24,7 @@ namespace RevitAPP
             BeamRebarPro.Host.Start();
             IsolatedFootingRebar.Host.Start();
             WallRebar.Host.Start();
+            ChatHost.Start();
             PointCloudPanelRegistry.Register(Application);
             CreateRibbon();
             UpdateStartupCoordinator.Start(Application);
@@ -90,6 +92,10 @@ namespace RevitAPP
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
 
             panel.AddPushButton<PointCloudPocCommand>("PC POC")
+                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+
+            panel.AddPushButton<ChatCommand>("Chat AI")
                 .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
         }

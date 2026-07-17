@@ -10,7 +10,7 @@
         <LaunchRevit>true</LaunchRevit>
         <IsRepackable>true</IsRepackable>
         <EnableDynamicLoading>true</EnableDynamicLoading>
-        <Version>1.0.2</Version>
+        <Version>1.1.0</Version>
         <!-- Optional unique assembly identity for Add-In Manager smoke tests while the deployed RevitAPP is loaded. -->
         <AssemblyName Condition="'$(RevitAPPAssemblyName)' != ''">$(RevitAPPAssemblyName)</AssemblyName>
         <!-- Multi-version R23–R27. R27: RebarHookOrientation đã bỏ → xử lý bằng preprocessor. -->
@@ -27,6 +27,14 @@
 
         <!-- MVVM -->
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
+
+        <!-- Chat AI: DPAPI mã hóa API key (ProtectedData không nằm trong BCL của net8/net10). -->
+        <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0"/>
+
+        <!-- Chat AI: JObject cho tool params + parse wire format 3 provider LLM. -->
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
+        <PackageReference Include="ExcelDataReader" Version="3.9.0"/>
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0"/>
 
         <!-- Logging -->
         <PackageReference Include="Serilog" Version="4.3.1"/>

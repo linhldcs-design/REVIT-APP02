@@ -12,6 +12,7 @@
     <ItemGroup>
         <!-- net48 (Revit 2023/2024) can package cho System.Text.Json + polyfill record/init. -->
         <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
         <PackageReference Include="System.Text.Json" Version="8.0.5" Condition="'$(TargetFramework)' == 'net48'"/>
     </ItemGroup>
 

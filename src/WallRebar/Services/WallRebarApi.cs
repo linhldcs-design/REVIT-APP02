@@ -49,6 +49,16 @@ public static class WallRebarApi
         Document document, ElementId wallId, WallRebarApiOptions? options = null)
         => Run(document, wallId, options, useExistingTransaction: false);
 
+    /// <summary>Vẽ bằng toàn bộ model từ preset của WallRebar, giữ nguyên cả các tùy chọn nâng cao.</summary>
+    public static RebarCreationResult DrawForWall(
+        Document document, ElementId wallId, WallRebarModel model)
+    {
+        if (document.GetElement(wallId) is not Wall wall)
+            return new RebarCreationResult(0, 0, 0, ["Element không phải tường (Wall)."]);
+
+        return new WallRebarOrchestrator().Create(document, wall, model);
+    }
+
     /// <summary>Như <see cref="DrawForWall" /> nhưng KHÔNG tự mở Transaction — caller đã có transaction (vd revit-mcp).</summary>
     public static RebarCreationResult DrawForWallInExistingTransaction(
         Document document, ElementId wallId, WallRebarApiOptions? options = null)

@@ -1,0 +1,81 @@
+<Window x:Class="RevitAPP.Chat.Views.ChatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Title}"
+        Width="480" Height="640"
+        WindowStartupLocation="CenterOwner"
+        xmlns:v="clr-namespace:RevitAPP.Chat.Views"
+        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+        Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}">
+    <Window.Resources>
+        <v:RoleAlignmentConverter x:Key="RoleAlignmentConverter" />
+        <v:ErrorBrushConverter x:Key="ErrorBrushConverter" />
+        <v:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <v:InverseBoolConverter x:Key="InverseBoolConverter" />
+    </Window.Resources>
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Thanh trên -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
+            <Button Content="Cấu hình…" Command="{Binding OpenSettingsCommand}" Padding="10,4" />
+        </StackPanel>
+
+        <!-- Transcript -->
+        <Border Grid.Row="1" BorderThickness="1"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                <ItemsControl ItemsSource="{Binding Messages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,4" Padding="8,6" CornerRadius="6"
+                                    HorizontalAlignment="{Binding Role, Converter={StaticResource RoleAlignmentConverter}}"
+                                    Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxWidth="360"
+                                           Foreground="{Binding IsError, Converter={StaticResource ErrorBrushConverter}}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Busy -->
+        <StackPanel Grid.Row="2" Margin="0,6,0,0"
+                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
+            <ProgressBar Height="4" IsIndeterminate="True" />
+            <TextBlock Text="{Binding ActivityStatus}" Margin="0,4,0,0"
+                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+        </StackPanel>
+
+        <!-- Ô nhập -->
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBox Grid.Column="0" Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}"
+                     IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+                     VerticalContentAlignment="Center" Padding="6"
+                     AcceptsReturn="False">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Return" Command="{Binding SendCommand}" />
+                </TextBox.InputBindings>
+            </TextBox>
+
+            <Button Grid.Column="1" Content="Gửi" Margin="8,0,0,0" Width="72"
+                    Command="{Binding SendCommand}"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+            <Button Grid.Column="2" Content="Hủy" Margin="8,0,0,0" Width="72"
+                    Command="{Binding CancelCommand}"
+                    IsEnabled="{Binding IsBusy}" />
+        </Grid>
+    </Grid>
+</Window>

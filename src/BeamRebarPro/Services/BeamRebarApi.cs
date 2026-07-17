@@ -84,6 +84,15 @@ public static class BeamRebarApi
         Document document, IReadOnlyList<ElementId> beamIds, BeamRebarApiOptions? options = null)
         => DrawForBeams(document, beamIds, options, useExistingTransaction: false);
 
+    public static RebarCreationResult DrawForBeams(
+        Document document, IReadOnlyList<ElementId> beamIds, QuickSettingModel model)
+    {
+        var beams = beamIds.Select(document.GetElement).OfType<FamilyInstance>().ToList();
+        if (beams.Count == 0)
+            return new RebarCreationResult(0, 0, 0, new[] { "Khong co dam hop le trong danh sach." });
+        return Run(new BeamRebarOrchestrator(), document, beams, model, useExistingTransaction: false);
+    }
+
     /// <summary>
     ///     Như <see cref="DrawForBeams(Document,IReadOnlyList{ElementId},BeamRebarApiOptions)" /> nhưng
     ///     KHÔNG tự mở Transaction — dùng khi caller đã ở trong một Transaction đang mở

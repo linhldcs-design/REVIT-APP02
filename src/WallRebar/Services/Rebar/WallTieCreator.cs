@@ -82,6 +82,7 @@ public sealed class WallTieCreator
 
         var createdBars = 0;
         var failedRows = 0;
+        WallRebarDiagnostics.Mark($"ties.grid rows={heightGrid.IntervalCount + 1} stride={heightStride} columns={alongGrid.IntervalCount + 1}");
         for (var heightIndex = 0; heightIndex <= heightGrid.IntervalCount; heightIndex += heightStride)
         {
             var z = zStart + heightIndex * heightGrid.SpacingFeet + tieLiftFeet;
@@ -90,8 +91,10 @@ public sealed class WallTieCreator
             var p0 = frame.PointAt(alongStart, z, offA);
             var p1 = frame.PointAt(alongStart, z, offB);
 
-            var rebar = CreateTieSet(host, barType, hookType, frame.DirAlong, p0, p1,
-                maximumSpacingFeet, alongLayoutFeet, alongGrid);
+            Autodesk.Revit.DB.Structure.Rebar? rebar;
+            using (WallRebarDiagnostics.Measure("ties.row", $"index={heightIndex}"))
+                rebar = CreateTieSet(host, barType, hookType, frame.DirAlong, p0, p1,
+                    maximumSpacingFeet, alongLayoutFeet, alongGrid);
             if (rebar == null)
             {
                 failedRows++;
@@ -111,6 +114,13 @@ public sealed class WallTieCreator
         RebarHookType hookType, XYZ normal, XYZ p0, XYZ p1, double maximumSpacingFeet,
         double layoutFeet, MaximumSpacingGrid verticalGrid)
     {
+        // Place ties directly on the vertical-bar grid. The old implementation used MaximumSpacing,
+        // regenerated the document several times per row, then moved every bar individually. On a
+        // large wall that became thousands of expensive Revit API calls and made the UI appear frozen.
+        var gridStep = Math.Max(1, (int)Math.Floor(maximumSpacingFeet / verticalGrid.SpacingFeet));
+        var spacingFeet = gridStep * verticalGrid.SpacingFeet;
+        var count = Math.Max(2, (int)Math.Floor(layoutFeet / spacingFeet) + 1);
+
         foreach (var candidateNormal in new[] { normal, -normal })
         {
             Autodesk.Revit.DB.Structure.Rebar? rebar = null;
@@ -129,16 +139,7 @@ public sealed class WallTieCreator
                 }
 
                 var accessor = rebar.GetShapeDrivenAccessor();
-                accessor.SetLayoutAsMaximumSpacing(maximumSpacingFeet, layoutFeet, true, true, true);
-                _document.Regenerate();
-                if (BarsOverflow(rebar, layoutFeet))
-                {
-                    accessor.SetLayoutAsMaximumSpacing(maximumSpacingFeet, layoutFeet, false, true, true);
-                    _document.Regenerate();
-                }
-
-                AlignBarsToVerticalGrid(rebar, accessor, normal, verticalGrid);
-                _document.Regenerate();
+                accessor.SetLayoutAsNumberWithSpacing(count, spacingFeet, true, true, true);
                 return rebar;
             }
             catch
@@ -147,45 +148,6 @@ public sealed class WallTieCreator
             }
         }
 
-        return null;
-    }
-
-    private static void AlignBarsToVerticalGrid(Autodesk.Revit.DB.Structure.Rebar rebar,
-        RebarShapeDrivenAccessor accessor, XYZ distributionDirection, MaximumSpacingGrid verticalGrid)
-    {
-        var lastTargetIndex = -1;
-        for (var barIndex = 0; barIndex < rebar.NumberOfBarPositions; barIndex++)
-        {
-            var transform = accessor.GetBarPositionTransform(barIndex);
-            var currentOffset = transform.Origin.DotProduct(distributionDirection);
-            var targetIndex = (int)Math.Round(currentOffset / verticalGrid.SpacingFeet);
-            targetIndex = Math.Clamp(targetIndex, lastTargetIndex + 1, verticalGrid.IntervalCount);
-            lastTargetIndex = targetIndex;
-
-            var targetOffset = targetIndex * verticalGrid.SpacingFeet;
-            var delta = targetOffset - currentOffset;
-            if (Math.Abs(delta) <= 1e-6) continue;
-
-            rebar.MoveBarInSet(barIndex,
-                Transform.CreateTranslation(distributionDirection * delta));
-        }
-    }
-
-    private static bool BarsOverflow(Autodesk.Revit.DB.Structure.Rebar rebar, double layoutFeet)
-    {
-        var count = rebar.NumberOfBarPositions;
-        if (count <= 1) return false;
-
-        var first = FirstPoint(rebar, 0);
-        var last = FirstPoint(rebar, count - 1);
-        return first != null && last != null && first.DistanceTo(last) > layoutFeet + 2.0 / 304.8;
-    }
-
-    private static XYZ? FirstPoint(Autodesk.Revit.DB.Structure.Rebar rebar, int barIndex)
-    {
-        foreach (var curve in rebar.GetCenterlineCurves(false, false, false,
-                     MultiplanarOption.IncludeOnlyPlanarCurves, barIndex))
-            return curve.GetEndPoint(0);
         return null;
     }
 

@@ -254,3 +254,27 @@ Ribbon button
 ```
 
 Pure logic lives in `Models/*` and `Services/FootingMath.cs`, which are linked into `tests/IsolatedFootingRebar.Tests` for out-of-process xUnit tests. Revit API code remains verified by build plus manual Revit smoke testing.
+
+## 12. AI Chat Panel
+
+The ribbon opens a modeless WPF chat panel that can call Anthropic Claude, OpenAI, or Google Gemini. Provider settings and API keys are stored per user with Windows DPAPI.
+
+```text
+Ribbon -> modeless ChatWindow -> provider client
+                               -> neutral schema adapter
+                               -> ChatToolRegistry (7 tools)
+                               -> ExternalEvent -> Revit API / existing engines
+```
+
+The provider-independent wire layer (messages, schemas, request builders, and response parsers) lives in `RevitAPP.Core` and has no Revit API dependency. The registry exposes 47 tools: seven native Revit automation tools, 21 optional tools backed directly by an installed Revit MCP command assembly, 15 adapters covering every RevitAPP ribbon button, and four background Excel tools. `NativeMcpCommandHost` constructs MCP command objects in a valid Revit API context; each reuses its own `ExternalEvent`, so Chat does not require the MCP TCP server, localhost port 8080, or any external MCP connection. If the optional MCP command assembly is absent, Chat still starts and its other tools remain available. Excel discovery/inspection/table reads run on the Chat worker thread and support `.xls`, `.xlsx`, `.xlsm`, `.xlsb`, and `.csv` with bounded rows, columns, and file size. Model-changing commands require an explicit confirmation dialog; delete/arbitrary-C# commands display a stronger warning.
+
+`ChatMemoryStore` provides bounded advanced local memory. It persists up to 500 versioned entries in `%APPDATA%/RevitAPP/chat-memory.dat`, encrypted with Windows DPAPI for the current user. Memories are scoped by Revit document title unless explicitly saved as a global pinned preference. Successful conversations, tool inputs/results, corrections, and recent created Rebar ids can be reused in later sessions; relevant entries are selected deterministically instead of sending the full archive. API-key-like strings are redacted before persistence. Users manage memory directly through `XEM TRÍ NHỚ`, `GHIM ...`, `QUÊN ...`, and `XÓA TOÀN BỘ TRÍ NHỚ`.
+
+Threading and execution invariants:
+
+- Modeless UI code never calls the Revit API directly; all model/view access is marshalled through `ExternalEvent` onto Revit's API context.
+- License validation happens before tool dispatch.
+- Transaction ownership is explicit: the column tool requires a caller-owned transaction; beam, wall, footing, and beam-drawing engines own their transactions. Read tools do not open transactions.
+- The registry must not wrap engine-owned transactions, preventing nested Revit transactions.
+
+Current verification baseline: `RevitAPP.Tests` passes 151/151 tests, and `Release.R22` through `Release.R27` builds succeed.

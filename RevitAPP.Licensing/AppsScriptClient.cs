@@ -39,9 +39,9 @@ public sealed class AppsScriptClient : ILicenseVerifier
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
         // Apps Script /exec tra ve 302 redirect toi googleusercontent -> HttpClient tu follow.
-        using var resp = await Http.PostAsync(LicenseConfig.AppsScriptUrl, content, ct);
+        using var resp = await Http.PostAsync(LicenseConfig.AppsScriptUrl, content, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
-        var body = await resp.Content.ReadAsStringAsync();
+        var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         var parsed = JsonSerializer.Deserialize<Response>(body)
                      ?? throw new InvalidOperationException("Empty verify response");

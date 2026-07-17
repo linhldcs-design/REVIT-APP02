@@ -1,5 +1,19 @@
 # Project Changelog
 
+## 2026-07-17
+
+### AI Chat Panel + native tool control
+
+- Expanded Chat to 47 tools: all 15 RevitAPP ribbon buttons are callable, and four background Excel tools can discover open workbooks, find, inspect, and read `.xls/.xlsx/.xlsm/.xlsb/.csv` files without blocking the Revit UI.
+- Added encrypted advanced local memory: project-scoped conversations/tool outcomes, pinned global preferences, relevant-memory retrieval across sessions, 500-entry bound and deduplication, API-key redaction, direct memory-management chat commands, and tracking of Rebar ids created by the most recent draw action.
+- Expanded the Chat AI registry from 7 to 28 tools by loading the 21 installed Revit MCP command objects directly in-process. Commands reuse their own `ExternalEvent`; Chat no longer depends on the MCP TCP server or port 8080. Added write/delete/C# confirmation gates and prompt routing for selection, deletion, visibility, creation, tagging, dimensions, quantities, and model analysis.
+
+- Thêm nút ribbon mở AI Chat Panel dạng WPF modeless; hỗ trợ Anthropic Claude, OpenAI và Google Gemini. API key/cấu hình người dùng được lưu cục bộ bằng Windows DPAPI, không ghi plaintext vào repo.
+- Chuẩn hóa wire protocol thuần trong `RevitAPP.Core`: message/schema, request builder và response parser không phụ thuộc Revit API, cho phép kiểm thử ngoài Revit.
+- Thêm neutral tool registry gồm 7 tool: 5 tool ghi mô hình (`draw_column_rebar`, `draw_wall_rebar`, `draw_beam_rebar`, `draw_footing_rebar`, `draw_beam_drawing`) và 2 tool chỉ đọc (`get_selected_elements`, `get_current_view_info`). Registry chuyển schema trung lập sang envelope riêng của từng nhà cung cấp rồi dispatch về engine hiện hữu.
+- Mọi truy cập Revit API từ panel modeless đi qua `ExternalEvent`. License được kiểm tra trước dispatch; chỉ tool cột mở transaction ở caller, các engine còn lại tự quản lý transaction để tránh transaction lồng nhau.
+- Xác nhận `RevitAPP.Tests` pass 151/151 và build `Release.R22` đến `Release.R27` đều thành công.
+
 ## 2026-07-13
 
 ### Footing Section Drawing (Mặt Cắt Móng, MC 2-2)

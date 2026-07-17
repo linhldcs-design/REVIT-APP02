@@ -1,0 +1,40 @@
+<Window x:Class="RevitAPP.Chat.Views.ChatSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cấu hình Chat AI"
+        Width="440" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+        Foreground="{DynamicResource {x:Static SystemColors.WindowTextBrushKey}}">
+    <StackPanel Margin="16">
+        <TextBlock Text="Nhà cung cấp" Margin="0,0,0,4" />
+        <ComboBox ItemsSource="{Binding ProviderOptions}"
+                  SelectedItem="{Binding SelectedProvider}" />
+
+        <TextBlock Text="Model" Margin="0,12,0,4" />
+        <TextBox Text="{Binding Model, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock Text="Anthropic (Claude) API key" Margin="0,12,0,4" />
+        <PasswordBox x:Name="AnthropicKeyBox" />
+
+        <TextBlock Text="OpenAI API key" Margin="0,12,0,4" />
+        <PasswordBox x:Name="OpenAiKeyBox" />
+
+        <TextBlock Text="Gemini API key" Margin="0,12,0,4" />
+        <PasswordBox x:Name="GeminiKeyBox" />
+
+        <TextBlock Text="Key được mã hóa (DPAPI) và lưu cục bộ trên máy này."
+                   Margin="0,10,0,0" TextWrapping="Wrap"
+                   Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+
+        <TextBlock Text="{Binding TestResult}" Margin="0,10,0,0" TextWrapping="Wrap"
+                   Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Kiểm tra" Width="88" Click="OnTestClick" />
+            <Button Content="Lưu" Width="88" Margin="8,0,0,0" Click="OnSaveClick" IsDefault="True" />
+            <Button Content="Hủy" Width="88" Margin="8,0,0,0" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -33,6 +33,15 @@ public static class FootingRebarApi
         Document document, ElementId footingId, FootingRebarApiOptions? options = null)
         => Run(document, footingId, options, useExistingTransaction: false);
 
+    public static RebarCreationResult DrawForFooting(
+        Document document, ElementId footingId, FootingRebarModel model)
+    {
+        var foundation = document.GetElement(footingId);
+        if (foundation is null || foundation.Category?.Id.ToValue() != (long)BuiltInCategory.OST_StructuralFoundation)
+            return new RebarCreationResult(0, 0, 0, ["Element khong phai mong ket cau (Structural Foundation)."]);
+        return new FootingRebarOrchestrator().Create(document, foundation, model);
+    }
+
     /// <summary>Như <see cref="DrawForFooting" /> nhưng KHÔNG tự mở Transaction — caller đã có transaction (vd revit-mcp).</summary>
     public static RebarCreationResult DrawForFootingInExistingTransaction(
         Document document, ElementId footingId, FootingRebarApiOptions? options = null)
