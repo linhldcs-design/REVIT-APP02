@@ -389,16 +389,36 @@ public sealed partial class ChatViewModel : ObservableObject
         {
             "draw_column_rebar" => ("columnIds", BuiltInCategory.OST_StructuralColumns),
             "draw_beam_rebar" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
+            "draw_beam_rebar_from_open_excel" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
             "draw_wall_rebar" => ("wallIds", BuiltInCategory.OST_Walls),
             "draw_footing_rebar" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
             _ => (string.Empty, BuiltInCategory.INVALID)
         };
+
+        // Dò hệ cột theo Instance Mark không phụ thuộc selection/columnIds. Tool chạy một lần để tự lấy
+        // toàn bộ cột cùng Mark trong dự án rồi phân nhóm thành các hệ đứng.
+        var columnMark = name == "draw_column_rebar" ? input.Value<string?>("columnMark")?.Trim() : null;
+        if (!string.IsNullOrWhiteSpace(columnMark))
+        {
+            RunOnUi(() => ActivityStatus = $"Đang dò và vẽ các hệ cột Instance Mark {columnMark}…");
+            return _bridge.ExecuteToolOnRevitThread(name, (JObject)input.DeepClone());
+        }
 
         var ids = input[idKey] is JArray supplied && supplied.Count > 0
             ? supplied.Values<long>().ToList()
             : GetSelectedIds(category);
         if (ids.Count == 0)
             return JsonConvert.SerializeObject(new { success = false, message = $"Không có phần tử phù hợp đang chọn cho {name}." });
+
+        // Cột phải được xử lý theo cả hệ trong MỘT lần gọi: engine sẽ sắp dưới → trên và nhóm theo trục XY.
+        // Tách từng ElementId ở đây làm mỗi đoạn bị hiểu như một hệ độc lập, gây thép rời hoặc vẽ trùng.
+        if (name == "draw_column_rebar")
+        {
+            var stackInput = (JObject)input.DeepClone();
+            stackInput[idKey] = new JArray(ids);
+            RunOnUi(() => ActivityStatus = $"Đang chạy {name}: {ids.Count} đoạn cột theo hệ…");
+            return _bridge.ExecuteToolOnRevitThread(name, stackInput);
+        }
 
         var results = new JArray();
         var succeeded = 0;
@@ -437,7 +457,8 @@ public sealed partial class ChatViewModel : ObservableObject
     }
 
     private static bool IsBatchDrawTool(string name) => name is
-        "draw_column_rebar" or "draw_beam_rebar" or "draw_wall_rebar" or "draw_footing_rebar";
+        "draw_column_rebar" or "draw_beam_rebar" or "draw_beam_rebar_from_open_excel" or
+        "draw_wall_rebar" or "draw_footing_rebar";
 
     private void AddBubble(ChatBubble bubble) => RunOnUi(() => Messages.Add(bubble));
 

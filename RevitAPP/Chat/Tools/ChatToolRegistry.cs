@@ -23,6 +23,7 @@ public sealed class ChatToolRegistry
         {
             new DrawColumnRebarTool(),
             new DrawBeamRebarTool(),
+            new DrawBeamRebarFromOpenExcelTool(),
             new DrawWallRebarTool(),
             new DrawFootingRebarTool(),
             new DrawBeamDrawingTool(),

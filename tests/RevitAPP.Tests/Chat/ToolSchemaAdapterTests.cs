@@ -50,6 +50,34 @@ public sealed class ToolSchemaAdapterTests
     }
 
     [Fact]
+    public void ToGemini_RemovesUnsupportedAdditionalPropertiesRecursively()
+    {
+        var schema = new ToolSchema(
+            "operate_element",
+            "Operate on an element",
+            new JObject
+            {
+                ["type"] = "object",
+                ["additionalProperties"] = false,
+                ["properties"] = new JObject
+                {
+                    ["data"] = new JObject
+                    {
+                        ["type"] = "object",
+                        ["additionalProperties"] = true
+                    }
+                }
+            });
+
+        var wire = ToolSchemaAdapter.ToGemini(new[] { schema });
+        var parameters = wire[0]?["functionDeclarations"]?[0]?["parameters"];
+
+        Assert.Empty(parameters!.SelectTokens("$..additionalProperties"));
+        Assert.NotNull(schema.ParametersJsonSchema["additionalProperties"]);
+        Assert.NotNull(schema.ParametersJsonSchema["properties"]?["data"]?["additionalProperties"]);
+    }
+
+    [Fact]
     public void NeutralSchema_ColumnTool_ContainsBuildOptionKeys()
     {
         var properties = (JObject)CreateSchema().ParametersJsonSchema["properties"]!;

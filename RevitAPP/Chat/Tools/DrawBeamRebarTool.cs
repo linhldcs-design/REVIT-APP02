@@ -2,6 +2,7 @@ using Autodesk.Revit.DB;
 using BeamRebarPro.Services;
 using Newtonsoft.Json.Linq;
 using RevitAPP.Chat.Models;
+using RevitAPP.Chat.Services;
 using ElementIdCompat = RevitAPP.Chat.Tools.ChatElementIdCompat;
 
 namespace RevitAPP.Chat.Tools;
@@ -19,9 +20,13 @@ public sealed class DrawBeamRebarTool : IChatTool
     public ToolSchema Schema => new(
         Name,
         "Vẽ thép dầm (thép chủ trên/dưới, gia cường, cốt đai, thép chống phình) cho các dầm chỉ định. " +
-        "Đơn vị mm. Bỏ trống beamIds để dùng các dầm đang chọn trong Revit.",
+        "Đơn vị mm. Bỏ trống beamIds để dùng các dầm đang chọn trong Revit. " +
+        "Khi người dùng yêu cầu vẽ theo bảng Excel, truyền excelFilePath để parser áp cấu hình theo Mark; không tự suy diễn thông số từ bảng.",
         new JsonSchemaBuilder()
             .IntegerArray("beamIds", "Danh sách ElementId dầm; bỏ trống để dùng selection hiện tại.")
+            .Text("excelFilePath", "Đường dẫn đầy đủ file Excel chứa bảng thép dầm theo Mark.")
+            .Text("excelSheetName", "Tên sheet Excel; bỏ trống để dùng sheet đầu tiên.")
+            .Integer("excelHeaderRow", "Số dòng tiêu đề, đếm từ 1; mặc định 1.")
             .Integer("mainTopCount", "Số thép chủ trên.")
             .Integer("mainTopDiameterMm", "Đường kính thép chủ trên (mm).")
             .Integer("mainBottomCount", "Số thép chủ dưới.")
@@ -64,18 +69,59 @@ public sealed class DrawBeamRebarTool : IChatTool
         var beamIds = idTokens.Select(t => ElementIdCompat.Create(t.Value<long>())).ToList();
         if (beamIds.Count == 0) throw new ArgumentException("'beamIds' rỗng.");
 
+        var excelPath = input.Value<string?>("excelFilePath")?.Trim();
+        Dictionary<string, BeamRebarScheduleRow>? schedule = null;
+        if (input["excelHeaders"] is JArray liveHeaders && input["excelRows"] is JArray liveRows)
+        {
+            schedule = BeamRebarScheduleParser.Parse(
+                    liveHeaders.Values<string>().Where(value => value is not null).Cast<string>().ToList(),
+                    liveRows.Select(row => (IReadOnlyList<object?>)((JArray)row).Select(value =>
+                        value.Type == JTokenType.Null ? null : (object?)value.ToString()).ToList()).ToList())
+                .ToDictionary(row => row.Mark, StringComparer.OrdinalIgnoreCase);
+        }
+        else if (!string.IsNullOrWhiteSpace(excelPath))
+        {
+            var headerRow = input.Value<int?>("excelHeaderRow") ?? 1;
+            var table = ExcelWorkbookReader.Read(excelPath, input.Value<string?>("excelSheetName"),
+                headerRow, headerRow + 1, 1000, 100);
+            schedule = BeamRebarScheduleParser.Parse(table.Headers, table.Rows)
+                .GroupBy(row => row.Mark, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group =>
+                {
+                    if (group.Count() > 1) throw new FormatException($"Mark '{group.Key}' bị lặp trong bảng Excel.");
+                    return group.Single();
+                }, StringComparer.OrdinalIgnoreCase);
+        }
+
         var idValues = beamIds.Select(ElementIdCompat.Value).ToList();
-        var savedModel = HasExplicitParameters(input) ? null : BeamConfigStore.Load(idValues);
-        var options = savedModel is null ? BuildOptions(input) : null;
+        var savedModel = schedule is null && !HasExplicitParameters(input) ? BeamConfigStore.Load(idValues) : null;
+        var options = schedule is null && savedModel is null ? BuildOptions(input) : null;
         int longitudinal = 0, stirrup = 0, antiBulge = 0, ok = 0;
         var warnings = new List<string>();
+        var appliedMarks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var id in beamIds)
         {
+            BeamRebarApiOptions? beamOptions = options;
+            if (schedule is not null)
+            {
+                var beam = ctx.Doc.GetElement(id);
+                var mark = beam?.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)?.AsString()?.Trim();
+                if (string.IsNullOrWhiteSpace(mark) || !schedule.TryGetValue(mark, out var row))
+                {
+                    warnings.Add($"Dầm {ElementIdCompat.Value(id)} có Mark '{mark ?? "(trống)"}' không tồn tại trong bảng Excel; đã bỏ qua.");
+                    continue;
+                }
+                beamOptions = BuildOptions(row);
+                appliedMarks.Add(mark);
+            }
+
             // Mỗi dầm 1 lệnh riêng để orchestrator không gộp các dầm cùng trục thành 1 run nhiều nhịp.
             var result = savedModel is not null
                 ? BeamRebarApi.DrawForBeams(ctx.Doc, new[] { id }, savedModel)
-                : BeamRebarApi.DrawForBeams(ctx.Doc, new[] { id }, options);
-            ok++;
+                : BeamRebarApi.DrawForBeams(ctx.Doc, new[] { id }, beamOptions);
+            var created = result.LongitudinalCount + result.StirrupCount + result.AntiBulgeCount;
+            if (created > 0) ok++;
+            else warnings.Add($"Dầm {ElementIdCompat.Value(id)} không tạo được thanh thép nào.");
             longitudinal += result.LongitudinalCount;
             stirrup += result.StirrupCount;
             antiBulge += result.AntiBulgeCount;
@@ -84,12 +130,46 @@ public sealed class DrawBeamRebarTool : IChatTool
 
         var message = $"Đã tạo {longitudinal} thanh thép dọc, {stirrup} đai, " +
                       $"{antiBulge} thép chống phình cho {ok}/{beamIds.Count} dầm.";
+        if (schedule is not null) message += $" Đã áp bảng Excel theo Mark: {string.Join(", ", appliedMarks.OrderBy(value => value))}.";
         if (warnings.Count > 0) message += " | " + string.Join("; ", warnings.Distinct());
-        return new { success = true, message, usedSavedConfig = savedModel is not null };
+        return new { success = ok > 0, message, usedSavedConfig = savedModel is not null,
+            usedExcelSchedule = schedule is not null, appliedMarks = appliedMarks.OrderBy(value => value).ToArray() };
     }
 
     private static bool HasExplicitParameters(JObject input) =>
         input.Properties().Any(p => !string.Equals(p.Name, "beamIds", StringComparison.OrdinalIgnoreCase));
+
+    private static BeamRebarApiOptions BuildOptions(BeamRebarScheduleRow row)
+    {
+        var options = new BeamRebarApiOptions
+        {
+            MainTopCount = row.MainTop.Count,
+            MainTopDiameterMm = row.MainTop.DiameterMm,
+            MainTopBendDownFromHeightMinusMm = row.MainTop.BendDownFromHeightMinusMm,
+            MainBottomCount = row.MainBottom.Count,
+            MainBottomDiameterMm = row.MainBottom.DiameterMm,
+            StirrupDiameterMm = row.Stirrup.DiameterMm,
+            StirrupSpacingEndMm = row.Stirrup.EndSpacingMm,
+            StirrupSpacingMidMm = row.Stirrup.MidSpacingMm
+        };
+
+        if (row.Support.Layer == 2)
+            options = options with { TopAddL2Enabled = row.Support.Enabled, TopAddL2Count = row.Support.Count,
+                TopAddL2DiameterMm = row.Support.DiameterMm,
+                TopAddL2EdgeHookDownFromHeightMinusMm = row.Support.BendDownFromHeightMinusMm };
+        else
+            options = options with { TopAddEnabled = row.Support.Enabled, TopAddCount = row.Support.Count,
+                TopAddDiameterMm = row.Support.DiameterMm,
+                TopAddEdgeHookDownFromHeightMinusMm = row.Support.BendDownFromHeightMinusMm };
+
+        if (row.Midspan.Layer == 2)
+            options = options with { BottomAddL2Enabled = row.Midspan.Enabled, BottomAddL2Count = row.Midspan.Count,
+                BottomAddL2DiameterMm = row.Midspan.DiameterMm };
+        else
+            options = options with { BottomAddEnabled = row.Midspan.Enabled, BottomAddCount = row.Midspan.Count,
+                BottomAddDiameterMm = row.Midspan.DiameterMm };
+        return options;
+    }
 
     private static BeamRebarApiOptions BuildOptions(JObject p)
     {
@@ -132,5 +212,41 @@ public sealed class DrawBeamRebarTool : IChatTool
                 p.Value<double?>("antiBulgeHeightThresholdMm") ?? d.AntiBulgeHeightThresholdMm,
             CoverMm = p.Value<int?>("coverMm") ?? d.CoverMm
         };
+    }
+}
+
+/// <summary>Đường gọi xác định cho yêu cầu “vẽ theo Excel đang mở”; tự nối workbook với tool dầm.</summary>
+public sealed class DrawBeamRebarFromOpenExcelTool : IChatTool
+{
+    public string Name => "draw_beam_rebar_from_open_excel";
+    public bool RequiresTransaction => false;
+    public bool RequiresLicense => true;
+
+    public ToolSchema Schema => new(
+        Name,
+        "Vẽ thép các dầm đang chọn theo bảng Excel hiện đang mở. Tự tìm workbook và áp từng dòng theo Instance Mark; dùng tool này thay cho read_excel_table + tự suy diễn.",
+        new JsonSchemaBuilder()
+            .IntegerArray("beamIds", "Danh sách ElementId dầm; bỏ trống để dùng dầm đang chọn.")
+            .Text("sheetName", "Tên sheet; bỏ trống để dùng sheet đầu tiên.")
+            .Integer("headerRow", "Dòng tiêu đề, mặc định 1.")
+            .Build());
+
+    public object Execute(JObject input, ChatToolContext ctx)
+    {
+        var files = OpenExcelWorkbookFinder.Find();
+        if (files.Count == 0) throw new InvalidOperationException("Không tìm thấy workbook Excel đã lưu đang mở.");
+        if (files.Count > 1)
+            throw new InvalidOperationException("Đang mở nhiều workbook Excel; hãy đóng bớt hoặc dùng draw_beam_rebar với excelFilePath cụ thể. " +
+                                                string.Join("; ", files));
+
+        var forwarded = (JObject)input.DeepClone();
+        var table = OpenExcelTableReader.Read(files[0], input.Value<string?>("sheetName"),
+            input.Value<int?>("headerRow") ?? 1);
+        forwarded["excelFilePath"] = files[0];
+        forwarded["excelHeaders"] = new JArray(table.Headers);
+        forwarded["excelRows"] = new JArray(table.Rows.Select(row => new JArray(row)));
+        forwarded.Remove("sheetName");
+        forwarded.Remove("headerRow");
+        return new DrawBeamRebarTool().Execute(forwarded, ctx);
     }
 }

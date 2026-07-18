@@ -29,8 +29,16 @@ public static class ToolSchemaAdapter
         {
             ["name"] = tool.Name,
             ["description"] = tool.Description,
-            ["parameters"] = tool.ParametersJsonSchema.DeepClone()
+            ["parameters"] = ToGeminiSchema(tool.ParametersJsonSchema)
         }));
         return new JArray { new JObject { ["functionDeclarations"] = declarations } };
+    }
+
+    private static JToken ToGeminiSchema(JToken schema)
+    {
+        var clone = schema.DeepClone();
+        foreach (var value in clone.SelectTokens("$..additionalProperties").ToList())
+            value.Parent?.Remove();
+        return clone;
     }
 }

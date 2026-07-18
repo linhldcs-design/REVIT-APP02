@@ -489,49 +489,21 @@ public sealed class LongitudinalBarCreator
         if (!rebar.IsRebarShapeDriven()) return;
 
         var accessor = rebar.GetShapeDrivenAccessor();
-        var doc = rebar.Document;
         var layoutDistance = layoutDistanceFeet is > 1e-6 ? layoutDistanceFeet.Value : usableHalf * 2;
         try
         {
+            // Thanh đầu tiên luôn được dựng tại mép -Across (FirstLateral = -usableHalf), còn normal khi
+            // CreateFromCurves là frame.Across. Vì vậy rải về normal side sẽ đi vào trong tiết diện rồi
+            // tới mép +Across. Không regenerate để "đo lại" từng set: Revit 2025 chạy các Rebar Updater
+            // ở mỗi lần regenerate; khi tạo hàng loạt, các updater có thể cùng sửa một rebar và làm Revit
+            // treo/crash. Transaction commit sẽ regenerate đúng một lần sau khi toàn bộ set đã hoàn tất.
             accessor.SetLayoutAsFixedNumber(count, layoutDistance, barsOnNormalSide: true,
                 includeFirstBar: true, includeLastBar: true);
-            doc.Regenerate();
-
-            // Nếu bar rải RA NGOÀI bề rộng dầm (offset > usableHalf) → đảo chiều rải.
-            if (MaxBarOffsetFromCenter(rebar, frame) > usableHalf + 2.0 / 304.8)
-            {
-                accessor.SetLayoutAsFixedNumber(count, layoutDistance, barsOnNormalSide: false,
-                    includeFirstBar: true, includeLastBar: true);
-                doc.Regenerate();
-            }
         }
         catch
         {
             // Một số shape không cho fixed-number; giữ nguyên (Single) còn hơn fail cả thanh.
         }
-    }
-
-    /// <summary>
-    ///     Khoảng cách lớn nhất từ tâm các thanh tới TRỤC dầm theo phương ngang (Across). Dùng để phát hiện
-    ///     bar bị rải RA NGOÀI bề rộng dầm (offset > usableHalf), chính xác hơn so với host bbox.
-    /// </summary>
-    private static double MaxBarOffsetFromCenter(Autodesk.Revit.DB.Structure.Rebar rebar, SpanFrame frame)
-    {
-        var center = frame.AxisTop(0.5);
-        var across = frame.Across;
-        var maxOffset = 0.0;
-        var n = rebar.NumberOfBarPositions;
-        for (var i = 0; i < n; i++)
-        {
-            foreach (var curve in rebar.GetCenterlineCurves(false, false, false,
-                         MultiplanarOption.IncludeOnlyPlanarCurves, i))
-            {
-                var p = curve.GetEndPoint(0);
-                var offset = Math.Abs((p - center).DotProduct(across));
-                if (offset > maxOffset) maxOffset = offset;
-            }
-        }
-        return maxOffset;
     }
 
     private static XYZ PointAt(SpanFrame frame, double t, double lateral, double vertical)

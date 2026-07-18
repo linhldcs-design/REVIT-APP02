@@ -21,6 +21,7 @@
     <ItemGroup>
         <ProjectReference Include="..\..\RevitAPP.Core\RevitAPP.Core.csproj"/>
         <Compile Include="..\..\RevitAPP\Chat\Services\ExcelWorkbookReader.cs" Link="Chat\ExcelWorkbookReader.cs"/>
+        <Compile Include="..\..\RevitAPP\Chat\Services\BeamRebarScheduleParser.cs" Link="Chat\BeamRebarScheduleParser.cs"/>
     </ItemGroup>
 
 </Project>

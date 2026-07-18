@@ -40,12 +40,14 @@ public sealed record BeamRebarApiOptions
     public double TopAddLengthMm { get; init; }
     /// <summary>Đoạn bẻ móc xuống ở đầu biên (hai gối ngoài cùng) của thép gia cường trên (mm). 0 = không bẻ.</summary>
     public double TopAddEdgeHookDownMm { get; init; }
+    public double TopAddEdgeHookDownFromHeightMinusMm { get; init; }
 
     public bool TopAddL2Enabled { get; init; }
     public int TopAddL2Count { get; init; } = 2;
     public int TopAddL2DiameterMm { get; init; } = 16;
     public double TopAddL2LengthMm { get; init; }
     public double TopAddL2EdgeHookDownMm { get; init; }
+    public double TopAddL2EdgeHookDownFromHeightMinusMm { get; init; }
 
     // ── Thép gia cường DƯỚI (giữa nhịp) ───────────────────────────────────────
     public bool BottomAddEnabled { get; init; }
@@ -115,7 +117,9 @@ public static class BeamRebarApi
             return new RebarCreationResult(0, 0, 0, new[] { "Không có dầm (FamilyInstance) hợp lệ trong danh sách." });
 
         // Móc bẻ theo H khác nhau mỗi dầm → phải build model riêng cho từng dầm, chạy orchestrator từng cái.
-        if (options.MainTopBendDownFromHeightMinusMm > 0)
+        if (options.MainTopBendDownFromHeightMinusMm > 0 ||
+            options.TopAddEdgeHookDownFromHeightMinusMm > 0 ||
+            options.TopAddL2EdgeHookDownFromHeightMinusMm > 0)
             return DrawPerBeam(document, beams, options, useExistingTransaction);
 
         var model = BuildModel(options, mainTopBendDownMm: options.MainTopBendDownLengthMm);
@@ -140,17 +144,28 @@ public static class BeamRebarApi
         foreach (var beam in beams)
         {
             double bendMm = options.MainTopBendDownLengthMm;
+            double topAddHookMm = options.TopAddEdgeHookDownMm;
+            double topAddL2HookMm = options.TopAddL2EdgeHookDownMm;
             if (reader.TryRead(beam, out var segment, out var readError))
             {
                 var byHeight = segment.Section.HeightMm - options.MainTopBendDownFromHeightMinusMm;
-                if (byHeight > 0) bendMm = byHeight;
+                if (options.MainTopBendDownFromHeightMinusMm > 0 && byHeight > 0) bendMm = byHeight;
+                var topAddByHeight = segment.Section.HeightMm - options.TopAddEdgeHookDownFromHeightMinusMm;
+                if (options.TopAddEdgeHookDownFromHeightMinusMm > 0 && topAddByHeight > 0) topAddHookMm = topAddByHeight;
+                var topAddL2ByHeight = segment.Section.HeightMm - options.TopAddL2EdgeHookDownFromHeightMinusMm;
+                if (options.TopAddL2EdgeHookDownFromHeightMinusMm > 0 && topAddL2ByHeight > 0) topAddL2HookMm = topAddL2ByHeight;
             }
             else
             {
                 warnings.Add(readError);
             }
 
-            var model = BuildModel(options, mainTopBendDownMm: bendMm);
+            var perBeamOptions = options with
+            {
+                TopAddEdgeHookDownMm = topAddHookMm,
+                TopAddL2EdgeHookDownMm = topAddL2HookMm
+            };
+            var model = BuildModel(perBeamOptions, mainTopBendDownMm: bendMm);
             var result = Run(orchestrator, document, new[] { beam }, model, useExistingTransaction);
             longitudinal += result.LongitudinalCount;
             stirrup += result.StirrupCount;

@@ -88,17 +88,160 @@ public static class ColumnRebarApi
         return new RebarBuildResult(totalMain, totalStirrup, totalStarter, allErrors);
     }
 
-    // 50mm — đủ rộng để gộp sai số đặt cột, đủ hẹp để tách hai trục cột liền kề.
-    private const double PlanGroupToleranceFeet = 50d / 304.8;
+    /// <summary>
+    ///     Vẽ đúng cấu hình add-in đã lưu, gồm tham số chung và cấu hình riêng từng tầng.
+    ///     Caller phải đang ở trong Transaction.
+    /// </summary>
+    public static RebarBuildResult DrawForColumns(
+        Document document, IReadOnlyList<ElementId> columnIds, ColumnRebarConfig preset)
+    {
+        var columns = columnIds.Select(document.GetElement).OfType<FamilyInstance>().ToList();
+        if (columns.Count == 0)
+            return new RebarBuildResult(0, 0, 0, new[] { "Không có cột (FamilyInstance) hợp lệ trong danh sách." });
 
-    /// <summary>Gom các đoạn cột theo tâm XY (làm tròn) thành từng hệ cột thẳng hàng.</summary>
+        var detector = new ColumnStackDetector();
+        var items = columns.Count == 1
+            ? detector.BuildStack(document, columns[0], out _)
+            : detector.BuildStackFromColumns(document, columns, out _);
+        if (items.Count == 0)
+            return new RebarBuildResult(0, 0, 0, new[] { "Không tìm thấy cột hợp lệ." });
+
+        var barTypes = new RebarBarTypeProvider().GetAll(document);
+        if (barTypes.Count == 0)
+            return new RebarBuildResult(0, 0, 0, new[] { "Dự án chưa có loại thanh thép (RebarBarType)." });
+
+        var builder = new ColumnRebarBuilder();
+        var totalMain = 0;
+        var totalStirrup = 0;
+        var totalStarter = 0;
+        var warnings = new List<string>();
+
+        foreach (var group in GroupByPlanLocation(items))
+        {
+            var stack = group.OrderBy(item => item.Storey.BaseElevationMm).ToList();
+            var plans = BuildPlansFromPreset(stack, preset, barTypes);
+            if (plans.Count != stack.Count)
+            {
+                warnings.Add($"Preset '{preset.Name}' thiếu cấu hình tầng; hệ cột được bỏ qua.");
+                continue;
+            }
+
+            var result = builder.Build(
+                document,
+                stack,
+                plans,
+                new RebarLapOptions(preset.LapFactor, preset.CoverMm, preset.StaggerLap,
+                    preset.LapPosition, preset.LapDistanceFromBottomMm),
+                preset.FoundationEnabled
+                    ? new FoundationStarterOptions(true, preset.FoundationHmMm, preset.FoundationLbMm,
+                        preset.FoundationDirection, preset.FoundationSplitBothSides)
+                    : null,
+                new StirrupSpreadOptions(preset.DistanceToFirstStirrupMm, preset.SpreadThroughBeam,
+                    preset.MinConfineZoneMm, preset.ConfineClearanceDivisor, preset.ReinforceJoint,
+                    (int)Math.Max(2, preset.JointStirrupCount), preset.CrosstieDirection),
+                new ColumnEndOptions(preset.TopHookBending, preset.TopHookLengthMm, preset.CrankAtLap),
+                preset.AddPartition,
+                new SectionTransitionOptions(preset.BendIfOffsetLeMm, preset.SlopeRatioHdOverE,
+                    preset.LargeStepMode, preset.JointAnchorDownMm));
+
+            totalMain += result.MainBarCount;
+            totalStirrup += result.StirrupSetCount;
+            totalStarter += result.StarterBarCount;
+            warnings.AddRange(result.Warnings);
+        }
+
+        return new RebarBuildResult(totalMain, totalStirrup, totalStarter, warnings);
+    }
+
+    private static IReadOnlyList<StoreyRebarPlan> BuildPlansFromPreset(
+        IReadOnlyList<ColumnStackItem> stack,
+        ColumnRebarConfig preset,
+        IReadOnlyList<RebarBarTypeOption> barTypes)
+    {
+        var plans = new List<StoreyRebarPlan>(stack.Count);
+        foreach (var item in stack)
+        {
+            var floor = preset.Floors.FirstOrDefault(value =>
+                string.Equals(value.LevelName, item.Storey.LevelName, StringComparison.OrdinalIgnoreCase));
+            if (floor is null) continue;
+
+            var mainBar = NearestByDiameter(barTypes, floor.MainBarDiameterMm);
+            var stirrup = NearestByDiameter(barTypes, floor.StirrupDiameterMm);
+            var distributionBar = floor.UseDistributionBar
+                ? NearestByDiameter(barTypes, floor.DistributionBarDiameterMm)
+                : null;
+            var floorConfig = new FloorRebarConfig(
+                mainBar.DiameterMm, floor.BarsX, floor.BarsY, stirrup.DiameterMm,
+                floor.SpacingEndMm, floor.SpacingMidMm, floor.ConfineZoneLenMm,
+                Math.Round(item.AutoBeamDepthMm), floor.UseDistributionBar,
+                distributionBar?.DiameterMm ?? mainBar.DiameterMm, floor.StirrupSectionType);
+            plans.Add(new StoreyRebarPlan(item.Storey, floorConfig, mainBar, stirrup, distributionBar));
+        }
+
+        return plans;
+    }
+
+    private const double VerticalJointToleranceMm = 50d;
+    private const double PlanToleranceMm = 1d;
+
+    /// <summary>
+    /// Gom các đoạn cột thành từng hệ liên tục theo chiều đứng. Không thể chỉ gom theo tâm XY:
+    /// cột tầng trên thu tiết diện sát một mặt sẽ dịch tâm, nhưng vẫn thuộc cùng hệ cột.
+    /// </summary>
     private static IEnumerable<IReadOnlyList<ColumnStackItem>> GroupByPlanLocation(
         IReadOnlyList<ColumnStackItem> items)
-        => items
-            .GroupBy(it => (
-                X: Math.Round(it.CenterXFeet / PlanGroupToleranceFeet),
-                Y: Math.Round(it.CenterYFeet / PlanGroupToleranceFeet)))
-            .Select(g => (IReadOnlyList<ColumnStackItem>)g.ToList());
+    {
+        var remaining = new HashSet<int>(Enumerable.Range(0, items.Count));
+        while (remaining.Count > 0)
+        {
+            var seed = remaining.First();
+            remaining.Remove(seed);
+            var queue = new Queue<int>();
+            queue.Enqueue(seed);
+            var group = new List<ColumnStackItem>();
+
+            while (queue.Count > 0)
+            {
+                var currentIndex = queue.Dequeue();
+                var current = items[currentIndex];
+                group.Add(current);
+
+                foreach (var candidateIndex in remaining.ToList())
+                {
+                    if (!AreVerticallyConnected(current, items[candidateIndex])) continue;
+                    remaining.Remove(candidateIndex);
+                    queue.Enqueue(candidateIndex);
+                }
+            }
+
+            yield return group;
+        }
+    }
+
+    private static bool AreVerticallyConnected(ColumnStackItem a, ColumnStackItem b)
+    {
+        var verticalGapMm = Math.Min(
+            Math.Abs(a.Storey.TopElevationMm - b.Storey.BaseElevationMm),
+            Math.Abs(b.Storey.TopElevationMm - a.Storey.BaseElevationMm));
+        if (verticalGapMm > VerticalJointToleranceMm) return false;
+
+        // Cùng tâm, hoặc tâm của một tiết diện nằm trong footprint của tiết diện kia.
+        // Điều kiện đối xứng xử lý cả thu tiết diện và trường hợp tầng trên lớn hơn.
+        return CenterFallsInside(a, b) || CenterFallsInside(b, a);
+    }
+
+    private static bool CenterFallsInside(ColumnStackItem footprint, ColumnStackItem point)
+    {
+        var dxMm = (point.CenterXFeet - footprint.CenterXFeet) * 304.8;
+        var dyMm = (point.CenterYFeet - footprint.CenterYFeet) * 304.8;
+        var cos = Math.Cos(footprint.RotationRad);
+        var sin = Math.Sin(footprint.RotationRad);
+        var localX = dxMm * cos + dyMm * sin;
+        var localY = -dxMm * sin + dyMm * cos;
+
+        return Math.Abs(localX) <= footprint.Storey.Section.WidthMm / 2d + PlanToleranceMm
+            && Math.Abs(localY) <= footprint.Storey.Section.HeightMm / 2d + PlanToleranceMm;
+    }
 
     private static RebarBarTypeOption NearestByDiameter(IReadOnlyList<RebarBarTypeOption> options, double targetMm) =>
         options.OrderBy(o => Math.Abs(o.DiameterMm - targetMm)).First();

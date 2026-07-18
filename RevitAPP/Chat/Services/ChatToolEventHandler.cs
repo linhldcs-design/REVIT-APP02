@@ -116,7 +116,8 @@ public sealed class ChatToolEventHandler : IExternalEventHandler
     public string GetName() => "ChatToolEventHandler";
 
     private static bool IsRebarDrawTool(string name) => name is
-        "draw_column_rebar" or "draw_beam_rebar" or "draw_wall_rebar" or "draw_footing_rebar";
+        "draw_column_rebar" or "draw_beam_rebar" or "draw_beam_rebar_from_open_excel" or
+        "draw_wall_rebar" or "draw_footing_rebar";
 
     private static HashSet<long> CollectRebarIds(Document document) =>
         new FilteredElementCollector(document)
@@ -131,6 +132,7 @@ public sealed class ChatToolEventHandler : IExternalEventHandler
         {
             "draw_column_rebar" => ("columnIds", BuiltInCategory.OST_StructuralColumns),
             "draw_beam_rebar" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
+            "draw_beam_rebar_from_open_excel" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
             "draw_beam_drawing" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
             "draw_wall_rebar" => ("wallIds", BuiltInCategory.OST_Walls),
             "draw_footing_rebar" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
