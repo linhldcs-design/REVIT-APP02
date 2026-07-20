@@ -19,15 +19,24 @@ public sealed class FootingGeometryReader
         geometry = null!;
         error = string.Empty;
 
-        var vertices = CollectSolidVertices(foundation);
+        var solids = CollectSolids(foundation);
+        var structuralSolids = RemoveExplicitBottomBlindingSolids(foundation.Document, solids);
+        if (structuralSolids.Count == 0) structuralSolids = solids;
+
+        var dirX = ResolveDirX(foundation, dirXOverride);
+        var dirY = XYZ.BasisZ.CrossProduct(dirX).Normalize();
+
+        // Family không đặt Material/Subcategory vẫn thường model bê tông lót thành một bản mỏng riêng ở đáy.
+        // Chỉ dùng heuristic khi chưa có metadata rõ ràng và điều kiện hình học đủ chặt để tránh loại nhầm đế móng.
+        if (structuralSolids.Count == solids.Count)
+            structuralSolids = RemoveGeometricBlindingSlab(structuralSolids, dirX, dirY);
+
+        var vertices = CollectVertices(structuralSolids);
         if (vertices.Count == 0)
         {
             error = $"Móng id {foundation.Id.ToValue()}: không lấy được solid bê tông để đọc hình học.";
             return false;
         }
-
-        var dirX = ResolveDirX(foundation, dirXOverride);
-        var dirY = XYZ.BasisZ.CrossProduct(dirX).Normalize();
 
         var bottomZ = vertices.Min(p => p.Z);
         var topZ = vertices.Max(p => p.Z);
@@ -155,18 +164,99 @@ public sealed class FootingGeometryReader
 
     private static double MmToFeet(double mm) => mm / 304.8;
 
-    private static List<XYZ> CollectSolidVertices(Element element)
+    private static List<Solid> CollectSolids(Element element)
     {
-        var points = new List<XYZ>();
         var options = new Options { ComputeReferences = false, DetailLevel = ViewDetailLevel.Fine };
         var geom = element.get_Geometry(options);
-        if (geom is null) return points;
+        return geom is null ? [] : EnumerateSolids(geom).ToList();
+    }
 
-        foreach (var solid in EnumerateSolids(geom))
+    private static List<XYZ> CollectVertices(IEnumerable<Solid> solids)
+    {
+        var points = new List<XYZ>();
+
+        foreach (var solid in solids)
             foreach (Edge edge in solid.Edges)
                 points.AddRange(edge.Tessellate());
 
         return points;
+    }
+
+    private static bool IsExplicitBlindingSolid(Document document, Solid solid)
+    {
+        if (solid.GraphicsStyleId != ElementId.InvalidElementId
+            && document.GetElement(solid.GraphicsStyleId) is GraphicsStyle style
+            && BlindingConcreteFilter.IsBlindingName(style.GraphicsStyleCategory?.Name ?? style.Name))
+            return true;
+
+        var areaByMaterial = new Dictionary<ElementId, double>();
+        foreach (Face face in solid.Faces)
+        {
+            var materialId = face.MaterialElementId;
+            if (materialId == ElementId.InvalidElementId) continue;
+            areaByMaterial[materialId] = areaByMaterial.GetValueOrDefault(materialId) + face.Area;
+        }
+
+        if (areaByMaterial.Count == 0) return false;
+        var dominantMaterialId = areaByMaterial.MaxBy(pair => pair.Value).Key;
+        return document.GetElement(dominantMaterialId) is Material material
+               && BlindingConcreteFilter.IsBlindingName(material.Name);
+    }
+
+    private static List<Solid> RemoveExplicitBottomBlindingSolids(Document document, List<Solid> solids)
+    {
+        if (solids.Count == 0) return solids;
+
+        var bottomBySolid = solids.ToDictionary(
+            solid => solid,
+            solid => CollectVertices([solid]).Min(point => point.Z));
+        var familyBottom = bottomBySolid.Values.Min();
+        var bottomTolerance = MmToFeet(1);
+
+        return solids
+            .Where(solid => bottomBySolid[solid] > familyBottom + bottomTolerance
+                            || !IsExplicitBlindingSolid(document, solid))
+            .ToList();
+    }
+
+    private static List<Solid> RemoveGeometricBlindingSlab(List<Solid> solids, XYZ dirX, XYZ dirY)
+    {
+        if (solids.Count < 2) return solids;
+
+        var extents = solids.Select(solid => new SolidExtent(solid, CollectVertices([solid]), dirX, dirY)).ToList();
+        var candidate = extents.OrderBy(extent => extent.BottomZ).First();
+        var above = extents
+            .Where(extent => !ReferenceEquals(extent.Solid, candidate.Solid) && extent.BottomZ >= candidate.BottomZ)
+            .OrderBy(extent => Math.Abs(extent.BottomZ - candidate.TopZ))
+            .FirstOrDefault();
+
+        if (above is null) return solids;
+
+        var isBlinding = BlindingConcreteFilter.LooksLikeBlindingSlab(
+            candidate.BottomZ, candidate.TopZ, candidate.WidthX, candidate.WidthY,
+            above.BottomZ, above.TopZ, above.WidthX, above.WidthY,
+            MmToFeet(150), MmToFeet(20), MmToFeet(100));
+
+        return isBlinding ? solids.Where(solid => !ReferenceEquals(solid, candidate.Solid)).ToList() : solids;
+    }
+
+    private sealed class SolidExtent
+    {
+        public SolidExtent(Solid solid, IReadOnlyList<XYZ> vertices, XYZ dirX, XYZ dirY)
+        {
+            Solid = solid;
+            BottomZ = vertices.Min(point => point.Z);
+            TopZ = vertices.Max(point => point.Z);
+            var (_, widthX, widthY) = PlanExtent(vertices, dirX, dirY);
+            WidthX = widthX;
+            WidthY = widthY;
+        }
+
+        public Solid Solid { get; }
+        public double BottomZ { get; }
+        public double TopZ { get; }
+        public double WidthX { get; }
+        public double WidthY { get; }
     }
 
     private static IEnumerable<Solid> EnumerateSolids(GeometryElement geom)

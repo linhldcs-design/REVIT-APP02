@@ -10,7 +10,7 @@
         <LaunchRevit>true</LaunchRevit>
         <IsRepackable>true</IsRepackable>
         <EnableDynamicLoading>true</EnableDynamicLoading>
-        <Version>1.1.3</Version>
+        <Version>1.1.4</Version>
         <!-- Optional unique assembly identity for Add-In Manager smoke tests while the deployed RevitAPP is loaded. -->
         <AssemblyName Condition="'$(RevitAPPAssemblyName)' != ''">$(RevitAPPAssemblyName)</AssemblyName>
         <!-- Multi-version R23–R27. R27: RebarHookOrientation đã bỏ → xử lý bằng preprocessor. -->

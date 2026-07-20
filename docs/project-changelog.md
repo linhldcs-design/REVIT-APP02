@@ -1,5 +1,12 @@
 # Project Changelog
 
+## 2026-07-20
+
+### IsolatedFootingRebar: bỏ qua bê tông lót
+
+- Khi đọc hình học family móng để bố trí thép, bỏ qua solid bê tông lót ở đáy theo Material/Subcategory; nếu family không có metadata phù hợp, dùng điều kiện hình học chặt để nhận diện bản lót mỏng, rộng hơn khối móng phía trên.
+- Nếu không tìm được solid kết cấu sau khi lọc, giữ nguyên toàn bộ solid làm phương án an toàn để tránh làm hỏng các family hiện hữu.
+
 ## 2026-07-17
 
 ### AI Chat Panel + native tool control

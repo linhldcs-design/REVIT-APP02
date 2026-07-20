@@ -21,6 +21,9 @@
         <Compile Include="..\..\src\IsolatedFootingRebar\Services\FootingMath.cs">
             <Link>Core\Services\FootingMath.cs</Link>
         </Compile>
+        <Compile Include="..\..\src\IsolatedFootingRebar\Services\BlindingConcreteFilter.cs">
+            <Link>Core\Services\BlindingConcreteFilter.cs</Link>
+        </Compile>
     </ItemGroup>
 
 </Project>
