@@ -36,7 +36,7 @@
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
 - Test gần nhất: 159/159 đạt.
-- GitHub Actions của Release `v1.0.0`: thành công toàn bộ.
+- GitHub Actions của Release `v1.1.5`: thành công toàn bộ; Release có đủ 8 asset và `latest.json` trả HTTP 200.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
@@ -46,6 +46,7 @@
 - Thay đổi cho `v1.1.4`: công cụ Vẽ Móng Đơn bỏ qua solid bê tông lót ở dưới cùng khi đọc hình học family; ưu tiên Material/Subcategory và có nhận dạng hình học dự phòng cho family không gán metadata.
 - Thay đổi cho `v1.1.5`: Chat AI có 53 tool; thêm vẽ mặt bằng/mặt cắt móng trực tiếp và điều phối C# nguyên tử để giữ đúng viewport ID, xếp mặt bằng trên/mặt cắt dưới, căn tên view, kiểm tra sức chứa/va chạm nội dung sheet và rollback toàn bộ khi lỗi.
 - Các commit phát hành gần nhất:
+  - `72012ff` — Chat AI 53 tool và tự động triển khai bản vẽ móng lên sheet; phát hành v1.1.5
   - `dd37339` — bỏ qua bê tông lót khi đọc hình học móng đơn; phát hành v1.1.4
   - `aa1d25a` — attach installer executable to releases
   - `37f6391` — publish standalone installer in releases
