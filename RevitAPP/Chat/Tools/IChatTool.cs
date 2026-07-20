@@ -24,3 +24,10 @@ public interface IChatTool
 
     object Execute(JObject input, ChatToolContext ctx);
 }
+
+/// <summary>Tool thay đổi model hoặc chạy mã tùy ý cần xác nhận trước khi marshal vào Revit.</summary>
+public interface IConfirmableChatTool
+{
+    bool RequiresConfirmation { get; }
+    bool IsDangerous { get; }
+}

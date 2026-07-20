@@ -10,7 +10,7 @@
         <LaunchRevit>true</LaunchRevit>
         <IsRepackable>true</IsRepackable>
         <EnableDynamicLoading>true</EnableDynamicLoading>
-        <Version>1.1.5</Version>
+        <Version>1.1.6</Version>
         <!-- Optional unique assembly identity for Add-In Manager smoke tests while the deployed RevitAPP is loaded. -->
         <AssemblyName Condition="'$(RevitAPPAssemblyName)' != ''">$(RevitAPPAssemblyName)</AssemblyName>
         <!-- Multi-version R23–R27. R27: RebarHookOrientation đã bỏ → xử lý bằng preprocessor. -->
@@ -33,6 +33,7 @@
 
         <!-- Chat AI: JObject cho tool params + parse wire format 3 provider LLM. -->
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0"/>
         <PackageReference Include="ExcelDataReader" Version="3.9.0"/>
         <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0"/>
 

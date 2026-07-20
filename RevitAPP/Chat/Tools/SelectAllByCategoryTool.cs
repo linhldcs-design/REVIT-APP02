@@ -14,6 +14,7 @@ public sealed class SelectAllByCategoryTool : IChatTool
         new Dictionary<string, BuiltInCategory>(StringComparer.OrdinalIgnoreCase)
         {
             ["structural_columns"] = BuiltInCategory.OST_StructuralColumns,
+            ["structural_column_tags"] = BuiltInCategory.OST_StructuralColumnTags,
             ["structural_framing"] = BuiltInCategory.OST_StructuralFraming,
             ["walls"] = BuiltInCategory.OST_Walls,
             ["structural_foundations"] = BuiltInCategory.OST_StructuralFoundation,
@@ -38,7 +39,7 @@ public sealed class SelectAllByCategoryTool : IChatTool
                 {
                     ["type"] = "string",
                     ["enum"] = new JArray(Categories.Keys),
-                    ["description"] = "Nhóm phần tử cần chọn. Cột kết cấu = structural_columns."
+                    ["description"] = "Nhóm phần tử cần chọn. Cột kết cấu = structural_columns; tag/ký hiệu cột = structural_column_tags."
                 },
                 ["scope"] = new JObject
                 {

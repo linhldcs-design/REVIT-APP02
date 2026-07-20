@@ -14,6 +14,7 @@ using Nice3point.Revit.Toolkit;
 using RevitAPP.Chat.Models;
 using RevitAPP.Chat.Services;
 using RevitAPP.Chat.Tools;
+using RevitAPP.Chat.Tools.Native;
 using RevitAPP.Chat.Views;
 
 namespace RevitAPP.Chat.ViewModels;
@@ -74,7 +75,12 @@ public sealed partial class ChatViewModel : ObservableObject
         var pendingImages = PendingImages.ToList();
         AddBubble(new ChatBubble(ChatBubble.User,
             text!, Images: pendingImages.Select(image => image.Preview).ToList()));
-        if (pendingImages.Count == 0 && TryHandleMemoryCommand(text!)) return;
+        if (pendingImages.Count == 0 && (TryHandleToolListCommand(text!) || TryHandleMemoryCommand(text!))) return;
+        if (pendingImages.Count == 0 && IsSelectAllColumnTagsIntent(text!))
+        {
+            await HandleSelectAllColumnTagsAsync(text!);
+            return;
+        }
 
         var settings = _settingsStore.Load();
         if (!settings.HasKeyFor(settings.ActiveProvider))
@@ -225,24 +231,20 @@ public sealed partial class ChatViewModel : ObservableObject
         RunOnUi(() => ActivityStatus = $"Đang chạy {name}…");
         string result;
         var registeredTool = _registry.Get(name);
-        if (registeredTool is IBackgroundChatTool backgroundTool)
+        if (name == "send_code_to_revit" &&
+            (input.Value<string?>("code")?.Length ?? 0) > NativeDynamicCodeTool.MaxCodeLength)
+        {
+            result = JsonConvert.SerializeObject(new { success = false, message = $"Mã C# tối đa {NativeDynamicCodeTool.MaxCodeLength} ký tự để hiển thị đầy đủ khi xác nhận." });
+        }
+        else if (registeredTool is IConfirmableChatTool confirmable && confirmable.RequiresConfirmation &&
+            !ConfirmToolExecution(registeredTool.Name, confirmable, input))
+        {
+            result = JsonConvert.SerializeObject(new { success = false, cancelled = true, message = "Người dùng đã hủy thao tác." });
+        }
+        else if (registeredTool is IBackgroundChatTool backgroundTool)
         {
             try { result = JsonConvert.SerializeObject(backgroundTool.Execute(input, null!)); }
             catch (Exception ex) { result = JsonConvert.SerializeObject(new { success = false, message = ex.Message }); }
-        }
-        else if (registeredTool is RevitMcpProxyTool proxy)
-        {
-            if (proxy.McpMethod == "__focus_chat_ai")
-            {
-                result = JsonConvert.SerializeObject(new { success = true, message = "Cửa sổ Chat AI hiện đã được mở và ở phía trước." });
-            }
-            else
-            {
-                if (proxy.RequiresConfirmation && !ConfirmMcpExecution(proxy, input))
-                    result = JsonConvert.SerializeObject(new { success = false, cancelled = true, message = "Người dùng đã hủy thao tác MCP." });
-                else
-                    result = NativeMcpCommandHost.Execute(proxy.McpMethod, input);
-            }
         }
         else
         {
@@ -284,6 +286,64 @@ public sealed partial class ChatViewModel : ObservableObject
             Success = success,
             Kind = "tool"
         });
+    }
+
+    private bool TryHandleToolListCommand(string text)
+    {
+        var normalized = RemoveDiacritics(text).ToUpperInvariant().Trim();
+        if (normalized is not ("LIET KE TAT CA TOOL" or "LIET KE TOOL" or "DANH SACH TOOL")) return false;
+
+        var names = _registry.Schemas.Select(schema => schema.Name).ToList();
+        var reply = $"RevitAPP có đủ {names.Count} tool:\n" +
+                    string.Join("\n", names.Select((name, index) => $"{index + 1}. {name}"));
+        AddBubble(new ChatBubble(ChatBubble.Assistant, reply));
+        return true;
+    }
+
+    private static bool IsSelectAllColumnTagsIntent(string text)
+    {
+        var value = RemoveDiacritics(text).ToUpperInvariant();
+        if (value.Contains("KHONG CHON") || value.Contains("DUNG CHON") ||
+            value.Contains("DA CHON") || value.Contains("CHUA")) return false;
+        var asksSelectAll = value.Contains("CHON TAT CA") || value.Contains("CHON HET");
+        var mentionsColumnTag = value.Contains("TAG COT") || value.Contains("KY HIEU COT");
+        return asksSelectAll && mentionsColumnTag;
+    }
+
+    private async Task HandleSelectAllColumnTagsAsync(string text)
+    {
+        IsBusy = true;
+        ActivityStatus = "Đang chọn tag cột…";
+        _currentUserText = text;
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var ct = _cts.Token;
+            var resultJson = await Task.Run(() => ExecuteTool("select_all_by_category", new JObject
+            {
+                ["category"] = "structural_column_tags",
+                ["scope"] = "current_view"
+            }, ct), ct).ConfigureAwait(false);
+            var result = JObject.Parse(resultJson);
+            var ok = result.Value<bool?>("success") == true;
+            var count = result.Value<int?>("count") ?? 0;
+            var reply = ok
+                ? $"Đã chọn {count} tag cột trong view hiện tại."
+                : $"Không chọn được tag cột: {result.Value<string>("message") ?? resultJson}";
+            _history.Add(ChatMessage.FromAssistantText(reply));
+            AddBubble(new ChatBubble(ChatBubble.Assistant, reply, IsError: !ok));
+        }
+        catch (OperationCanceledException)
+        {
+            AddBubble(new ChatBubble(ChatBubble.Assistant, "Đã hủy.", IsError: true));
+        }
+        finally
+        {
+            IsBusy = false;
+            ActivityStatus = string.Empty;
+            _cts?.Dispose();
+            _cts = null;
+        }
     }
 
     private bool TryHandleMemoryCommand(string text)
@@ -370,15 +430,15 @@ public sealed partial class ChatViewModel : ObservableObject
                (value.Contains("vừa vẽ") || value.Contains("mới vẽ") || value.Contains("vừa tạo"));
     }
 
-    private bool ConfirmMcpExecution(RevitMcpProxyTool proxy, JObject input)
+    private bool ConfirmToolExecution(string toolName, IConfirmableChatTool tool, JObject input)
     {
         var details = input.ToString(Formatting.Indented);
         if (details.Length > 1800) details = details[..1800] + "\n…";
-        var warning = proxy.IsDangerous
+        var warning = tool.IsDangerous
             ? "CẢNH BÁO: thao tác này có thể xóa dữ liệu hoặc chạy mã C# tùy ý.\n\n"
             : "Thao tác này sẽ thay đổi mô hình Revit.\n\n";
         return _dispatcher.Invoke(() => MessageBox.Show(
-                   warning + $"Tool: {proxy.Name}\n\n{details}\n\nBạn có chắc muốn thực thi?",
+                   warning + $"Tool: {toolName}\n\n{details}\n\nBạn có chắc muốn thực thi?",
                    "Xác nhận Revit MCP", MessageBoxButton.YesNo, MessageBoxImage.Warning,
                    MessageBoxResult.No)) == MessageBoxResult.Yes;
     }

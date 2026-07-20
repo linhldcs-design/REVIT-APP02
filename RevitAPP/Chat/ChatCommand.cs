@@ -30,16 +30,6 @@ public class ChatCommand : ExternalCommand
         // ExternalEvent phải tạo trong API context (đang ở Execute) → tạo 1 lần rồi bind cho bridge.
         _externalEvent ??= Autodesk.Revit.UI.ExternalEvent.Create(ChatHost.Bridge);
         ChatHost.Bridge.Bind(_externalEvent);
-        // The MCP command assembly is an optional capability. Chat must still open on a
-        // clean RevitAPP installation so native, ribbon, memory, and Excel tools remain usable.
-        try
-        {
-            NativeMcpCommandHost.Initialize(RevitContext.UiApplication);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Optional Revit MCP commands were not loaded: {ex}");
-        }
         ChatSessionContext.ProjectKey = RevitContext.UiApplication.ActiveUIDocument?.Document.Title ?? string.Empty;
 
         if (_window is not null)
