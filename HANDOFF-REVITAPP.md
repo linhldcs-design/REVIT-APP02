@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang chuẩn bị phát hành: `v1.1.4`
+- Release đang phát hành: `v1.1.4`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -45,6 +45,7 @@
 - Thay đổi cho `v1.1.3`: phát hành Chat AI 49 tool; sửa Gemini tool schema; đọc bảng Excel đang mở đúng cả khi UsedRange không bắt đầu tại A1; vẽ dầm theo Instance Mark và cấu hình Excel; gọi hệ cột theo Instance Mark/cấu hình add-in; giảm số lần Regenerate để tránh lag; không báo thành công khi không tạo được thép.
 - Thay đổi cho `v1.1.4`: công cụ Vẽ Móng Đơn bỏ qua solid bê tông lót ở dưới cùng khi đọc hình học family; ưu tiên Material/Subcategory và có nhận dạng hình học dự phòng cho family không gán metadata.
 - Các commit phát hành gần nhất:
+  - `dd37339` — bỏ qua bê tông lót khi đọc hình học móng đơn; phát hành v1.1.4
   - `aa1d25a` — attach installer executable to releases
   - `37f6391` — publish standalone installer in releases
   - `eb200ef` — release RevitAPP installer for Revit 2022-2027
