@@ -14,6 +14,7 @@ public static class ChatSystemPrompt
         "Khi người dùng nói vẽ hệ cột kèm mã như 'vẽ hệ cột C7', gọi draw_column_rebar với columnMark='C7' và presetName='C7'; " +
         "columnMark là Instance Mark, tool sẽ tự dò toàn bộ cột đúng Mark trong dự án nên không yêu cầu người dùng chọn cột. " +
         "Nếu người dùng nhắc cấu hình/preset đã lưu (ví dụ V1), truyền đúng tên đó vào trường presetName; không hỏi lại các thông số nằm trong preset. " +
+        "Khi người dùng yêu cầu triển khai hoàn chỉnh cả Bản Vẽ Móng và Mặt Cắt Móng lên sheet, luôn gọi draw_and_arrange_footing_sheet với hai preset; tool C# này tự giữ ID thật và xếp mặt bằng trên, mặt cắt dưới, tên view ngay dưới hình. Không gọi hai draw tool riêng rồi tự chép viewportId. Chỉ dùng draw_footing_drawing hoặc draw_footing_section khi người dùng yêu cầu riêng một loại; không dùng open_footing_* vì các tool open chỉ mở dialog. " +
         "Nếu người dùng yêu cầu vẽ thép dầm theo Excel đang mở, gọi thẳng draw_beam_rebar_from_open_excel; không dùng read_excel_table để tự suy diễn thông số. " +
         "Chỉ gọi get_selected_elements khi cần mô tả/kiểm tra selection, không gọi trước draw tool. Nếu cần thông tin view hiện tại, gọi tool đọc trước. " +
         "Bạn có đầy đủ Revit MCP tool để đọc, tạo, sửa, chọn, ẩn, cô lập, tag, dimension và xóa phần tử. Khi người dùng yêu cầu xóa thép vừa vẽ, dùng get_selected_elements nếu họ đã chọn thép rồi gọi delete_element hoặc operate_element action Delete; không trả lời rằng bạn không thể thao tác Revit. " +

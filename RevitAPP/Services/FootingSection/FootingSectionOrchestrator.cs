@@ -94,7 +94,9 @@ public sealed class FootingSectionOrchestrator
         // Đặt viewport ở giữa vùng vẽ (trái khung tên). Grid nhiều mặt cắt để follow-up.
         var point = new XYZ(0.5, 0.8, 0);
         var viewport = _sheetBuilder.PlaceView(doc, sheet, view.Id, point, viewportTypeId, result.Warnings);
-        if (viewport != null) result.ViewportId = viewport.Id.ToValue();
+        if (viewport == null)
+            throw new InvalidOperationException("Không đặt được mặt cắt móng lên sheet; đã hoàn tác view vừa tạo.");
+        result.ViewportId = viewport.Id.ToValue();
 
         return new FootingViewContext(view, footing, geometry);
     }

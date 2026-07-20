@@ -7,6 +7,14 @@
 - Khi đọc hình học family móng để bố trí thép, bỏ qua solid bê tông lót ở đáy theo Material/Subcategory; nếu family không có metadata phù hợp, dùng điều kiện hình học chặt để nhận diện bản lót mỏng, rộng hơn khối móng phía trên.
 - Nếu không tìm được solid kết cấu sau khi lọc, giữ nguyên toàn bộ solid làm phương án an toàn để tránh làm hỏng các family hiện hữu.
 
+### RevitAPP v1.1.5 — Chat footing drawings and sheet layout
+
+- Added `draw_footing_drawing`, `draw_footing_section`, `arrange_footing_sheet`, and `draw_and_arrange_footing_sheet`, increasing the Chat registry to 53 tools. The combined C# tool retains real viewport IDs instead of asking the LLM to copy nested batch results, then arranges each footing plan above its matching section with title/overlap/capacity checks.
+- The two drawing tools reuse selected Structural Foundation elements and require an exact saved preset name; they execute the existing drawing engines directly without opening configuration dialogs or guessing settings.
+- Chat now routes requests such as “triển khai bản vẽ móng đang chọn theo cấu hình M1” to the native drawing tool instead of the ribbon-opening adapter.
+- Footing plan and section viewports are paired by source footing ID and exact Revit viewport IDs, never inferred from view names or duplicate Marks.
+- The combined workflow is atomic: any drawing, capacity, or collision failure rolls back all views and viewports created in that request. Layout measures viewport boxes and labels, accepts section/detail section types, places plans above sections left-to-right, keeps labels below views, reserves 15% at right and 12% at bottom, and rejects collisions with existing sheet content.
+
 ## 2026-07-17
 
 ### AI Chat Panel + native tool control

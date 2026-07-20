@@ -55,7 +55,9 @@ public sealed class FootingDrawingOrchestrator
                 var center = (sheet.Outline.Max + sheet.Outline.Min) * 0.5;
                 var placePoint = new XYZ(center.U, center.V, 0);
                 var viewport = _sheetBuilder.PlaceView(doc, sheet, view.Id, placePoint, viewportTypeId, result.Warnings);
-                if (viewport != null) result.ViewportId = viewport.Id.ToLong();
+                if (viewport == null)
+                    throw new InvalidOperationException("Không đặt được mặt bằng móng lên sheet; đã hoàn tác view vừa tạo.");
+                result.ViewportId = viewport.Id.ToLong();
 
                 t1.Commit(); // Commit tự regenerate — view có reference hợp lệ cho T2.
             }

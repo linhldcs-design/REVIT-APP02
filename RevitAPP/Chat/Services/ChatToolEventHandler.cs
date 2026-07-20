@@ -134,6 +134,9 @@ public sealed class ChatToolEventHandler : IExternalEventHandler
             "draw_beam_rebar" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
             "draw_beam_rebar_from_open_excel" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
             "draw_beam_drawing" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
+            "draw_footing_drawing" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
+            "draw_footing_section" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
+            "draw_and_arrange_footing_sheet" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
             "draw_wall_rebar" => ("wallIds", BuiltInCategory.OST_Walls),
             "draw_footing_rebar" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
             _ => (string.Empty, BuiltInCategory.INVALID)

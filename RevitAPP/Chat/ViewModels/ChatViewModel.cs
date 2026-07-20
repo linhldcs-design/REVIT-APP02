@@ -392,6 +392,8 @@ public sealed partial class ChatViewModel : ObservableObject
             "draw_beam_rebar_from_open_excel" => ("beamIds", BuiltInCategory.OST_StructuralFraming),
             "draw_wall_rebar" => ("wallIds", BuiltInCategory.OST_Walls),
             "draw_footing_rebar" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
+            "draw_footing_drawing" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
+            "draw_footing_section" => ("footingIds", BuiltInCategory.OST_StructuralFoundation),
             _ => (string.Empty, BuiltInCategory.INVALID)
         };
 
@@ -458,7 +460,7 @@ public sealed partial class ChatViewModel : ObservableObject
 
     private static bool IsBatchDrawTool(string name) => name is
         "draw_column_rebar" or "draw_beam_rebar" or "draw_beam_rebar_from_open_excel" or
-        "draw_wall_rebar" or "draw_footing_rebar";
+        "draw_wall_rebar" or "draw_footing_rebar" or "draw_footing_drawing" or "draw_footing_section";
 
     private void AddBubble(ChatBubble bubble) => RunOnUi(() => Messages.Add(bubble));
 
