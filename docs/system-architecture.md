@@ -279,3 +279,38 @@ Threading and execution invariants:
 - The registry must not wrap engine-owned transactions, preventing nested Revit transactions.
 
 Current verification baseline: `RevitAPP.Tests` passes 159/159 tests, and `Release.R22` through `Release.R27` builds succeed.
+
+## 13. Beam Longitudinal Drawing
+
+The beam longitudinal drawing feature is being added to the existing `RevitAPP` assembly as a separate ribbon command. Its Phase 00-02 boundary is:
+
+```text
+BeamLongitudinalDrawingCommand
+  -> read selected beams and their existing hosted Rebar
+  -> reject any selected beam without existing Rebar
+  -> modal BeamLongitudinalDrawingWindow/ViewModel
+  -> mandatory themed preview and explicit confirmation gate
+  -> resource/settings validation and isolated JSON presets
+
+RevitAPP.Core (no Revit API dependency)
+  -> BeamChainBuilder
+  -> SectionStationPlanner
+  -> RebarFingerprintComparer
+  -> LongitudinalDimensionPlanner
+```
+
+The Core layer owns deterministic chain validation, station deduplication, normalized reinforcement fingerprints,
+upper/lower dimension witness plans, drawing settings validation, preset serialization, and preview projection. The
+`RevitAPP` layer owns read-only Revit element/resource discovery and WPF presentation in Phase 02; transactions,
+view/annotation creation, and sheet placement remain later-phase responsibilities.
+
+Before any Revit transaction starts, Phase 02 projects `BeamChainModel + SectionStation` into a pure
+`BeamChainPreviewModel` rendered by a themed WPF preview control. The preview is a required confirmation boundary:
+invalid topology, a changed selection/direction/tolerance, or an unconfirmed snapshot keeps Generate disabled. The
+workflow is intentionally read-only and never creates, modifies, or deletes Rebar; it only documents beams whose
+reinforcement already exists in the active model.
+
+Current status: Phase 00-02 complete; 196/196 `RevitAPP.Tests` pass and `Debug.R25` builds successfully. The command
+provides selection validation, settings, presets, and mandatory preview confirmation, but still does not create any
+Revit view or modify the model. View generation, annotation, sheet output, runtime smoke testing, deployment, and
+release hand-off remain pending in Phase 03-06; the feature is not released.

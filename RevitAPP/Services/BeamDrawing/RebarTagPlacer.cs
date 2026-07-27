@@ -32,7 +32,7 @@ public sealed class RebarTagPlacer
                 : new List<(Reference Reference, XYZ? End)>();
             var references = dottedReferences.Count > 0
                 ? dottedReferences.Select(item => item.Reference).ToList()
-                : new[] { GetTaggableReference(groups[index][0]) }
+                : new[] { GetTaggableReference(groups[index][0], view) }
                     .Where(reference => reference != null).Cast<Reference>().ToList();
             var horizontalEnd = groups[index].Count == 1
                 ? GetRightBarAnchor(groups[index][0], view)
@@ -138,7 +138,7 @@ public sealed class RebarTagPlacer
         }
         catch { }
 
-        var fallback = GetTaggableReference(rebar);
+        var fallback = GetTaggableReference(rebar, view);
         return fallback == null
             ? new List<(Reference, XYZ?)>()
             : new List<(Reference, XYZ?)> { (fallback, null) };
@@ -181,7 +181,9 @@ public sealed class RebarTagPlacer
     public int TagRebars(Document doc, View view, IReadOnlyList<Rebar> rebars,
         IReadOnlyList<ElementId?> tagTypeIds,
         List<string> warnings, int spacingFactor = 6,
-        IReadOnlyList<(double X, double Y)>? tagHeadLocals = null)
+        IReadOnlyList<(double X, double Y)>? tagHeadLocals = null,
+        bool sharedStemLeaders = false,
+        IReadOnlyList<bool>? sharedStemFlags = null)
     {
         if (rebars.Count == 0) return 0;
         if (tagTypeIds.Count == 0 || tagTypeIds.All(id => id == null || id == ElementId.InvalidElementId))
@@ -221,8 +223,8 @@ public sealed class RebarTagPlacer
             var rebar = rebars[rebarIndex];
             var tagTypeId = tagTypeIds[Math.Min(rebarIndex, tagTypeIds.Count - 1)];
             if (tagTypeId == null || tagTypeId == ElementId.InvalidElementId) continue;
-            var reference = GetTaggableReference(rebar);
-            if (reference == null)
+            var references = GetTaggableReferences(rebar, view);
+            if (references.Count == 0)
             {
                 warnings.Add($"Không lấy được reference cho thép '{rebar.Id}' trong view '{view.Name}'.");
                 continue;
@@ -245,14 +247,58 @@ public sealed class RebarTagPlacer
                         : GetTagPoint(rebar, view);
                 }
 
-                var tag = IndependentTag.Create(doc, tagTypeId, view.Id, reference, true,
-                    TagOrientation.Horizontal, tagHead);
+                IndependentTag? tag = null;
+                Reference? reference = null;
+                foreach (var candidate in references)
+                {
+                    SubTransaction? probe = null;
+                    try
+                    {
+                        probe = new SubTransaction(doc);
+                        probe.Start();
+                        var trial = IndependentTag.Create(doc, tagTypeId, view.Id, candidate, true,
+                            TagOrientation.Horizontal, tagHead);
+                        try { trial.TagHeadPosition = tagHead; } catch { }
+                        doc.Regenerate();
+                        if (trial.get_BoundingBox(view) != null)
+                        {
+                            probe.Commit();
+                            tag = trial;
+                            reference = candidate;
+                            break;
+                        }
+                        probe.RollBack();
+                    }
+                    catch
+                    {
+                        if (probe?.GetStatus() == TransactionStatus.Started)
+                            probe.RollBack();
+                    }
+                }
+                if (tag == null || reference == null)
+                {
+                    warnings.Add(
+                        $"NO_VISIBLE_REFERENCE '{view.Name}': rebar={rebar.Id.ToValue()}, tried={references.Count}.");
+                    continue;
+                }
                 // Ép head về đúng cột (Revit tự dời sau Create) TRƯỚC, rồi set leader vuông góc theo head đó.
                 try { tag.TagHeadPosition = tagHead; }
                 catch { /* tag không cho set head — bỏ qua */ }
-                if (cropTransform != null)
+                var useSharedStem = sharedStemLeaders &&
+                                    (sharedStemFlags == null || rebarIndex >= sharedStemFlags.Count ||
+                                     sharedStemFlags[rebarIndex]);
+                try { tag.HasLeader = !sharedStemLeaders || useSharedStem; } catch { }
+                if (useSharedStem && cropTransform != null && tagHeadLocals != null &&
+                    rebarIndex < tagHeadLocals.Count)
+                {
+                    var slot = tagHeadLocals[rebarIndex];
+                    var stemX = slot.X - 20.0 * Math.Max(view.Scale, 1) / 304.8;
+                    var anchor = GetHorizontalAnchorAtLocalX(rebar, cropTransform, stemX);
+                    StraightLeader.ApplySharedStem(tag, reference, tagHead, cropTransform, stemX, anchor);
+                }
+                else if (!sharedStemLeaders && cropTransform != null)
                     StraightLeader.ApplyPerpendicular(tag, reference, tagHead, cropTransform);
-                else
+                else if (!sharedStemLeaders)
                     StraightLeader.Apply(tag, reference, tagHead);
 
                 placed++;
@@ -268,14 +314,39 @@ public sealed class RebarTagPlacer
     }
 
     /// <summary>Reference tag được: Revit 2023+ cần subelement (1 thanh con), không nhận cả set.</summary>
-    private static Reference? GetTaggableReference(Rebar rebar)
+    private static Reference? GetTaggableReference(Rebar rebar, View? view = null)
     {
         try
         {
             var subelements = rebar.GetSubelements();
             if (subelements is { Count: > 0 })
             {
-                var reference = subelements[0].GetReference();
+                // Rebar set có nhiều thanh con dọc theo dầm. Subelement[0] thường nằm ngoài
+                // mặt cắt giữa nhịp, khiến IndependentTag được tạo nhưng bbox=NULL.
+                var visible = view == null
+                    ? null
+                    : subelements.FirstOrDefault(subelement =>
+                    {
+                        try { return subelement.GetBoundingBox(view) != null; }
+                        catch { return false; }
+                    });
+                var nearestToCut = visible ?? (view == null
+                    ? null
+                    : subelements
+                        .Select(subelement => new
+                        {
+                            Subelement = subelement,
+                            Box = SafeBoundingBox(subelement)
+                        })
+                        .Where(item => item.Box != null)
+                        .OrderBy(item =>
+                        {
+                            var center = (item.Box!.Min + item.Box.Max) * 0.5;
+                            return Math.Abs((center - view.Origin).DotProduct(view.ViewDirection));
+                        })
+                        .Select(item => item.Subelement)
+                        .FirstOrDefault());
+                var reference = (nearestToCut ?? subelements[0]).GetReference();
                 if (reference != null) return reference;
             }
         }
@@ -283,6 +354,84 @@ public sealed class RebarTagPlacer
 
         try { return new Reference(rebar); }
         catch { return null; }
+    }
+
+    private static BoundingBoxXYZ? SafeBoundingBox(Subelement subelement)
+    {
+        try { return subelement.GetBoundingBox(null); }
+        catch { return null; }
+    }
+
+    private static List<Reference> GetTaggableReferences(Rebar rebar, View view)
+    {
+        // Dùng đúng pipeline reference của Bản Vẽ Dầm cho mọi cross view.
+        // Tên view không được làm thay đổi khả năng tag của cùng một Rebar Set.
+        var result = RebarReferenceResolver.FromExistingTags(rebar).ToList();
+        try { result.Add(new Reference(rebar)); } catch { }
+        try
+        {
+            var ordered = rebar.GetSubelements()
+                .Select(subelement => new
+                {
+                    Reference = subelement.GetReference(),
+                    Box = SafeBoundingBox(subelement),
+                    InsideCrop = IsInsideCrop(subelement, view)
+                })
+                .Where(item => item.Reference != null)
+                .OrderByDescending(item => item.InsideCrop)
+                .ThenBy(item =>
+                {
+                    if (item.Box == null) return double.MaxValue;
+                    var center = (item.Box.Min + item.Box.Max) * 0.5;
+                    return Math.Abs((center - view.Origin).DotProduct(view.ViewDirection));
+                });
+            result.AddRange(ordered.Select(item => item.Reference!));
+        }
+        catch { }
+        return result;
+    }
+
+    private static bool IntersectsCutPlane(Subelement subelement, View view)
+    {
+        var box = SafeBoundingBox(subelement);
+        if (box == null) return false;
+        var normal = view.ViewDirection.Normalize();
+        var distances = BoxCorners(box)
+            .Select(point => (point - view.Origin).DotProduct(normal))
+            .ToList();
+        const double tolerance = 1.0 / 304.8;
+        return distances.Min() <= tolerance && distances.Max() >= -tolerance;
+    }
+
+    private static bool IsInsideCrop(Subelement subelement, View view)
+    {
+        try
+        {
+            var box = subelement.GetBoundingBox(null);
+            if (box == null) return false;
+            var crop = view.CropBox;
+            var inverse = crop.Transform.Inverse;
+            var points = BoxCorners(box).Select(inverse.OfPoint).ToList();
+            const double tolerance = 1.0 / 304.8;
+            return points.Max(point => point.X) >= crop.Min.X - tolerance &&
+                   points.Min(point => point.X) <= crop.Max.X + tolerance &&
+                   points.Max(point => point.Y) >= crop.Min.Y - tolerance &&
+                   points.Min(point => point.Y) <= crop.Max.Y + tolerance &&
+                   points.Max(point => point.Z) >= crop.Min.Z - tolerance &&
+                   points.Min(point => point.Z) <= crop.Max.Z + tolerance;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IEnumerable<XYZ> BoxCorners(BoundingBoxXYZ box)
+    {
+        foreach (var x in new[] { box.Min.X, box.Max.X })
+        foreach (var y in new[] { box.Min.Y, box.Max.Y })
+        foreach (var z in new[] { box.Min.Z, box.Max.Z })
+            yield return new XYZ(x, y, z);
     }
 
     private static XYZ GetTagPoint(Rebar rebar, View view)
@@ -296,5 +445,36 @@ public sealed class RebarTagPlacer
 
         var viewBox = view.get_BoundingBox(view);
         return viewBox != null ? (viewBox.Min + viewBox.Max) * 0.5 : XYZ.Zero;
+    }
+
+    private static XYZ? GetHorizontalAnchorAtLocalX(Rebar rebar, Transform cropTransform, double stemX)
+    {
+        try
+        {
+            var inverse = cropTransform.Inverse;
+            var segment = rebar.GetCenterlineCurves(false, false, false,
+                    MultiplanarOption.IncludeOnlyPlanarCurves, 0)
+                .Select(curve =>
+                {
+                    var start = inverse.OfPoint(curve.GetEndPoint(0));
+                    var end = inverse.OfPoint(curve.GetEndPoint(1));
+                    return new { Start = start, End = end, Horizontal = Math.Abs(end.X - start.X) };
+                })
+                .OrderByDescending(item => item.Horizontal)
+                .FirstOrDefault();
+            if (segment is not { Horizontal: > 1e-6 }) return null;
+            // Keep the free leader end vertically below the shared stem. Clamping X back to the
+            // rebar segment end creates the long diagonal dog-leg seen at support columns.
+            var x = stemX;
+            var t = Math.Abs(segment.End.X - segment.Start.X) < 1e-9
+                ? 0
+                : (x - segment.Start.X) / (segment.End.X - segment.Start.X);
+            var y = segment.Start.Y + (segment.End.Y - segment.Start.Y) * t;
+            return cropTransform.OfPoint(new XYZ(x, y, 0));
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

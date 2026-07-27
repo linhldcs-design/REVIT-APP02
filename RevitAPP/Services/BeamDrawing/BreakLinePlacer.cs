@@ -138,7 +138,8 @@ public sealed class BreakLinePlacer
         {
             var geometry = floor.get_Geometry(geometryOptions);
             if (geometry == null) continue;
-            foreach (var solid in CollectSolids(geometry))
+            var solids = CollectSolids(geometry).ToList();
+            foreach (var solid in solids)
             {
                 if (!TryVerticalRange(solid, station.X, station.Y, beamTop, out var bottom, out var top)) continue;
                 // Không giả định top/bottom sàn trùng top dầm. Chấp nhận sàn hạ cốt miễn còn giao dải cao dầm;
@@ -159,6 +160,30 @@ public sealed class BreakLinePlacer
                     bestRightDistance = distance;
                     rightSide = new SlabSide(solid, bottom, top, sideRightX);
                 }
+            }
+
+            // Tại tim cột/gối, mặt phẳng cắt có thể nằm đúng seam của solid sàn nên
+            // SolidCurveIntersection trả rỗng dù sàn đang hiện trong view. Dùng bbox của chính
+            // Floor đã qua bộ lọc station làm dự phòng để nét cắt không bị mất.
+            if ((leftSide == null || rightSide == null) && solids.Count > 0)
+            {
+                var box = floor.get_BoundingBox(null);
+                if (box == null) continue;
+                var worldCorners = BoxCorners(box).ToArray();
+                var localCorners = worldCorners.Select(inverse.OfPoint).ToArray();
+                var slabLeft = localCorners.Min(point => point.X);
+                var slabRight = localCorners.Max(point => point.X);
+                var bottom = worldCorners.Min(point => point.Z);
+                var top = worldCorners.Max(point => point.Z);
+                if (top < beamBottom - probe || bottom > beamTop + SlabNearTopFeet) continue;
+
+                var positions = SlabBreakLineMath.Calculate(beamLeft, beamRight, slabLeft, slabRight,
+                    PreferredStubFeet, MinimumOverhangFeet);
+                var solid = solids[0];
+                if (leftSide == null && positions.LeftX is { } leftX)
+                    leftSide = new SlabSide(solid, bottom, top, leftX);
+                if (rightSide == null && positions.RightX is { } rightX)
+                    rightSide = new SlabSide(solid, bottom, top, rightX);
             }
         }
 

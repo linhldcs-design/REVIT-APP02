@@ -12,7 +12,7 @@ public sealed record ViewBeamPair(
     BeamGeometry Geometry,
     bool IsCross,
     double? Station = null,
-    bool? IsSupportZone = null); // true=GỐI, false=NHỊP (phân vùng độc lập với Station t thật, cho dầm nhiều nhịp)
+    bool? IsSupportZone = null); // true=GỐI, false=NHỊP
 
 /// <summary>
 ///     Đặt annotation (rebar tag / dimension / spot elevation) lên các view đã commit. Cài đặt ở Phase 5.

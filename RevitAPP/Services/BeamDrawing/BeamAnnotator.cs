@@ -28,6 +28,10 @@ public sealed class BeamAnnotator : IBeamAnnotator
             doc, crossAnnotation.EndStirrupTagTypeName ?? setting.Tags.D4, result.Warnings);
         var midStirrupTagId = _resources.ResolveRebarTagType(
             doc, crossAnnotation.MidStirrupTagTypeName ?? setting.Tags.D2, result.Warnings);
+        var endReinforceL1TagId = _resources.ResolveRebarTagType(
+            doc, crossAnnotation.EndReinforceL1MraTypeName, result.Warnings) ?? endStirrupTagId;
+        var midReinforceL1TagId = _resources.ResolveRebarTagType(
+            doc, crossAnnotation.MidReinforceL1MraTypeName, result.Warnings) ?? midStirrupTagId;
         var spotTypeId = _resources.ResolveSpotType(doc, setting.Spot.TypeName, result.Warnings);
         var sectionalDimTypeId = _resources.ResolveDimType(doc, setting.Dim.SectionalDimTypeName, result.Warnings);
         var crossDimTypeId = _resources.ResolveDimType(doc, setting.Dim.CrossDimTypeName, result.Warnings);
@@ -41,7 +45,7 @@ public sealed class BeamAnnotator : IBeamAnnotator
             var hosted = rebarsByHost.TryGetValue(pair.Beam.Id, out var list) ? list : new List<Rebar>();
             if (pair.IsCross)
             {
-                var atStation = FilterAndSortAtStation(hosted, pair);
+                var atStation = FilterAndSortInCrossView(hosted, pair);
                 // Phân vùng GỐI/NHỊP theo cờ IsSupportZone (từ orchestrator, dò cột) — chính xác cho dầm nhiều nhịp.
                 // Fallback ngưỡng Station nếu cờ chưa set (tương thích cũ).
                 var isEndZone = pair.IsSupportZone ?? (pair.Station is < 0.25 or > 0.75);
@@ -69,7 +73,6 @@ public sealed class BeamAnnotator : IBeamAnnotator
                 var mainBot = mainCandidates.Count > 1 ? mainCandidates[^1] : null;
                 // Tăng cường = mọi nhóm KHÔNG phải mainTop/mainBot (gồm nhóm qty nhỏ + nhóm chủ dư nếu >2).
                 var reinforce = longByY.Where(g => !ReferenceEquals(g, mainTop) && !ReferenceEquals(g, mainBot)).ToList();
-
                 // THỨ TỰ TAG theo VÙNG (quy luật user): GỐI = chủ-trên / tăng-cường / ĐAI / chủ-dưới;
                 // NHỊP = chủ-trên / ĐAI / tăng-cường / chủ-dưới. Kind: 0=chủ, 1=tăng-cường, 2=đai.
                 var ordered = new List<(int Kind, IReadOnlyList<Rebar>? Group, Rebar? Stirrup)>();
@@ -92,7 +95,7 @@ public sealed class BeamAnnotator : IBeamAnnotator
                 // Thép CHỦ dùng MRA (type chung). Thép TĂNG CƯỜNG L1 (1 cây) dùng REBAR TAG (IndependentTag)
                 // = tag đai của vùng (ReinforceL1 là tên MRA type, không phải rebar-tag → không resolve tại đây).
                 var mainMraId = isEndZone ? endMraTypeId : midMraTypeId;
-                ElementId? reinforceTagId = null;
+                var reinforceTagId = isEndZone ? endReinforceL1TagId : midReinforceL1TagId;
 
                 var mainGroups = new List<IReadOnlyList<Rebar>>(); var mainSlots = new List<(double X, double Y)>();
                 var reinMraGroups = new List<IReadOnlyList<Rebar>>(); var reinMraSlots = new List<(double X, double Y)>();
@@ -123,7 +126,10 @@ public sealed class BeamAnnotator : IBeamAnnotator
                     var reinMraId = isEndZone
                         ? _resources.ResolveMultiRebarAnnotationType(doc, crossAnnotation.EndReinforceL2MraTypeName, result.Warnings) ?? mainMraId
                         : _resources.ResolveMultiRebarAnnotationType(doc, crossAnnotation.MidReinforceL2MraTypeName, result.Warnings) ?? mainMraId;
-                    _multiRebarPlacer.Place(doc, pair.View, reinMraGroups, reinMraId, reinMraSlots, result.Warnings);
+                    // MRA thật được thử trước. Nếu Revit không nhận cả set, fallback vẫn dùng
+                    // Reference/Rebar subelement thật theo đúng pipeline Bản Vẽ Dầm.
+                    _multiRebarPlacer.Place(doc, pair.View, reinMraGroups, reinMraId, reinMraSlots,
+                        result.Warnings, reinforceTagId, useSetReferenceFallback: true);
                 }
                 // Tăng cường LỚP 1 (1 cây) → IndependentTag.
                 if (reinBars.Count > 0)
@@ -134,9 +140,13 @@ public sealed class BeamAnnotator : IBeamAnnotator
                         setting.Dim.SpacingFactor, reinSlots);
                 }
                 var stirrupTagId = isEndZone ? endStirrupTagId : midStirrupTagId;
-                _tagPlacer.TagRebars(doc, pair.View, stirrups,
-                    Enumerable.Repeat(stirrupTagId, stirrups.Count).ToList(), result.Warnings,
-                    setting.Dim.SpacingFactor, stirrupSlots);
+                if (stirrups.Count > 0)
+                {
+                    // Thép đai của Bản Vẽ Dầm là Rebar Tag thật, không phải MRA.
+                    _tagPlacer.TagRebars(doc, pair.View, stirrups,
+                        Enumerable.Repeat(stirrupTagId, stirrups.Count).ToList(), result.Warnings,
+                        setting.Dim.SpacingFactor, stirrupSlots);
+                }
                 if (setting.Dim.Enabled)
                     _dimensionPlacer.PlaceCrossDimensions(doc, pair.View, pair, atStation, crossDimTypeId,
                         setting.Dim, result.Warnings);
@@ -262,6 +272,53 @@ public sealed class BeamAnnotator : IBeamAnnotator
             .ThenByDescending(r => Center(r).Z)
             .ThenBy(r => Center(r).DotProduct(pair.View.RightDirection))
             .ToList();
+    }
+
+    private static List<Rebar> FilterAndSortInCrossView(
+        IEnumerable<Rebar> rebars, ViewBeamPair pair)
+    {
+        var hosted = rebars.ToList();
+        var crop = pair.View.CropBox;
+        var visible = hosted.Where(rebar => HasSubelementInsideCrop(rebar, crop)).ToList();
+        var source = visible.Count > 0 ? visible : FilterAndSortAtStation(hosted, pair);
+        return source
+            .OrderBy(rebar => IsStirrup(rebar) ? 1 : 0)
+            .ThenByDescending(rebar => Center(rebar).Z)
+            .ThenBy(rebar => Center(rebar).DotProduct(pair.View.RightDirection))
+            .ToList();
+    }
+
+    private static bool HasSubelementInsideCrop(Rebar rebar, BoundingBoxXYZ crop)
+    {
+        try
+        {
+            var subelements = rebar.GetSubelements();
+            if (subelements.Count == 0)
+                return BoxIntersectsCrop(rebar.get_BoundingBox(null), crop);
+            return subelements.Any(subelement =>
+                BoxIntersectsCrop(subelement.GetBoundingBox(null), crop));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool BoxIntersectsCrop(BoundingBoxXYZ? box, BoundingBoxXYZ crop)
+    {
+        if (box == null) return false;
+        var inverse = crop.Transform.Inverse;
+        var local = BoxCorners(box).Select(inverse.OfPoint).ToList();
+        var minX = local.Min(point => point.X);
+        var maxX = local.Max(point => point.X);
+        var minY = local.Min(point => point.Y);
+        var maxY = local.Max(point => point.Y);
+        var minZ = local.Min(point => point.Z);
+        var maxZ = local.Max(point => point.Z);
+        const double tolerance = 1.0 / 304.8;
+        return maxX >= crop.Min.X - tolerance && minX <= crop.Max.X + tolerance &&
+               maxY >= crop.Min.Y - tolerance && minY <= crop.Max.Y + tolerance &&
+               maxZ >= crop.Min.Z - tolerance && minZ <= crop.Max.Z + tolerance;
     }
 
     private static bool IntersectsStation(Rebar rebar, XYZ direction, double stationProjection, double tolerance)

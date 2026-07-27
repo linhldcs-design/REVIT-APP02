@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.1.6`
+- Release đang phát hành: `v1.2.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -43,6 +43,7 @@
 - GitHub Actions của Release `v1.1.5`: thành công toàn bộ; Release có đủ 8 asset và `latest.json` trả HTTP 200.
 - `v1.1.6`: native hóa 21 MCP proxy để đủ 53 tool chạy độc lập trên máy đích; không cần `revit_mcp_plugin`, `commandRegistry.json` hoặc MCP server. Bổ sung chọn toàn bộ tag cột trong view bằng `OST_StructuralColumnTags`, chạy trực tiếp không cần API key.
 - GitHub Actions Release `v1.1.6` (run `29736265914`) thành công; 8 assets đã phát hành và `latest.json` v1.1.6 trả HTTP 200.
+- `v1.2.0`: thêm lệnh triển khai mặt cắt dọc dầm theo một chuỗi dầm liên tục, preview trục/vị trí cắt, mặt cắt ngang gối–nhịp, tag/dim/detail thật và phát hành lên sheet có sẵn. Kiểm thử local đạt 196 + 15 test; build Release R22–R27 thành công.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

@@ -51,4 +51,24 @@ public static class StraightLeader
             try { tag.LeaderEndCondition = LeaderEndCondition.Attached; } catch { }
         }
     }
+
+    /// <summary>Creates one common vertical stem for a stack of independent tags.</summary>
+    public static void ApplySharedStem(IndependentTag tag, Reference reference, XYZ tagHead,
+        Transform cropTransform, double stemLocalX, XYZ? leaderEnd)
+    {
+        try { tag.LeaderEndCondition = LeaderEndCondition.Free; }
+        catch { return; }
+        try
+        {
+            tag.Document.Regenerate();
+            if (leaderEnd != null) tag.SetLeaderEnd(reference, leaderEnd);
+            var headLocal = cropTransform.Inverse.OfPoint(tag.TagHeadPosition);
+            var elbow = cropTransform.OfPoint(new XYZ(stemLocalX, headLocal.Y, 0));
+            tag.SetLeaderElbow(reference, elbow);
+        }
+        catch
+        {
+            try { tag.LeaderEndCondition = LeaderEndCondition.Attached; } catch { }
+        }
+    }
 }

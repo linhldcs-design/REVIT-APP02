@@ -63,6 +63,10 @@ namespace RevitAPP
                 .SetImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon32.png");
 
+            panel.AddPushButton<BeamLongitudinalDrawingCommand>("Mat Cat Doc Dam")
+                .SetImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon32.png");
+
             panel.AddPushButton<BeamRebarStartupCommand>("Ve Thep Dam")
                 .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");

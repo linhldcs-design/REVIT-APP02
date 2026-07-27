@@ -54,7 +54,8 @@ public sealed class DimensionPlacer
     ///     nhìn thấy tại station và mặt đỉnh; reference rebar không hợp lệ sẽ được Revit từ chối và ghi warning.
     /// </summary>
     public int PlaceCrossDimensions(Document doc, View view, ViewBeamPair pair, IReadOnlyList<Rebar> rebars,
-        ElementId? dimensionTypeId, DimensionConfig config, List<string> warnings)
+        ElementId? dimensionTypeId, DimensionConfig config, List<string> warnings,
+        bool placeHeightOnViewLeft = false)
     {
         try
         {
@@ -65,6 +66,9 @@ public sealed class DimensionPlacer
                 pair.Geometry.End.Y - pair.Geometry.Start.Y,
                 pair.Geometry.End.Z - pair.Geometry.Start.Z));
             var side = Normalize(XYZ.BasisZ.CrossProduct(axis));
+            // Trái/phải phải theo hệ tọa độ của view, không theo dấu trục X/Y toàn cục.
+            // Điều này giữ dim cao bên trái cho cả dầm phương X lẫn phương Y.
+            var heightSide = placeHeightOnViewLeft ? -Normalize(view.RightDirection) : side;
             var dimensionType = dimensionTypeId == null ? null : doc.GetElement(dimensionTypeId) as DimensionType;
             var placed = 0;
 
@@ -85,7 +89,7 @@ public sealed class DimensionPlacer
 
             var paperSpacing = config.SpacingFactor * Math.Max(view.Scale, 1) / 304.8;
             var sideOffset = config.DistanceToSideBeamMm / 304.8;
-            var xBase = center + side * (pair.Geometry.WidthFeet * 0.5 + sideOffset);
+            var xBase = center + heightSide * (pair.Geometry.WidthFeet * 0.5 + sideOffset);
 
             // Chuỗi cao linh hoạt: đáy dầm / đáy sàn / top sàn / top dầm. Mặt trùng nhau trong 2mm tự gộp.
             // Sàn hạ cốt: 280 + 120 + 50; top sàn trùng top dầm: chỉ còn 330 + 120.
@@ -125,7 +129,7 @@ public sealed class DimensionPlacer
                 var overallRefs = new ReferenceArray();
                 overallRefs.Append(orderedFaces[0].Ref);
                 overallRefs.Append(orderedFaces[^1].Ref);
-                var overallBase = xBase + side * paperSpacing;
+                var overallBase = xBase + heightSide * paperSpacing;
                 var overallLine = Line.CreateBound(
                     new XYZ(overallBase.X, overallBase.Y, orderedLevels[0] - 0.25),
                     new XYZ(overallBase.X, overallBase.Y, orderedLevels[^1] + 0.25));
