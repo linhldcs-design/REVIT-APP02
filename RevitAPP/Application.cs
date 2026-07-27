@@ -37,71 +37,73 @@ namespace RevitAPP
 
         private void CreateRibbon()
         {
-            var panel = Application.CreatePanel("Commands", "RevitAPP");
+            var commandsPanel = Application.CreatePanel("Commands", "RevitAPP");
+            var rebarPanel = Application.CreatePanel("Rebar", "RevitAPP");
+            var drawingRebarPanel = Application.CreatePanel("Drawing Rebar", "RevitAPP");
 
-            panel.AddPushButton<LicenseCommand>("License")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<LicenseCommand>("License")
+                .SetImage("/RevitAPP;component/Resources/Icons/LicenseIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/LicenseIcon32.png");
 
-            panel.AddPushButton<HelloWorldCommand>("Hello World")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<HelloWorldCommand>("Hello World")
+                .SetImage("/RevitAPP;component/Resources/Icons/HelloWorldIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/HelloWorldIcon32.png");
 
-            panel.AddPushButton<TranslateTextCommand>("Dich Text")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<TranslateTextCommand>("Dich Text")
+                .SetImage("/RevitAPP;component/Resources/Icons/TranslateTextIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/TranslateTextIcon32.png");
 
-            panel.AddPushButton<RenumberScheduleCommand>("Danh So Schedule")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<RenumberScheduleCommand>("Danh So Schedule")
+                .SetImage("/RevitAPP;component/Resources/Icons/RenumberScheduleIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/RenumberScheduleIcon32.png");
 
-            panel.AddPushButton<DrawColumnRebarCommand>("Ve Thep Cot")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            rebarPanel.AddPushButton<DrawColumnRebarCommand>("Ve Thep Cot")
+                .SetImage("/RevitAPP;component/Resources/Icons/ColumnRebarIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/ColumnRebarIcon32.png");
 
-            panel.AddPushButton<BeamDrawingCommand>("Ban Ve Dam")
+            drawingRebarPanel.AddPushButton<BeamDrawingCommand>("Mat Cat Ngang Dam")
                 .SetImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon32.png");
 
-            panel.AddPushButton<BeamLongitudinalDrawingCommand>("Mat Cat Doc Dam")
-                .SetImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/BeamDrawingIcon32.png");
+            drawingRebarPanel.AddPushButton<BeamLongitudinalDrawingCommand>("Mat Cat Doc Dam")
+                .SetImage("/RevitAPP;component/Resources/Icons/BeamLongitudinalIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/BeamLongitudinalIcon32.png");
 
-            panel.AddPushButton<BeamRebarStartupCommand>("Ve Thep Dam")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            rebarPanel.AddPushButton<BeamRebarStartupCommand>("Ve Thep Dam")
+                .SetImage("/RevitAPP;component/Resources/Icons/BeamRebarIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/BeamRebarIcon32.png");
 
-            panel.AddPushButton<FootingRebarStartupCommand>("Ve Mong Don")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            rebarPanel.AddPushButton<FootingRebarStartupCommand>("Ve Mong Don")
+                .SetImage("/RevitAPP;component/Resources/Icons/FootingRebarIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/FootingRebarIcon32.png");
 
-            panel.AddPushButton<FootingDrawingCommand>("Ban Ve Mong")
+            drawingRebarPanel.AddPushButton<FootingDrawingCommand>("Mat Bang Mong")
                 .SetImage("/RevitAPP;component/Resources/Icons/FootingDrawingIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/FootingDrawingIcon32.png");
 
-            panel.AddPushButton<FootingSectionDrawingCommand>("Mat Cat Mong")
-                .SetImage("/RevitAPP;component/Resources/Icons/FootingDrawingIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/FootingDrawingIcon32.png");
+            drawingRebarPanel.AddPushButton<FootingSectionDrawingCommand>("Mat Cat Mong")
+                .SetImage("/RevitAPP;component/Resources/Icons/FootingSectionIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/FootingSectionIcon32.png");
 
-            panel.AddPushButton<WallRebarStartupCommand>("Ve Thep Tuong")
+            rebarPanel.AddPushButton<WallRebarStartupCommand>("Ve Thep Tuong")
                 .SetImage("/RevitAPP;component/Resources/Icons/WallRebarIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/WallRebarIcon32.png");
 
-            panel.AddPushButton<AlignSheetViewportsCommand>("Can Chinh View")
+            commandsPanel.AddPushButton<AlignSheetViewportsCommand>("Can Chinh View")
                 .SetImage("/RevitAPP;component/Resources/Icons/AlignViewIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/AlignViewIcon32.png");
 
-            panel.AddPushButton<TogglePointCloudPanelCommand>("Point Cloud")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<TogglePointCloudPanelCommand>("Point Cloud")
+                .SetImage("/RevitAPP;component/Resources/Icons/PointCloudIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/PointCloudIcon32.png");
 
-            panel.AddPushButton<PointCloudPocCommand>("PC POC")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<PointCloudPocCommand>("PC POC")
+                .SetImage("/RevitAPP;component/Resources/Icons/PointCloudPocIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/PointCloudPocIcon32.png");
 
-            panel.AddPushButton<ChatCommand>("Chat AI")
-                .SetImage("/RevitAPP;component/Resources/Icons/RibbonIcon16.png")
-                .SetLargeImage("/RevitAPP;component/Resources/Icons/RibbonIcon32.png");
+            commandsPanel.AddPushButton<ChatCommand>("Chat AI")
+                .SetImage("/RevitAPP;component/Resources/Icons/ChatAiIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/ChatAiIcon32.png");
         }
 
         private static void CreateLogger()

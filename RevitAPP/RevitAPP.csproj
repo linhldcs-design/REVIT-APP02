@@ -10,7 +10,7 @@
         <LaunchRevit>true</LaunchRevit>
         <IsRepackable>true</IsRepackable>
         <EnableDynamicLoading>true</EnableDynamicLoading>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
         <!-- Optional unique assembly identity for Add-In Manager smoke tests while the deployed RevitAPP is loaded. -->
         <AssemblyName Condition="'$(RevitAPPAssemblyName)' != ''">$(RevitAPPAssemblyName)</AssemblyName>
         <!-- Multi-version R23–R27. R27: RebarHookOrientation đã bỏ → xử lý bằng preprocessor. -->
@@ -66,16 +66,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Resource Include="Resources\Icons\RibbonIcon16.png"/>
-        <Resource Include="Resources\Icons\RibbonIcon32.png"/>
-        <Resource Include="Resources\Icons\WallRebarIcon16.png"/>
-        <Resource Include="Resources\Icons\WallRebarIcon32.png"/>
-        <Resource Include="Resources\Icons\AlignViewIcon16.png"/>
-        <Resource Include="Resources\Icons\AlignViewIcon32.png"/>
-        <Resource Include="Resources\Icons\BeamDrawingIcon16.png"/>
-        <Resource Include="Resources\Icons\BeamDrawingIcon32.png"/>
-        <Resource Include="Resources\Icons\FootingDrawingIcon16.png" Condition="Exists('Resources\Icons\FootingDrawingIcon16.png')"/>
-        <Resource Include="Resources\Icons\FootingDrawingIcon32.png" Condition="Exists('Resources\Icons\FootingDrawingIcon32.png')"/>
+        <!-- Embed every command icon so pack URIs in Application.cs resolve at runtime. -->
+        <Resource Include="Resources\Icons\*Icon16.png"/>
+        <Resource Include="Resources\Icons\*Icon32.png"/>
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net48'">

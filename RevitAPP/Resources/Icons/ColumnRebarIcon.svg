@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <title>BeamDrawingIcon</title>
+  <title>ColumnRebarIcon</title>
 
   <style>
     .paper{fill:#f4fbfc;stroke:#bde8ec;stroke-width:1.2;stroke-linejoin:round}
@@ -21,14 +21,10 @@
   </style>
 
 
-      <!-- Cross section: concrete, closed stirrup and longitudinal bars. -->
-      <rect x="8" y="4" width="16" height="24" rx="1" class="concrete"/>
-      <rect x="10.5" y="6.5" width="11" height="19" rx="1.5" class="stirrup"/>
-      <circle cx="12" cy="8" r="1.7" fill="#ff5a4e"/>
-      <circle cx="20" cy="8" r="1.7" fill="#ff5a4e"/>
-      <circle cx="12" cy="24" r="1.7" fill="#ff5a4e"/>
-      <circle cx="20" cy="24" r="1.7" fill="#ff5a4e"/>
-      <path d="M3 16h5M24 16h5" class="cut"/>
-      <path d="M4 13l3 3-3 3M28 13l-3 3 3 3" class="accent-line"/>
+      <rect x="10" y="5" width="12" height="22" rx="1" class="concrete"/>
+      <rect x="12" y="7" width="8" height="18" rx="1" class="rebar-loop"/>
+      <path d="M14 7v18M18 7v18" class="rebar"/>
+      <circle cx="14" cy="9" r="1.2" class="accent"/><circle cx="18" cy="9" r="1.2" class="accent"/>
+      <circle cx="14" cy="23" r="1.2" class="accent"/><circle cx="18" cy="23" r="1.2" class="accent"/>
 
 </svg>
