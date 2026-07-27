@@ -2,8 +2,8 @@
   <title>BeamRebarIcon</title>
 
   <style>
-    .paper{fill:#f4fbfc;stroke:#bde8ec;stroke-width:1.2;stroke-linejoin:round}
-    .concrete{fill:#dce8ea;stroke:#f4fbfc;stroke-width:1.25;stroke-linejoin:round}
+    .paper{fill:none;stroke:#bde8ec;stroke-width:1.2;stroke-linejoin:round}
+    .concrete{fill:none;stroke:#f4fbfc;stroke-width:1.25;stroke-linejoin:round}
     .line,.ink{fill:none;stroke:#f4fbfc;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
     .ink{stroke:#163642;stroke-width:1.35}
     .grid{fill:none;stroke:#6f939b;stroke-width:1}
