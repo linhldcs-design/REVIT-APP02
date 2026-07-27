@@ -37,9 +37,10 @@ namespace RevitAPP
 
         private void CreateRibbon()
         {
-            var commandsPanel = Application.CreatePanel("Commands", "RevitAPP");
-            var rebarPanel = Application.CreatePanel("Rebar", "RevitAPP");
-            var drawingRebarPanel = Application.CreatePanel("Drawing Rebar", "RevitAPP");
+            const string ribbonTabName = "LDL-STRUCTURAL";
+            var commandsPanel = Application.CreatePanel("Commands", ribbonTabName);
+            var rebarPanel = Application.CreatePanel("Rebar", ribbonTabName);
+            var drawingRebarPanel = Application.CreatePanel("Drawing Rebar", ribbonTabName);
 
             commandsPanel.AddPushButton<LicenseCommand>("License")
                 .SetImage("/RevitAPP;component/Resources/Icons/LicenseIcon16.png")

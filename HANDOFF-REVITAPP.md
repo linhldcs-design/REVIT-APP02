@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.2.1`
+- Release đang phát hành: `v1.2.2`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -45,6 +45,7 @@
 - GitHub Actions Release `v1.1.6` (run `29736265914`) thành công; 8 assets đã phát hành và `latest.json` v1.1.6 trả HTTP 200.
 - `v1.2.0`: thêm lệnh triển khai mặt cắt dọc dầm theo một chuỗi dầm liên tục, preview trục/vị trí cắt, mặt cắt ngang gối–nhịp, tag/dim/detail thật và phát hành lên sheet có sẵn. Kiểm thử local đạt 196 + 15 test; build Release R22–R27 thành công.
 - `v1.2.1`: thiết kế bộ icon riêng nền trong suốt cho toàn bộ lệnh; tách Ribbon thành `Commands`, `Rebar` và `Drawing Rebar`; đổi tên `Bản Vẽ Dầm` thành `Mặt Cắt Ngang Dầm`, `Bản Vẽ Móng` thành `Mặt Bằng Móng`.
+- `v1.2.2`: đổi tên tab Ribbon hiển thị từ `RevitAPP` thành `LDL-STRUCTURAL`; giữ nguyên assembly, manifest, namespace, pack URI và toàn bộ logic lệnh để bảo đảm tương thích cập nhật.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
