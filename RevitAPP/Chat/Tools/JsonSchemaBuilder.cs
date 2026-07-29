@@ -49,6 +49,18 @@ public sealed class JsonSchemaBuilder
         return this;
     }
 
+    public JsonSchemaBuilder TextArray(string name, string description, bool required = false)
+    {
+        _properties[name] = new JObject
+        {
+            ["type"] = "array",
+            ["description"] = description,
+            ["items"] = new JObject { ["type"] = "string" }
+        };
+        if (required) _required.Add(name);
+        return this;
+    }
+
     public JObject Build() => new()
     {
         ["type"] = "object",

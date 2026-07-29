@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using RevitAPP.Chat.Models;
+using RevitAPP.Chat.Tools.BeamLongitudinalDrawing;
 using RevitAPP.Chat.Tools.Native;
 using RevitAPP.Commands;
 using BeamRebarStartupCommand = BeamRebarPro.Commands.StartupCommand;
@@ -28,6 +29,8 @@ public sealed class ChatToolRegistry
             new DrawFootingSectionTool(),
             new ArrangeFootingSheetTool(),
             new DrawAndArrangeFootingSheetTool(),
+            new FindBeamLongitudinalPresetsTool(),
+            new DrawBeamLongitudinalDrawingTool(),
             new GetSelectedElementsTool(),
             new GetCurrentViewInfoTool(),
             new SelectAllByCategoryTool(),

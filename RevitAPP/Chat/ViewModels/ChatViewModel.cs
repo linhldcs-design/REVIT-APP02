@@ -231,6 +231,9 @@ public sealed partial class ChatViewModel : ObservableObject
         RunOnUi(() => ActivityStatus = $"Đang chạy {name}…");
         string result;
         var registeredTool = _registry.Get(name);
+        if (name == "draw_beam_longitudinal_drawing" &&
+            input["beamIds"] is not JArray { Count: > 0 })
+            input["beamIds"] = new JArray(GetSelectedIds(BuiltInCategory.OST_StructuralFraming));
         if (name == "send_code_to_revit" &&
             (input.Value<string?>("code")?.Length ?? 0) > NativeDynamicCodeTool.MaxCodeLength)
         {
@@ -432,8 +435,29 @@ public sealed partial class ChatViewModel : ObservableObject
 
     private bool ConfirmToolExecution(string toolName, IConfirmableChatTool tool, JObject input)
     {
-        var details = input.ToString(Formatting.Indented);
-        if (details.Length > 1800) details = details[..1800] + "\n…";
+        var confirmationInput = (JObject)input.DeepClone();
+        if (toolName == "draw_beam_longitudinal_drawing" &&
+            confirmationInput["beamIds"] is not JArray { Count: > 0 })
+            confirmationInput["beamIds"] = "(sẽ dùng toàn bộ dầm kết cấu đang được chọn trong Revit)";
+        string details;
+        if (toolName == "draw_beam_longitudinal_drawing" &&
+            confirmationInput["beamIds"] is JArray beamIds)
+        {
+            var sheets = confirmationInput["sheetNumbers"] is JArray sheetNumbers
+                ? string.Join(", ", sheetNumbers.Values<string>())
+                : "(chưa cung cấp)";
+            details =
+                $"beamIds ({beamIds.Count}): {string.Join(", ", beamIds.Values<long>())}\n" +
+                $"beamsPerSheet: {confirmationInput.Value<int?>("beamsPerSheet")?.ToString() ?? "(chưa cung cấp)"}\n" +
+                $"sheetNumbers: {sheets}\n" +
+                $"presetName: {confirmationInput.Value<string?>("presetName") ?? "(mặc định)"}\n" +
+                $"reverseDirection: {confirmationInput.Value<bool?>("reverseDirection") ?? false}";
+        }
+        else
+        {
+            details = confirmationInput.ToString(Formatting.Indented);
+            if (details.Length > 1800) details = details[..1800] + "\n…";
+        }
         var warning = tool.IsDangerous
             ? "CẢNH BÁO: thao tác này có thể xóa dữ liệu hoặc chạy mã C# tùy ý.\n\n"
             : "Thao tác này sẽ thay đổi mô hình Revit.\n\n";
