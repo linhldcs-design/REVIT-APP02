@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.2.2`
+- Release đang phát hành: `v1.2.4`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,7 +35,7 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 159/159 đạt và bộ test bổ sung 8/8 đạt.
+- Test gần nhất: `RevitAPP.Tests` 217/217 đạt.
 - Chat AI giữ registry **53 tool duy nhất**. Toàn bộ 21 MCP proxy đã được native hóa vào RevitAPP; máy đích không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài.
 - Build xác nhận gần nhất: Revit 2022, 2025 và 2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
@@ -46,6 +46,8 @@
 - `v1.2.0`: thêm lệnh triển khai mặt cắt dọc dầm theo một chuỗi dầm liên tục, preview trục/vị trí cắt, mặt cắt ngang gối–nhịp, tag/dim/detail thật và phát hành lên sheet có sẵn. Kiểm thử local đạt 196 + 15 test; build Release R22–R27 thành công.
 - `v1.2.1`: thiết kế bộ icon riêng nền trong suốt cho toàn bộ lệnh; tách Ribbon thành `Commands`, `Rebar` và `Drawing Rebar`; đổi tên `Bản Vẽ Dầm` thành `Mặt Cắt Ngang Dầm`, `Bản Vẽ Móng` thành `Mặt Bằng Móng`.
 - `v1.2.2`: đổi tên tab Ribbon hiển thị từ `RevitAPP` thành `LDL-STRUCTURAL`; giữ nguyên assembly, manifest, namespace, pack URI và toàn bộ logic lệnh để bảo đảm tương thích cập nhật.
+- `v1.2.3`: hoàn thiện bộ icon nền trong suốt cho các lệnh trên Ribbon.
+- `v1.2.4`: sửa lệnh Mặt Cắt Ngang Dầm chỉ sắp xếp viewport vừa tạo; giữ nguyên viewport cũ trên sheet, tránh nội dung hiện hữu và vẫn giữ viewport mới để người dùng chỉnh tay khi không còn vùng trống.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

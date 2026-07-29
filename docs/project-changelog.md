@@ -1,5 +1,14 @@
 # Project Changelog
 
+## 2026-07-29
+
+### RevitAPP v1.2.4 — Giữ nguyên bố cục sheet khi thêm mặt cắt ngang dầm
+
+- Lệnh Mặt Cắt Ngang Dầm chỉ di chuyển các viewport được tạo trong lần chạy hiện tại; không còn quét tên `MCN-*` rồi sắp xếp lại toàn bộ viewport cũ trên sheet.
+- Nội dung hiện hữu được xem là vùng chiếm chỗ bất biến. Viewport mới ưu tiên tìm ô trống và giữ khoảng hở tối thiểu 1 mm.
+- Nếu sheet không còn vùng trống, viewport mới vẫn được giữ trên sheet để người dùng chỉnh tay; lệnh cảnh báo nhưng không rollback kết quả.
+- Bổ sung planner thuần và regression guard; `RevitAPP.Tests` đạt 217/217.
+
 ## 2026-07-20
 
 ### IsolatedFootingRebar: bỏ qua bê tông lót
