@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.2.4`
+- Release đang phát hành: `v1.3.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -36,8 +36,8 @@
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
 - Test gần nhất: `RevitAPP.Tests` 217/217 đạt.
-- Chat AI giữ registry **53 tool duy nhất**. Toàn bộ 21 MCP proxy đã được native hóa vào RevitAPP; máy đích không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài.
-- Build xác nhận gần nhất: Revit 2022, 2025 và 2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
+- Chat AI giữ registry **55 tool duy nhất**. Toàn bộ 21 MCP proxy đã được native hóa vào RevitAPP; máy đích không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài.
+- Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
 - Bộ lọc màu đã được sửa; thao tác tạo kích thước chạy nguyên tử, lỗi giữa chừng không để lại kết quả dở dang.
 - GitHub Actions của Release `v1.1.5`: thành công toàn bộ; Release có đủ 8 asset và `latest.json` trả HTTP 200.
@@ -48,6 +48,7 @@
 - `v1.2.2`: đổi tên tab Ribbon hiển thị từ `RevitAPP` thành `LDL-STRUCTURAL`; giữ nguyên assembly, manifest, namespace, pack URI và toàn bộ logic lệnh để bảo đảm tương thích cập nhật.
 - `v1.2.3`: hoàn thiện bộ icon nền trong suốt cho các lệnh trên Ribbon.
 - `v1.2.4`: sửa lệnh Mặt Cắt Ngang Dầm chỉ sắp xếp viewport vừa tạo; giữ nguyên viewport cũ trên sheet, tránh nội dung hiện hữu và vẫn giữ viewport mới để người dùng chỉnh tay khi không còn vùng trống.
+- `v1.3.0`: thêm 2 Chat AI tool tìm preset và triển khai mặt cắt dọc dầm hàng loạt lên sheet có sẵn. Hỗ trợ số dầm mỗi sheet do người dùng chọn, chia dependent view tại lưới gần trung điểm, đặt nét cắt cách lưới ưu tiên 500 mm, xếp mặt cắt ngang 1–2 hàng và luôn giữ nguyên tỷ lệ. Khi sheet thiếu chỗ, tool vẫn đặt view để người dùng tiếp tục sắp xếp tay thay vì rollback vì kích thước.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
