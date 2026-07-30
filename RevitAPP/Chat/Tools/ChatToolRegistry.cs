@@ -45,6 +45,7 @@ public sealed class ChatToolRegistry
     }
 
     public IReadOnlyList<ToolSchema> Schemas => _tools.Values.Select(tool => tool.Schema).ToList();
+    public IReadOnlyList<IChatTool> Tools => _tools.Values.ToList();
 
     public bool TryGet(string name, out IChatTool tool) => _tools.TryGetValue(name, out tool!);
 

@@ -16,6 +16,7 @@ using RevitAPP.Chat.Services;
 using RevitAPP.Chat.Tools;
 using RevitAPP.Chat.Tools.Native;
 using RevitAPP.Chat.Views;
+using RevitAPP.Licensing;
 
 namespace RevitAPP.Chat.ViewModels;
 
@@ -246,8 +247,16 @@ public sealed partial class ChatViewModel : ObservableObject
         }
         else if (registeredTool is IBackgroundChatTool backgroundTool)
         {
-            try { result = JsonConvert.SerializeObject(backgroundTool.Execute(input, null!)); }
-            catch (Exception ex) { result = JsonConvert.SerializeObject(new { success = false, message = ex.Message }); }
+            var (licenseOk, licenseMessage) = registeredTool.RequiresLicense
+                ? LicenseService.EnsureValid()
+                : (true, string.Empty);
+            if (!licenseOk)
+                result = JsonConvert.SerializeObject(new { success = false, message = licenseMessage });
+            else
+            {
+                try { result = JsonConvert.SerializeObject(backgroundTool.Execute(input, null!)); }
+                catch (Exception ex) { result = JsonConvert.SerializeObject(new { success = false, message = ex.Message }); }
+            }
         }
         else
         {

@@ -1,3 +1,4 @@
+using RevitAPP.Chat.Mcp;
 using RevitAPP.Chat.Services;
 using RevitAPP.Chat.Tools;
 using RevitAPP.Chat.ViewModels;
@@ -17,6 +18,8 @@ public static class ChatHost
     private static ChatToolEventHandler? _bridge;
     private static ChatMemoryStore? _memoryStore;
     private static ChatImageService? _imageService;
+    private static Autodesk.Revit.UI.ExternalEvent? _externalEvent;
+    private static RevitMcpHttpServer? _mcpServer;
 
     public static void Start()
     {
@@ -30,6 +33,45 @@ public static class ChatHost
 
     /// <summary>Bridge singleton — ChatCommand gán ExternalEvent (tạo trong API context) cho nó.</summary>
     public static ChatToolEventHandler Bridge => _bridge ??= new ChatToolEventHandler(GetService<ChatToolRegistry>());
+
+    /// <summary>Tạo ExternalEvent dùng chung cho Chat AI và MCP trong Revit API context.</summary>
+    public static void BindRevitBridge()
+    {
+        Start();
+        _externalEvent ??= Autodesk.Revit.UI.ExternalEvent.Create(Bridge);
+        Bridge.Bind(_externalEvent);
+    }
+
+    public static void StartMcpServer()
+    {
+        Start();
+        if (_mcpServer is not null) return;
+
+        try
+        {
+            var registry = GetService<ChatToolRegistry>();
+            var surface = new McpToolSurface(registry, Bridge);
+            var version = typeof(ChatHost).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+            var dispatcher = new McpProtocolDispatcher(surface.Tools, surface.ExecuteAsync, version);
+            var accessToken = McpAccessTokenStore.Resolve();
+            var server = new RevitMcpHttpServer(
+                dispatcher, surface.Tools.Count, accessToken, ResolveMcpPort());
+            if (server.Start()) _mcpServer = server;
+            else server.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "RevitAPP MCP did not start because secure configuration failed");
+        }
+    }
+
+    public static void Stop()
+    {
+        _mcpServer?.Dispose();
+        _mcpServer = null;
+        _externalEvent?.Dispose();
+        _externalEvent = null;
+    }
 
     public static T GetService<T>() where T : class
     {
@@ -54,5 +96,13 @@ public static class ChatHost
                 GetService<ChatMemoryStore>(), GetService<ChatImageService>());
 
         throw new InvalidOperationException($"No service of type {typeof(T).FullName} is registered.");
+    }
+
+    private static int ResolveMcpPort()
+    {
+        var value = Environment.GetEnvironmentVariable("REVITAPP_MCP_PORT");
+        return int.TryParse(value, out var port) && port is >= 1024 and <= 65535
+            ? port
+            : RevitMcpHttpServer.DefaultPort;
     }
 }

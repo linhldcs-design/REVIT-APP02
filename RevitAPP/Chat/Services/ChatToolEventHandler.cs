@@ -1,8 +1,8 @@
-using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using RevitAPP.Chat.Mcp;
 using RevitAPP.Chat.Tools;
 using RevitAPP.Licensing;
 
@@ -17,12 +17,11 @@ namespace RevitAPP.Chat.Services;
 public sealed class ChatToolEventHandler : IExternalEventHandler
 {
     private readonly ChatToolRegistry _registry;
-    private readonly ManualResetEvent _done = new(false);
+    private readonly object _executionGate = new();
+    private readonly object _pendingGate = new();
 
     private ExternalEvent? _event;
-    private string _pendingName = string.Empty;
-    private JObject _pendingInput = new();
-    private string _result = string.Empty;
+    private PendingToolRequest? _pendingRequest;
 
     public ChatToolEventHandler(ChatToolRegistry registry)
     {
@@ -33,90 +32,159 @@ public sealed class ChatToolEventHandler : IExternalEventHandler
     public void Bind(ExternalEvent externalEvent) => _event = externalEvent;
 
     /// <summary>Chạy 1 tool trên Revit thread và chờ kết quả (JSON string). Gọi từ background thread.</summary>
-    public string ExecuteToolOnRevitThread(string name, JObject input, int timeoutMs = 120_000)
+    public string ExecuteToolOnRevitThread(
+        string name,
+        JObject input,
+        int timeoutMs = 120_000,
+        bool requireUserConfirmation = false)
     {
-        if (_event is null)
-            return Error("Chat chưa sẵn sàng (ExternalEvent chưa khởi tạo).");
+        lock (_executionGate)
+        {
+            if (_event is null)
+                return Error("Chat/MCP chưa sẵn sàng (ExternalEvent chưa khởi tạo).");
 
-        var effectiveTimeoutMs = name == "draw_beam_longitudinal_drawing"
-            ? Math.Max(timeoutMs, 30 * 60 * 1000)
-            : timeoutMs;
-        _pendingName = name;
-        _pendingInput = input;
-        _result = Error("Không nhận được kết quả từ Revit.");
-        _done.Reset();
+            var effectiveTimeoutMs = name == "draw_beam_longitudinal_drawing"
+                ? Math.Max(timeoutMs, 30 * 60 * 1000)
+                : timeoutMs;
+            using var completion = new McpRequestCompletion();
+            var request = new PendingToolRequest(
+                name, (JObject)input.DeepClone(), requireUserConfirmation, completion);
+            lock (_pendingGate)
+            {
+                if (_pendingRequest is not null)
+                    return Error("Chat/MCP đang xử lý một request khác.");
+                _pendingRequest = request;
+            }
 
-        _event.Raise();
-        if (!_done.WaitOne(effectiveTimeoutMs))
-            return Error($"Tool '{name}' quá thời gian chờ ({effectiveTimeoutMs / 1000}s).");
+            var raiseResult = _event.Raise();
+            if (raiseResult is not (ExternalEventRequest.Accepted or ExternalEventRequest.Pending))
+            {
+                var error = Error($"Revit từ chối ExternalEvent cho tool '{name}' ({raiseResult}).");
+                completion.TryCancel(error);
+                ClearPending(request);
+                return error;
+            }
 
-        return _result;
+            if (!completion.Wait(effectiveTimeoutMs))
+            {
+                var timeout = Error(
+                    $"Tool '{name}' quá thời gian chờ ({effectiveTimeoutMs / 1000}s).");
+                if (completion.TryCancel(timeout))
+                {
+                    ClearPending(request);
+                    return timeout;
+                }
+
+                // Revit already started this request. Wait for its own correlated result so the
+                // next caller can never overwrite or duplicate an in-flight model change.
+                completion.Wait();
+            }
+
+            ClearPending(request);
+            return completion.Result;
+        }
     }
 
     public void Execute(UIApplication app)
     {
+        PendingToolRequest? request;
+        lock (_pendingGate)
+        {
+            request = _pendingRequest;
+            if (request is null || !request.Completion.TryStart()) return;
+        }
+
+        string result;
         try
         {
             var uiDoc = app.ActiveUIDocument;
             if (uiDoc is null)
             {
-                _result = Error("Không có tài liệu Revit đang mở.");
-                return;
+                result = Error("Không có tài liệu Revit đang mở.");
             }
-
-            if (!_registry.TryGet(_pendingName, out var tool))
+            else if (!_registry.TryGet(request.Name, out var tool))
             {
-                _result = Error($"Tool không tồn tại: {_pendingName}");
-                return;
+                result = Error($"Tool không tồn tại: {request.Name}");
             }
-
-            if (tool.RequiresLicense)
+            else if (tool.RequiresLicense && LicenseService.EnsureValid() is var license && !license.Ok)
             {
-                var (ok, message) = LicenseService.EnsureValid();
-                if (!ok)
+                result = Error(license.Message);
+            }
+            else if (request.RequireUserConfirmation && !ConfirmMcpExecution(tool, request.Input))
+            {
+                result = JsonConvert.SerializeObject(new
                 {
-                    _result = Error(message);
-                    return;
-                }
-            }
-
-            var doc = uiDoc.Document;
-            var ctx = new ChatToolContext(doc, uiDoc);
-            AddSelectedElementIdsWhenMissing(_pendingName, _pendingInput, ctx);
-            var rebarBefore = IsRebarDrawTool(_pendingName) ? CollectRebarIds(doc) : null;
-
-            object output;
-            if (tool.RequiresTransaction)
-            {
-                using var transaction = new Transaction(doc, "Chat AI tool");
-                transaction.Start();
-                output = tool.Execute(_pendingInput, ctx);
-                transaction.Commit();
+                    success = false,
+                    cancelled = true,
+                    message = "Người dùng đã hủy MCP tool trong Revit."
+                });
             }
             else
             {
-                output = tool.Execute(_pendingInput, ctx);
-            }
+                var doc = uiDoc.Document;
+                var ctx = new ChatToolContext(doc, uiDoc);
+                AddSelectedElementIdsWhenMissing(request.Name, request.Input, ctx);
+                var rebarBefore = IsRebarDrawTool(request.Name) ? CollectRebarIds(doc) : null;
 
-            var result = JObject.FromObject(output);
-            if (rebarBefore is not null)
-            {
-                var createdIds = CollectRebarIds(doc).Where(id => !rebarBefore.Contains(id)).ToArray();
-                result["createdElementIds"] = new JArray(createdIds);
+                object output;
+                if (tool.RequiresTransaction)
+                {
+                    using var transaction = new Transaction(doc, "Chat AI tool");
+                    transaction.Start();
+                    output = tool.Execute(request.Input, ctx);
+                    transaction.Commit();
+                }
+                else
+                {
+                    output = tool.Execute(request.Input, ctx);
+                }
+
+                var resultObject = JObject.FromObject(output);
+                if (rebarBefore is not null)
+                {
+                    var createdIds = CollectRebarIds(doc).Where(id => !rebarBefore.Contains(id)).ToArray();
+                    resultObject["createdElementIds"] = new JArray(createdIds);
+                }
+                result = resultObject.ToString(Formatting.None);
             }
-            _result = result.ToString(Formatting.None);
         }
         catch (Exception ex)
         {
-            _result = Error(ex.Message);
+            result = Error(ex.Message);
         }
-        finally
-        {
-            _done.Set();
-        }
+
+        request.Completion.Complete(result);
+        ClearPending(request);
     }
 
     public string GetName() => "ChatToolEventHandler";
+
+    private static bool ConfirmMcpExecution(IChatTool tool, JObject inputObject)
+    {
+        var input = inputObject.ToString(Formatting.Indented);
+        if (input.Length > 1600) input = input[..1600] + "\n…";
+        var dangerous = tool is IConfirmableChatTool { IsDangerous: true };
+        var dialog = new TaskDialog("RevitAPP - MCP")
+        {
+            MainInstruction = dangerous
+                ? $"MCP yêu cầu chạy thao tác nguy hiểm: {tool.Name}"
+                : $"MCP yêu cầu thay đổi mô hình: {tool.Name}",
+            MainContent = input,
+            CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
+            DefaultButton = TaskDialogResult.No,
+            MainIcon = dangerous
+                ? TaskDialogIcon.TaskDialogIconWarning
+                : TaskDialogIcon.TaskDialogIconInformation
+        };
+        return dialog.Show() == TaskDialogResult.Yes;
+    }
+
+    private void ClearPending(PendingToolRequest request)
+    {
+        lock (_pendingGate)
+            if (ReferenceEquals(_pendingRequest, request))
+                _pendingRequest = null;
+    }
 
     private static bool IsRebarDrawTool(string name) => name is
         "draw_column_rebar" or "draw_beam_rebar" or "draw_beam_rebar_from_open_excel" or
@@ -163,4 +231,10 @@ public sealed class ChatToolEventHandler : IExternalEventHandler
 
     private static string Error(string message) =>
         JsonConvert.SerializeObject(new { success = false, message });
+
+    private sealed record PendingToolRequest(
+        string Name,
+        JObject Input,
+        bool RequireUserConfirmation,
+        McpRequestCompletion Completion);
 }

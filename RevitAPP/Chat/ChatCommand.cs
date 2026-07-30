@@ -19,7 +19,6 @@ namespace RevitAPP.Chat;
 public class ChatCommand : ExternalCommand
 {
     private static ChatWindow? _window;
-    private static Autodesk.Revit.UI.ExternalEvent? _externalEvent;
 
     public override void Execute()
     {
@@ -27,9 +26,9 @@ public class ChatCommand : ExternalCommand
         // Host có thể chưa Start nếu load qua Add-in Manager (OnStartup không chạy) → đảm bảo khởi tạo.
         ChatHost.Start();
 
-        // ExternalEvent phải tạo trong API context (đang ở Execute) → tạo 1 lần rồi bind cho bridge.
-        _externalEvent ??= Autodesk.Revit.UI.ExternalEvent.Create(ChatHost.Bridge);
-        ChatHost.Bridge.Bind(_externalEvent);
+        // Chat AI và MCP dùng chung một bridge; Chat AI vẫn giữ nguyên giao diện và tool loop.
+        ChatHost.BindRevitBridge();
+        ChatHost.StartMcpServer();
         ChatSessionContext.ProjectKey = RevitContext.UiApplication.ActiveUIDocument?.Document.Title ?? string.Empty;
 
         if (_window is not null)

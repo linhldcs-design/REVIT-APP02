@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.3.2`
+- Release đang phát hành: `v1.4.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,8 +35,8 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 217/217 đạt.
-- Chat AI giữ registry **55 tool duy nhất**. Toàn bộ 21 MCP proxy đã được native hóa vào RevitAPP; máy đích không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài.
+- Test gần nhất: `RevitAPP.Tests` 245/245 đạt.
+- Chat AI giữ nguyên registry **55 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
 - Bộ lọc màu đã được sửa; thao tác tạo kích thước chạy nguyên tử, lỗi giữa chừng không để lại kết quả dở dang.
@@ -51,6 +51,7 @@
 - `v1.3.0`: thêm 2 Chat AI tool tìm preset và triển khai mặt cắt dọc dầm hàng loạt lên sheet có sẵn. Hỗ trợ số dầm mỗi sheet do người dùng chọn, chia dependent view tại lưới gần trung điểm, đặt nét cắt cách lưới ưu tiên 500 mm, xếp mặt cắt ngang 1–2 hàng và luôn giữ nguyên tỷ lệ. Khi sheet thiếu chỗ, tool vẫn đặt view để người dùng tiếp tục sắp xếp tay thay vì rollback vì kích thước.
 - `v1.3.1`: thêm lệnh `Lưới 3D/2D` trong panel `Commands` để đồng bộ cả hai đầu của toàn bộ lưới trục đang hiển thị trong mặt bằng. Nếu còn đầu lưới ở 3D, lệnh chuyển toàn bộ sang 2D; khi tất cả đã ở 2D, lệnh chuyển ngược lại 3D. Mỗi lưới được xử lý trong sub-transaction riêng và lưới không thể chỉnh sửa được bỏ qua có báo cáo.
 - `v1.3.2`: mở rộng lệnh `Lưới 3D/2D` để sử dụng trong mặt đứng, mặt cắt và Detail/Callout dạng `ViewSection`, ngoài mặt bằng; thông báo kết quả dùng tên view hiện tại.
+- `v1.4.0`: phát hành toàn bộ 55 Chat AI tool qua MCP Streamable HTTP tích hợp, đồng thời giữ nguyên cửa sổ Chat AI. Endpoint loopback yêu cầu bearer token 256-bit tại `%LocalAppData%\RevitAPP\mcp-access-token.txt`, dùng MCP ổn định `2025-11-25`, hàng đợi worker có giới hạn, kết quả được liên kết riêng theo từng request và mọi tool thay đổi model đều yêu cầu xác nhận trong Revit; license gate và transaction ownership hiện có được giữ nguyên.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

@@ -25,6 +25,8 @@ namespace RevitAPP
             IsolatedFootingRebar.Host.Start();
             WallRebar.Host.Start();
             ChatHost.Start();
+            ChatHost.BindRevitBridge();
+            ChatHost.StartMcpServer();
             PointCloudPanelRegistry.Register(Application);
             CreateRibbon();
             UpdateStartupCoordinator.Start(Application);
@@ -32,6 +34,7 @@ namespace RevitAPP
 
         public override void OnShutdown()
         {
+            ChatHost.Stop();
             Log.CloseAndFlush();
         }
 
