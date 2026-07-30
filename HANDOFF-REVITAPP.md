@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.3.1`
+- Release đang phát hành: `v1.3.2`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -50,6 +50,7 @@
 - `v1.2.4`: sửa lệnh Mặt Cắt Ngang Dầm chỉ sắp xếp viewport vừa tạo; giữ nguyên viewport cũ trên sheet, tránh nội dung hiện hữu và vẫn giữ viewport mới để người dùng chỉnh tay khi không còn vùng trống.
 - `v1.3.0`: thêm 2 Chat AI tool tìm preset và triển khai mặt cắt dọc dầm hàng loạt lên sheet có sẵn. Hỗ trợ số dầm mỗi sheet do người dùng chọn, chia dependent view tại lưới gần trung điểm, đặt nét cắt cách lưới ưu tiên 500 mm, xếp mặt cắt ngang 1–2 hàng và luôn giữ nguyên tỷ lệ. Khi sheet thiếu chỗ, tool vẫn đặt view để người dùng tiếp tục sắp xếp tay thay vì rollback vì kích thước.
 - `v1.3.1`: thêm lệnh `Lưới 3D/2D` trong panel `Commands` để đồng bộ cả hai đầu của toàn bộ lưới trục đang hiển thị trong mặt bằng. Nếu còn đầu lưới ở 3D, lệnh chuyển toàn bộ sang 2D; khi tất cả đã ở 2D, lệnh chuyển ngược lại 3D. Mỗi lưới được xử lý trong sub-transaction riêng và lưới không thể chỉnh sửa được bỏ qua có báo cáo.
+- `v1.3.2`: mở rộng lệnh `Lưới 3D/2D` để sử dụng trong mặt đứng, mặt cắt và Detail/Callout dạng `ViewSection`, ngoài mặt bằng; thông báo kết quả dùng tên view hiện tại.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
