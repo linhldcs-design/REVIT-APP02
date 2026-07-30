@@ -58,6 +58,10 @@ namespace RevitAPP
                 .SetImage("/RevitAPP;component/Resources/Icons/RenumberScheduleIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/RenumberScheduleIcon32.png");
 
+            commandsPanel.AddPushButton<ToggleGridExtentCommand>("Luoi 3D/2D")
+                .SetImage("/RevitAPP;component/Resources/Icons/GridExtentIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/GridExtentIcon32.png");
+
             rebarPanel.AddPushButton<DrawColumnRebarCommand>("Ve Thep Cot")
                 .SetImage("/RevitAPP;component/Resources/Icons/ColumnRebarIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/ColumnRebarIcon32.png");
