@@ -22,9 +22,9 @@ namespace RevitAPP.Commands
 
             var document = Application.ActiveUIDocument.Document;
             var view = document.ActiveView;
-            if (view is not ViewPlan || view.IsTemplate)
+            if (!IsSupportedView(view))
             {
-                TaskDialog.Show("RevitAI", "Lệnh này chỉ sử dụng được trong mặt bằng.");
+                TaskDialog.Show("RevitAI", "Lệnh này chỉ sử dụng được trong mặt bằng, mặt đứng, mặt cắt hoặc view chi tiết.");
                 return;
             }
 
@@ -35,7 +35,7 @@ namespace RevitAPP.Commands
 
             if (visibleGrids.Count == 0)
             {
-                TaskDialog.Show("RevitAI", "Không tìm thấy lưới trục nào trong mặt bằng hiện tại.");
+                TaskDialog.Show("RevitAI", "Không tìm thấy lưới trục nào trong view hiện tại.");
                 return;
             }
 
@@ -45,7 +45,7 @@ namespace RevitAPP.Commands
 
             if (editableGrids.Count == 0)
             {
-                TaskDialog.Show("RevitAI", "Không có lưới trục nào có thể chuyển đổi trong mặt bằng hiện tại.");
+                TaskDialog.Show("RevitAI", "Không có lưới trục nào có thể chuyển đổi trong view hiện tại.");
                 return;
             }
 
@@ -87,8 +87,13 @@ namespace RevitAPP.Commands
             var mode = targetExtent == DatumExtentType.ViewSpecific ? "2D" : "3D";
             TaskDialog.Show(
                 "RevitAI",
-                $"Đã chuyển {updatedCount} lưới trục sang {mode} trong mặt bằng \"{view.Name}\"."
+                $"Đã chuyển {updatedCount} lưới trục sang {mode} trong view \"{view.Name}\"."
                 + (skippedCount > 0 ? $"\nBỏ qua {skippedCount} lưới không thể chỉnh sửa." : string.Empty));
+        }
+
+        private static bool IsSupportedView(View view)
+        {
+            return !view.IsTemplate && (view is ViewPlan || view is ViewSection);
         }
 
         private static bool CanReadBothEnds(Grid grid, View view)
