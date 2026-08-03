@@ -10,7 +10,7 @@
         <LaunchRevit>true</LaunchRevit>
         <IsRepackable>true</IsRepackable>
         <EnableDynamicLoading>true</EnableDynamicLoading>
-        <Version>1.4.0</Version>
+        <Version>1.5.0</Version>
         <!-- Optional unique assembly identity for Add-In Manager smoke tests while the deployed RevitAPP is loaded. -->
         <AssemblyName Condition="'$(RevitAPPAssemblyName)' != ''">$(RevitAPPAssemblyName)</AssemblyName>
         <!-- Multi-version R23–R27. R27: RebarHookOrientation đã bỏ → xử lý bằng preprocessor. -->
@@ -74,5 +74,25 @@
     <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
         <Reference Include="System.Net.Http"/>
     </ItemGroup>
+
+    <PropertyGroup>
+        <DwgExportWorkerConfiguration>Debug</DwgExportWorkerConfiguration>
+        <DwgExportWorkerConfiguration Condition="$([System.String]::Copy('$(Configuration)').StartsWith('Release'))">Release</DwgExportWorkerConfiguration>
+        <DwgExportWorkerProject>$(MSBuildProjectDirectory)\..\tools\DwgExportWorker\RevitAPP.DwgExportWorker.csproj</DwgExportWorkerProject>
+        <DwgExportWorkerPublishDirectory>$(MSBuildProjectDirectory)\..\tools\DwgExportWorker\bin\$(DwgExportWorkerConfiguration)\net8.0-windows\win-x64\publish</DwgExportWorkerPublishDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="$(DwgExportWorkerPublishDirectory)\RevitAPP.DwgExportWorker.exe"
+              Link="RevitAPP.DwgExportWorker.exe"
+              CopyToOutputDirectory="PreserveNewest"
+              CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <Target Name="BuildDwgExportWorker" BeforeTargets="PrepareForBuild">
+        <MSBuild Projects="$(DwgExportWorkerProject)"
+                 Targets="Publish"
+                 Properties="Configuration=$(DwgExportWorkerConfiguration)" />
+    </Target>
 
 </Project>

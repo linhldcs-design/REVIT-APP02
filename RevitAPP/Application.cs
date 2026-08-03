@@ -44,6 +44,11 @@ namespace RevitAPP
             var commandsPanel = Application.CreatePanel("Commands", ribbonTabName);
             var rebarPanel = Application.CreatePanel("Rebar", ribbonTabName);
             var drawingRebarPanel = Application.CreatePanel("Drawing Rebar", ribbonTabName);
+            var cadPanel = Application.CreatePanel("CAD Tools", ribbonTabName);
+
+            cadPanel.AddPushButton<ExportSheetsToDwgCommand>("Xuất DWG\nModel")
+                .SetImage("/RevitAPP;component/Resources/Icons/AlignViewIcon16.png")
+                .SetLargeImage("/RevitAPP;component/Resources/Icons/AlignViewIcon32.png");
 
             commandsPanel.AddPushButton<LicenseCommand>("License")
                 .SetImage("/RevitAPP;component/Resources/Icons/LicenseIcon16.png")

@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.4.0`
+- Release đang phát hành: `v1.5.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,7 +35,7 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 245/245 đạt.
+- Test gần nhất: `RevitAPP.Tests` 343/343 đạt.
 - Chat AI giữ nguyên registry **55 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
@@ -52,6 +52,7 @@
 - `v1.3.1`: thêm lệnh `Lưới 3D/2D` trong panel `Commands` để đồng bộ cả hai đầu của toàn bộ lưới trục đang hiển thị trong mặt bằng. Nếu còn đầu lưới ở 3D, lệnh chuyển toàn bộ sang 2D; khi tất cả đã ở 2D, lệnh chuyển ngược lại 3D. Mỗi lưới được xử lý trong sub-transaction riêng và lưới không thể chỉnh sửa được bỏ qua có báo cáo.
 - `v1.3.2`: mở rộng lệnh `Lưới 3D/2D` để sử dụng trong mặt đứng, mặt cắt và Detail/Callout dạng `ViewSection`, ngoài mặt bằng; thông báo kết quả dùng tên view hiện tại.
 - `v1.4.0`: phát hành toàn bộ 55 Chat AI tool qua MCP Streamable HTTP tích hợp, đồng thời giữ nguyên cửa sổ Chat AI. Endpoint loopback yêu cầu bearer token 256-bit tại `%LocalAppData%\RevitAPP\mcp-access-token.txt`, dùng MCP ổn định `2025-11-25`, hàng đợi worker có giới hạn, kết quả được liên kết riêng theo từng request và mọi tool thay đổi model đều yêu cầu xác nhận trong Revit; license gate và transaction ownership hiện có được giữ nguyên.
+- `v1.5.0`: thêm lệnh `Xuất DWG Model` trong panel `CAD Tools`. Lệnh chọn DWG Export Setup, phiên bản DWG và Print Set đã lưu; xuất toàn bộ sheet thành một DWG Model Space tự chứa qua AutoCAD 2024 Automation riêng. DIM và DIMSTYLE được chuyển annotative, Text Style dùng Arial Narrow cao 2.5 và width factor 0.8, giữ DIMLFAC theo viewport; worker có ownership/timeout/retry và được đóng gói self-contained trong mỗi gói R22–R27. Runtime smoke Revit 2025 đạt 34/34 sheet, 1.695/1.695 DIM và Text Style đúng contract, `AUDIT` 0 lỗi.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
