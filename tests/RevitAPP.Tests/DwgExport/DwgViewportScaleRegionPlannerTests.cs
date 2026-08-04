@@ -44,6 +44,20 @@ public sealed class DwgViewportScaleRegionPlannerTests
     }
 
     [Fact]
+    public void MapToDrawingUnits_SingleReferenceScale_NormalizesDimlfacToOne()
+    {
+        var sheet = new DwgSheetPlan(
+            0, 1, "S-01", "Sheet", "sheet.dwg",
+            new[] { new DwgViewportPlan(10, 20, "Reference", 75, 0, 0, 0, -1, -1, 1, 1) });
+
+        var region = Assert.Single(DwgViewportScaleRegionPlanner.MapToDrawingUnits(
+            sheet,
+            DwgDrawingUnit.Feet));
+
+        Assert.Equal(1d, region.DimensionLinearFactor, 12);
+    }
+
+    [Fact]
     public void MapToDrawingUnits_OneToSeventyFiveAndOneToTwentyFive_MapsFactors()
     {
         var sheet = new DwgSheetPlan(

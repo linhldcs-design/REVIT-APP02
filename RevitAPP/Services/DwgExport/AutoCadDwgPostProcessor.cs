@@ -325,7 +325,7 @@ public static class AutoCadDwgPostProcessor
                 outputPath,
                 applicationProcessId,
                 timeout);
-            if (sheet.Viewports.Select(viewport => viewport.ScaleDenominator).Distinct().Count() > 1)
+            if (sheet.Viewports.Count > 0)
             {
                 NormalizeAndCloseGeneratedDocument(
                     documents,
@@ -378,7 +378,6 @@ public static class AutoCadDwgPostProcessor
         DwgSheetPlan sheet,
         DwgDrawingUnit drawingUnit)
     {
-        if (sheet.Viewports.Select(viewport => viewport.ScaleDenominator).Distinct().Count() <= 1) return;
         var modelSpace = Get(document, "ModelSpace")
             ?? throw new InvalidOperationException("Không truy cập được Model Space sau EXPORTLAYOUT.");
         var entities = Enumerate(modelSpace).ToArray();

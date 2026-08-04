@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang phát hành: `v1.5.1`
+- Release đang chuẩn bị phát hành: `v1.5.2`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -54,6 +54,7 @@
 - `v1.4.0`: phát hành toàn bộ 55 Chat AI tool qua MCP Streamable HTTP tích hợp, đồng thời giữ nguyên cửa sổ Chat AI. Endpoint loopback yêu cầu bearer token 256-bit tại `%LocalAppData%\RevitAPP\mcp-access-token.txt`, dùng MCP ổn định `2025-11-25`, hàng đợi worker có giới hạn, kết quả được liên kết riêng theo từng request và mọi tool thay đổi model đều yêu cầu xác nhận trong Revit; license gate và transaction ownership hiện có được giữ nguyên.
 - `v1.5.0`: thêm lệnh `Xuất DWG Model` trong panel `CAD Tools`. Lệnh chọn DWG Export Setup, phiên bản DWG và Print Set đã lưu; xuất toàn bộ sheet thành một DWG Model Space tự chứa qua AutoCAD 2024 Automation riêng. DIM và DIMSTYLE được chuyển annotative, Text Style dùng Arial Narrow cao 2.5 và width factor 0.8, giữ DIMLFAC theo viewport; worker có ownership/timeout/retry và được đóng gói self-contained trong mỗi gói R22–R27. Runtime smoke Revit 2025 đạt 34/34 sheet, 1.695/1.695 DIM và Text Style đúng contract, `AUDIT` 0 lỗi.
 - `v1.5.1`: sửa workflow clean-run để restore `DwgExportWorker` trước khi publish; `v1.5.0` chỉ là tag build thất bại và không tạo GitHub Release.
+- `v1.5.2`: chuẩn hóa DIMLFAC cho mọi sheet có viewport, kể cả sheet chỉ có một tỷ lệ. View tham chiếu (mẫu số tỷ lệ lớn nhất trên sheet) luôn có DIMLFAC = 1; các view còn lại dùng `view.Scale / referenceScale` (ví dụ 1:25 so với 1:75 là 25/75). `v1.5.1` đã bị hủy trong lúc chạy workflow và không tạo GitHub Release vì phát hiện lỗi này trước khi phát hành.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
