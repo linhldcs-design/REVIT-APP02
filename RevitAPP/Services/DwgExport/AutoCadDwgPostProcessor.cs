@@ -522,7 +522,12 @@ public static class AutoCadDwgPostProcessor
             Release(block);
         }
 
-        ApplyDimensionAnnotationScales(finalDocument, annotationPlans, job.StagingDirectory, commandTimeout);
+        ApplyDimensionAnnotationScales(
+            finalDocument,
+            annotationPlans,
+            job.DrawingUnit,
+            job.StagingDirectory,
+            commandTimeout);
         Call(finalDocument, "SetVariable", "TILEMODE", 1);
         Call(finalDocument, "Regen", 1); // acAllViewports
         Release(modelSpace);
@@ -531,6 +536,7 @@ public static class AutoCadDwgPostProcessor
     private static void ApplyDimensionAnnotationScales(
         object document,
         IReadOnlyList<DwgSheetDimensionAnnotationPlan> plans,
+        DwgDrawingUnit drawingUnit,
         string stagingDirectory,
         TimeSpan commandTimeout)
     {
@@ -544,7 +550,10 @@ public static class AutoCadDwgPostProcessor
         {
             File.WriteAllText(
                 scriptPath,
-                DwgDimensionAnnotationScriptBuilder.Build(plans, marker),
+                DwgDimensionAnnotationScriptBuilder.Build(
+                    plans,
+                    marker,
+                    DwgSheetLayoutPlanner.InchesToDrawingUnits(1d, drawingUnit)),
                 Encoding.ASCII);
             Call(document, "SetVariable", "USERS5", string.Empty);
             Call(document, "SetVariable", "USERR1", 0d);

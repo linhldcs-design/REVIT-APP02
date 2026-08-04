@@ -53,6 +53,17 @@ public sealed class DwgSheetLayoutPlannerTests
         Assert.Equal(expected, DwgSheetLayoutPlanner.MillimetresToDrawingUnits(100, unit), 8);
     }
 
+    [Theory]
+    [InlineData(DwgDrawingUnit.Millimetres, 25.4)]
+    [InlineData(DwgDrawingUnit.Centimetres, 2.54)]
+    [InlineData(DwgDrawingUnit.Metres, 0.0254)]
+    [InlineData(DwgDrawingUnit.Inches, 1)]
+    [InlineData(DwgDrawingUnit.Feet, 1d / 12d)]
+    public void InchesToDrawingUnits_ConvertsDimensionSizes(DwgDrawingUnit unit, double expected)
+    {
+        Assert.Equal(expected, DwgSheetLayoutPlanner.InchesToDrawingUnits(1, unit), 12);
+    }
+
     [Fact]
     public void ArrangeLeftToRight_DuplicateOrdinal_Throws()
     {

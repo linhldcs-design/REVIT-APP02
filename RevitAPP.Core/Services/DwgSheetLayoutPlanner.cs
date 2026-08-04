@@ -86,6 +86,21 @@ public static class DwgSheetLayoutPlanner
         };
     }
 
+    public static double InchesToDrawingUnits(double inches, DwgDrawingUnit unit)
+    {
+        if (!IsFinite(inches)) throw new ArgumentOutOfRangeException(nameof(inches));
+
+        return unit switch
+        {
+            DwgDrawingUnit.Millimetres => inches * 25.4d,
+            DwgDrawingUnit.Centimetres => inches * 2.54d,
+            DwgDrawingUnit.Metres => inches * 0.0254d,
+            DwgDrawingUnit.Inches => inches,
+            DwgDrawingUnit.Feet => inches / 12d,
+            _ => throw new ArgumentOutOfRangeException(nameof(unit))
+        };
+    }
+
     private static void ValidateScales(int referenceScale, int viewScale)
     {
         if (referenceScale <= 0) throw new ArgumentOutOfRangeException(nameof(referenceScale));

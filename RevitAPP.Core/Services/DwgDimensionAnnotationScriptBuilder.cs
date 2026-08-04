@@ -26,12 +26,19 @@ public static class DwgDimensionAnnotationScriptBuilder
 
     public static string Build(
         IEnumerable<DwgSheetDimensionAnnotationPlan> plans,
-        string completionMarker)
+        string completionMarker,
+        double dimensionSizeScaleFactor)
     {
         if (string.IsNullOrWhiteSpace(completionMarker))
             throw new ArgumentException("A completion marker is required.", nameof(completionMarker));
         if (completionMarker.Any(character => character is '"' or '\r' or '\n'))
             throw new ArgumentException("Completion marker contains an unsafe character.", nameof(completionMarker));
+        if (double.IsNaN(dimensionSizeScaleFactor)
+            || double.IsInfinity(dimensionSizeScaleFactor)
+            || dimensionSizeScaleFactor <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(dimensionSizeScaleFactor),
+                "Dimension size scale factor must be finite and positive.");
 
         var sheets = plans.ToArray();
         if (sheets.Any(sheet => sheet.ReferenceScale <= 0))
@@ -78,9 +85,16 @@ public static class DwgDimensionAnnotationScriptBuilder
         script.AppendLine("(setvar \"USERS5\" \"\")");
         script.AppendLine("(setvar \"USERR1\" 0.0)");
         script.AppendLine("(setvar \"USERR2\" 0.0)");
+        script.AppendLine(
+            $"(setq ra_dim_size_factor {dimensionSizeScaleFactor.ToString("R", CultureInfo.InvariantCulture)})");
         script.AppendLine("(defun ra_set_scale (n / s r) (setq s (strcat \"1:\" (itoa n))) (setq r (vl-catch-all-apply 'setvar (list \"CANNOSCALE\" s))) (if (vl-catch-all-error-p r) (progn (command \"_.-SCALELISTEDIT\" \"_Add\" s s \"_Exit\") (setvar \"CANNOSCALE\" s))) s)");
         script.AppendLine("(defun ra_unique_name (table base / candidate suffix) (setq candidate base suffix 0) (while (tblsearch table candidate) (setq suffix (1+ suffix) candidate (strcat base \"_\" (itoa suffix)))) candidate)");
         script.AppendLine("(defun ra_make_text_style (n) (command \"_.-STYLE\" n \"Arial Narrow\" \"_Annotative\" \"_Yes\" \"_No\" \"2.5\" \"0.8\" \"0\" \"_No\" \"_No\") n)");
+        script.AppendLine("(defun ra_app_name (a / n) (setq n (car a)) (strcase (if (= (type n) 'STR) n (vl-symbol-name n))))");
+        script.AppendLine("(defun ra_scale_dim_items (items factor / out pending item) (setq out '() pending nil) (foreach item items (if (and pending (listp item) (= (car item) 1040)) (progn (setq item (cons 1040 (* (cdr item) factor))) (setq pending nil))) (setq out (cons item out)) (if (and (listp item) (= (car item) 1070) (= (cdr item) 41)) (setq pending T))) (reverse out))");
+        script.AppendLine("(defun ra_scale_dim_apps (apps factor) (mapcar '(lambda (a) (if (= (ra_app_name a) \"ACAD\") (cons (car a) (ra_scale_dim_items (cdr a) factor)) a)) apps))");
+        script.AppendLine("(defun ra_scale_dim_data (d factor / x) (setq x (assoc -3 d)) (if x (subst (cons -3 (ra_scale_dim_apps (cdr x) factor)) x d) d))");
+        script.AppendLine("(defun ra_scale_dim_size (e factor) (if (and e (/= factor 1.0)) (entmod (ra_scale_dim_data (entget e '(\"ACAD\")) factor))) T)");
         // entupd forces an immediate graphical regeneration for every dimension and becomes
         // prohibitively slow on large print sets. entmod updates the database record; the
         // batched ANNOUPDATE below performs the required graphical/context refresh once per sheet.
@@ -113,6 +127,15 @@ public static class DwgDimensionAnnotationScriptBuilder
                 script.AppendLine($"(if (and ra_e (ra_set_style ra_e {styleName})) (progn (ssadd ra_e ra_ss) (setq ra_selected (1+ ra_selected))))");
             }
             script.AppendLine("(if (> (sslength ra_ss) 0) (progn (command \"_.ANNOUPDATE\" ra_ss \"\") (command \"_.-OBJECTSCALE\" ra_ss \"\" \"_Add\" ra_scale \"\") (command) (setq ra_i 0) (repeat (sslength ra_ss) (setq ra_e (ssname ra_ss ra_i)) (if (assoc -3 (entget ra_e '(\"AcadAnnotative\"))) (setq ra_annotative (1+ ra_annotative))) (setq ra_i (1+ ra_i))))))");
+        }
+
+        // Revit writes per-dimension DIMASZ overrides in inches. Convert those overrides only
+        // after ANNOUPDATE; changing arrow geometry beforehand makes AutoCAD recompute the full
+        // 1,500+ dimension set during annotation conversion and can exceed the worker timeout.
+        foreach (var dimension in dimensions)
+        {
+            script.AppendLine($"(setq ra_e (handent \"{dimension.Handle}\"))");
+            script.AppendLine("(ra_scale_dim_size ra_e ra_dim_size_factor)");
         }
 
         script.AppendLine("(setvar \"USERR1\" ra_selected)");

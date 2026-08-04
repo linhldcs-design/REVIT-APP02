@@ -20,7 +20,8 @@ public sealed class DwgDimensionAnnotationScriptBuilderTests
                         new DwgDimensionAnnotationTarget("A11", "Kích thước móng", 1d / 3d)
                     })
             },
-            "DONE_123");
+            "DONE_123",
+            25.4d);
 
         Assert.Contains("(setq ra_scale (ra_set_scale 75))", script);
         Assert.Contains("(handent \"A10\")", script);
@@ -34,6 +35,13 @@ public sealed class DwgDimensionAnnotationScriptBuilderTests
         Assert.Contains("(ra_set_style ra_e ra_ds_0000)", script);
         Assert.Contains("\"_Annotative\" \"_Yes\" \"_No\" \"2.5\" \"0.8\"", script);
         Assert.Contains("(setvar \"USERS5\" \"DONE_123\")", script);
+        Assert.Contains("(setq ra_dim_size_factor 25.4)", script);
+        Assert.Contains("ra_scale_dim_data", script);
+        Assert.Contains("(cons 1040 (* (cdr item) factor))", script);
+        Assert.Contains("(ra_scale_dim_size ra_e ra_dim_size_factor)", script);
+        Assert.True(
+            script.IndexOf("_.ANNOUPDATE", StringComparison.Ordinal)
+            < script.IndexOf("(ra_scale_dim_size ra_e ra_dim_size_factor)", StringComparison.Ordinal));
         Assert.DoesNotContain("Kích thước móng", script);
         Assert.Equal(1, Count(script, "(setq ra_scale (ra_set_scale 75))"));
     }
@@ -53,7 +61,8 @@ public sealed class DwgDimensionAnnotationScriptBuilderTests
                     75,
                     new[] { new DwgDimensionAnnotationTarget("B10", "Style", 1d) })
             },
-            "DONE");
+            "DONE",
+            25.4d);
 
         Assert.Equal(1, Count(script, "(setq ra_scale (ra_set_scale 75))"));
         Assert.Equal(1, Count(script, "_.ANNOUPDATE"));
@@ -76,12 +85,18 @@ public sealed class DwgDimensionAnnotationScriptBuilderTests
         };
 
         Assert.Throws<ArgumentException>(() =>
-            DwgDimensionAnnotationScriptBuilder.Build(plans, "DONE"));
+            DwgDimensionAnnotationScriptBuilder.Build(plans, "DONE", 25.4d));
     }
 
     [Fact]
     public void Build_InvalidScaleOrHandle_Throws()
     {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DwgDimensionAnnotationScriptBuilder.Build(
+                Array.Empty<DwgSheetDimensionAnnotationPlan>(),
+                "DONE",
+                0d));
+
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             DwgDimensionAnnotationScriptBuilder.Build(
                 new[]
@@ -91,7 +106,8 @@ public sealed class DwgDimensionAnnotationScriptBuilderTests
                         0,
                         Array.Empty<DwgDimensionAnnotationTarget>())
                 },
-                "DONE"));
+                "DONE",
+                25.4d));
 
         Assert.Throws<ArgumentException>(() =>
             DwgDimensionAnnotationScriptBuilder.Build(
@@ -102,7 +118,8 @@ public sealed class DwgDimensionAnnotationScriptBuilderTests
                         75,
                         new[] { new DwgDimensionAnnotationTarget("NOT-A-HANDLE", "Style", 1d) })
                 },
-                "DONE"));
+                "DONE",
+                25.4d));
     }
 
     private static int Count(string value, string fragment) =>
