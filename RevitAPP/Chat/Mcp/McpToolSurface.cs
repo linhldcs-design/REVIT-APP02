@@ -13,6 +13,7 @@ public sealed class McpToolSurface
     {
         "get_selected_elements",
         "get_current_view_info",
+        "get_viewport_text_notes",
         "get_open_excel_workbooks",
         "find_excel_files",
         "inspect_excel_file",

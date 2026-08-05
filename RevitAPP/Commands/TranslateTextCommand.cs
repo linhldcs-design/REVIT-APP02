@@ -39,7 +39,7 @@ namespace RevitAPP.Commands
 
             TranslationSessionSettings.Save(optionsWindow.Options);
 
-            var service = new GeminiTranslationService();
+            var service = new GoogleTranslateFreeService();
             var translatedTexts = new Dictionary<ElementId, string>();
 
             try
@@ -52,7 +52,8 @@ namespace RevitAPP.Commands
                     var textNote = selectedTextNotes[index];
                     var originalText = originalTexts[index];
                     var translatedText = batchTranslations[index];
-                    translatedText = GeminiTranslationService.ApplyCase(translatedText, optionsWindow.Options.CaseMode);
+                    translatedText = GoogleTranslateFreeService.ApplyCase(
+                        translatedText, optionsWindow.Options.CaseMode);
 
                     translatedTexts[textNote.Id] = optionsWindow.Options.AppendToOriginal
                         ? $"{originalText}/{translatedText}"
@@ -61,7 +62,7 @@ namespace RevitAPP.Commands
             }
             catch (Exception exception)
             {
-                TaskDialog.Show("RevitAI", $"Khong the dich text bang Gemini AI:\n{exception.Message}");
+                TaskDialog.Show("RevitAI", $"Khong the dich text:\n{exception.Message}");
                 return;
             }
 
@@ -83,11 +84,7 @@ namespace RevitAPP.Commands
 
         private static List<TextNote>? GetSelectedOrPickedTextNotes(UIDocument uiDocument, Document document)
         {
-            var selectedTextNotes = uiDocument.Selection.GetElementIds()
-                .Select(id => document.GetElement(id))
-                .OfType<TextNote>()
-                .Where(textNote => !string.IsNullOrWhiteSpace(textNote.Text))
-                .ToList();
+            var selectedTextNotes = CollectTextNotes(document, uiDocument.Selection.GetElementIds());
 
             if (selectedTextNotes.Count > 0)
             {
@@ -96,14 +93,10 @@ namespace RevitAPP.Commands
 
             try
             {
-                var references = uiDocument.Selection.PickObjects(ObjectType.Element, new TextNoteSelectionFilter(),
-                    "Chon mot hoac nhieu TextNote can dich, bam Finish de tiep tuc.");
+                var references = uiDocument.Selection.PickObjects(ObjectType.Element, new TranslatableTextSelectionFilter(),
+                    "Chon TextNote hoac Viewport can dich, bam Finish de tiep tuc.");
 
-                return references
-                    .Select(reference => document.GetElement(reference.ElementId))
-                    .OfType<TextNote>()
-                    .Where(textNote => !string.IsNullOrWhiteSpace(textNote.Text))
-                    .ToList();
+                return CollectTextNotes(document, references.Select(reference => reference.ElementId));
             }
             catch (OperationCanceledException)
             {
@@ -111,11 +104,41 @@ namespace RevitAPP.Commands
             }
         }
 
-        private class TextNoteSelectionFilter : ISelectionFilter
+        private static List<TextNote> CollectTextNotes(Document document, IEnumerable<ElementId> elementIds)
+        {
+            var textNotesById = new Dictionary<ElementId, TextNote>();
+
+            foreach (var elementId in elementIds)
+            {
+                switch (document.GetElement(elementId))
+                {
+                    case TextNote textNote when !string.IsNullOrWhiteSpace(textNote.Text):
+                        textNotesById[textNote.Id] = textNote;
+                        break;
+                    case Viewport viewport:
+                        var viewportTextNotes = new FilteredElementCollector(document, viewport.ViewId)
+                            .OfClass(typeof(TextNote))
+                            .Cast<TextNote>()
+                            .Where(note => !string.IsNullOrWhiteSpace(note.Text));
+
+                        foreach (var viewportTextNote in viewportTextNotes)
+                        {
+                            textNotesById[viewportTextNote.Id] = viewportTextNote;
+                        }
+
+                        break;
+                }
+            }
+
+            return textNotesById.Values.ToList();
+        }
+
+        private class TranslatableTextSelectionFilter : ISelectionFilter
         {
             public bool AllowElement(Element element)
             {
-                return element is TextNote textNote && !string.IsNullOrWhiteSpace(textNote.Text);
+                return element is Viewport ||
+                       element is TextNote textNote && !string.IsNullOrWhiteSpace(textNote.Text);
             }
 
             public bool AllowReference(Reference reference, XYZ position)

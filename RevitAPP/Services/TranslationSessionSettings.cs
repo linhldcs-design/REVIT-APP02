@@ -12,18 +12,11 @@ namespace RevitAPP.Services
                 ? new TranslationOptions()
                 : new TranslationOptions
                 {
-                    ApiKey = _lastOptions.ApiKey,
                     SourceLanguage = _lastOptions.SourceLanguage,
                     TargetLanguage = _lastOptions.TargetLanguage,
-                    Model = _lastOptions.Model,
                     CaseMode = _lastOptions.CaseMode,
                     AppendToOriginal = _lastOptions.AppendToOriginal
                 };
-
-            if (string.IsNullOrWhiteSpace(options.ApiKey))
-            {
-                options.ApiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? string.Empty;
-            }
 
             return options;
         }
@@ -32,10 +25,8 @@ namespace RevitAPP.Services
         {
             _lastOptions = new TranslationOptions
             {
-                ApiKey = options.ApiKey,
                 SourceLanguage = options.SourceLanguage,
                 TargetLanguage = options.TargetLanguage,
-                Model = options.Model,
                 CaseMode = options.CaseMode,
                 AppendToOriginal = options.AppendToOriginal
             };

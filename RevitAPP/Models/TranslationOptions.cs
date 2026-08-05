@@ -2,6 +2,7 @@ namespace RevitAPP.Models
 {
     public class TranslationOptions
     {
+        // Kept for compatibility with GeminiTranslationService; the Dịch Text command no longer uses these values.
         public string ApiKey { get; set; } = string.Empty;
 
         public string SourceLanguage { get; set; } = "Auto detect";

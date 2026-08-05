@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang chuẩn bị phát hành: `v1.6.0`
+- Release đang chuẩn bị phát hành: `v1.7.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,8 +35,8 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 343/343 đạt.
-- Chat AI giữ nguyên registry **55 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
+- Test gần nhất: `RevitAPP.Tests` 349/349 đạt.
+- Chat AI có registry **57 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
 - Bộ lọc màu đã được sửa; thao tác tạo kích thước chạy nguyên tử, lỗi giữa chừng không để lại kết quả dở dang.
@@ -57,6 +57,7 @@
 - `v1.5.2`: chuẩn hóa DIMLFAC cho mọi sheet có viewport, kể cả sheet chỉ có một tỷ lệ. View tham chiếu (mẫu số tỷ lệ lớn nhất trên sheet) luôn có DIMLFAC = 1; các view còn lại dùng `view.Scale / referenceScale` (ví dụ 1:25 so với 1:75 là 25/75). `v1.5.1` đã bị hủy trong lúc chạy workflow và không tạo GitHub Release vì phát hiện lỗi này trước khi phát hành.
 - `v1.5.3`: sửa đầu DIM/tick bị nhỏ sau khi chuyển annotative. Revit ghi override DIMASZ theo inch; worker chuyển riêng từng override sang đơn vị DWG đích sau ANNOUPDATE để giữ đúng kích thước riêng của từng kiểu đầu DIM mà không làm chậm bước regenerate. Kiểm chứng trực tiếp 1.695/1.695 DIM: DIMASZ đổi đúng inch sang mm, giữ nguyên REVIT XData và trạng thái annotative.
 - `v1.6.0`: thêm lệnh `Tạo Lưới từ Cad` cho Revit 2025 tại `LDL-STRUCTURAL > CAD Tools`. Người dùng chạy lệnh trong Revit, quét chọn thủ công các đối tượng `LINE` trong AutoCAD 2024–2027 đang mở, xem/chọn/chỉnh tên các trục trong preview rồi bấm một điểm gốc đặt lưới. Add-in giữ nguyên khoảng cách, góc và chiều dài tương đối của line CAD, hỗ trợ cả trục chéo, bỏ qua Grid trùng và tạo toàn bộ Grid mới trong một transaction; không cần CAD link/import hoặc hai Grid neo có sẵn.
+- `v1.7.0`: lệnh `Dịch Text` không còn yêu cầu API key và có thể dịch TextNote trong các Viewport được chọn. Chat AI/MCP bổ sung `get_viewport_text_notes` và `apply_text_note_translations` để dịch song ngữ Việt/Trung cho TextNote, tên hiển thị Viewport và Sheet Name trên toàn bộ project; ưu tiên `Title on Sheet` khi có nội dung, chỉ dịch `View Name` khi trường này rỗng, luôn giữ nguyên `Sheet Number`, hỗ trợ phân trang và kiểm tra nội dung gốc trước khi ghi để tránh ghi đè thay đổi mới.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

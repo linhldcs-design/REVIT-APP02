@@ -33,6 +33,8 @@ public sealed class ChatToolRegistry
             new DrawBeamLongitudinalDrawingTool(),
             new GetSelectedElementsTool(),
             new GetCurrentViewInfoTool(),
+            new GetViewportTextNotesTool(),
+            new ApplyTextNoteTranslationsTool(),
             new SelectAllByCategoryTool(),
             new GetOpenExcelWorkbooksTool(),
             new FindExcelFilesTool(),

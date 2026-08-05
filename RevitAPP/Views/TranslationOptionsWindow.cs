@@ -9,10 +9,8 @@ namespace RevitAPP.Views
 {
     public class TranslationOptionsWindow : Window
     {
-        private readonly PasswordBox _apiKeyBox;
         private readonly TextBox _sourceLanguageBox;
         private readonly TextBox _targetLanguageBox;
-        private readonly TextBox _modelBox;
         private readonly RadioButton _preserveCaseButton;
         private readonly RadioButton _upperCaseButton;
         private readonly RadioButton _lowerCaseButton;
@@ -20,7 +18,7 @@ namespace RevitAPP.Views
 
         public TranslationOptionsWindow(IntPtr ownerHandle, int selectedTextCount, TranslationOptions initialOptions)
         {
-            Title = "Dich text bang Gemini AI";
+            Title = "Dich Text";
             Width = 430;
             MinWidth = 430;
             SizeToContent = SizeToContent.Height;
@@ -42,34 +40,20 @@ namespace RevitAPP.Views
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             AddText(root, $"Dang chon {selectedTextCount} TextNote.", 0, FontWeights.SemiBold);
-
-            _apiKeyBox = new PasswordBox
-            {
-                Password = initialOptions.ApiKey
-            };
-            AddLabeledControl(root, "Gemini API key", _apiKeyBox, 1);
 
             _sourceLanguageBox = new TextBox
             {
                 Text = initialOptions.SourceLanguage
             };
-            AddLabeledControl(root, "Ngon ngu goc", _sourceLanguageBox, 2);
+            AddLabeledControl(root, "Ngon ngu goc", _sourceLanguageBox, 1);
 
             _targetLanguageBox = new TextBox
             {
                 Text = initialOptions.TargetLanguage
             };
-            AddLabeledControl(root, "Ngon ngu dich", _targetLanguageBox, 3);
-
-            _modelBox = new TextBox
-            {
-                Text = initialOptions.Model
-            };
-            AddLabeledControl(root, "Gemini model", _modelBox, 4);
+            AddLabeledControl(root, "Ngon ngu dich", _targetLanguageBox, 2);
 
             var casePanel = new StackPanel
             {
@@ -95,14 +79,14 @@ namespace RevitAPP.Views
             };
             _preserveCaseButton = new RadioButton
             {
-                Content = "Giu nguyen ket qua AI",
+                Content = "Giu nguyen ban dich",
                 IsChecked = initialOptions.CaseMode == TranslationCase.Preserve,
                 Margin = new Thickness(0, 2, 0, 2)
             };
             casePanel.Children.Add(_upperCaseButton);
             casePanel.Children.Add(_lowerCaseButton);
             casePanel.Children.Add(_preserveCaseButton);
-            Grid.SetRow(casePanel, 5);
+            Grid.SetRow(casePanel, 3);
             root.Children.Add(casePanel);
 
             _appendToOriginalBox = new CheckBox
@@ -111,7 +95,7 @@ namespace RevitAPP.Views
                 IsChecked = initialOptions.AppendToOriginal,
                 Margin = new Thickness(0, 14, 0, 4)
             };
-            Grid.SetRow(_appendToOriginalBox, 6);
+            Grid.SetRow(_appendToOriginalBox, 4);
             root.Children.Add(_appendToOriginalBox);
 
             var buttons = new StackPanel
@@ -141,7 +125,7 @@ namespace RevitAPP.Views
 
             buttons.Children.Add(okButton);
             buttons.Children.Add(cancelButton);
-            Grid.SetRow(buttons, 7);
+            Grid.SetRow(buttons, 5);
             root.Children.Add(buttons);
 
             Content = root;
@@ -182,17 +166,8 @@ namespace RevitAPP.Views
 
         private void Accept()
         {
-            var apiKey = _apiKeyBox.Password.Trim();
             var sourceLanguage = _sourceLanguageBox.Text.Trim();
             var targetLanguage = _targetLanguageBox.Text.Trim();
-            var model = _modelBox.Text.Trim();
-
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                MessageBox.Show(this, "Vui long nhap Gemini API key hoac dat bien moi truong GEMINI_API_KEY.", Title,
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
 
             if (string.IsNullOrWhiteSpace(targetLanguage))
             {
@@ -202,10 +177,8 @@ namespace RevitAPP.Views
 
             Options = new TranslationOptions
             {
-                ApiKey = apiKey,
                 SourceLanguage = string.IsNullOrWhiteSpace(sourceLanguage) ? "Auto detect" : sourceLanguage,
                 TargetLanguage = targetLanguage,
-                Model = string.IsNullOrWhiteSpace(model) ? "gemini-2.5-flash" : model,
                 CaseMode = GetCaseMode(),
                 AppendToOriginal = _appendToOriginalBox.IsChecked == true
             };
