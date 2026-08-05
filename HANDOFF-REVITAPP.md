@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release đang chuẩn bị phát hành: `v1.5.3`
+- Release đang chuẩn bị phát hành: `v1.6.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -56,6 +56,7 @@
 - `v1.5.1`: sửa workflow clean-run để restore `DwgExportWorker` trước khi publish; `v1.5.0` chỉ là tag build thất bại và không tạo GitHub Release.
 - `v1.5.2`: chuẩn hóa DIMLFAC cho mọi sheet có viewport, kể cả sheet chỉ có một tỷ lệ. View tham chiếu (mẫu số tỷ lệ lớn nhất trên sheet) luôn có DIMLFAC = 1; các view còn lại dùng `view.Scale / referenceScale` (ví dụ 1:25 so với 1:75 là 25/75). `v1.5.1` đã bị hủy trong lúc chạy workflow và không tạo GitHub Release vì phát hiện lỗi này trước khi phát hành.
 - `v1.5.3`: sửa đầu DIM/tick bị nhỏ sau khi chuyển annotative. Revit ghi override DIMASZ theo inch; worker chuyển riêng từng override sang đơn vị DWG đích sau ANNOUPDATE để giữ đúng kích thước riêng của từng kiểu đầu DIM mà không làm chậm bước regenerate. Kiểm chứng trực tiếp 1.695/1.695 DIM: DIMASZ đổi đúng inch sang mm, giữ nguyên REVIT XData và trạng thái annotative.
+- `v1.6.0`: thêm lệnh `Tạo Lưới từ Cad` cho Revit 2025 tại `LDL-STRUCTURAL > CAD Tools`. Người dùng chạy lệnh trong Revit, quét chọn thủ công các đối tượng `LINE` trong AutoCAD 2024–2027 đang mở, xem/chọn/chỉnh tên các trục trong preview rồi bấm một điểm gốc đặt lưới. Add-in giữ nguyên khoảng cách, góc và chiều dài tương đối của line CAD, hỗ trợ cả trục chéo, bỏ qua Grid trùng và tạo toàn bộ Grid mới trong một transaction; không cần CAD link/import hoặc hai Grid neo có sẵn.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
