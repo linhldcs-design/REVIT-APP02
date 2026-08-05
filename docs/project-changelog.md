@@ -1,5 +1,18 @@
 # Project Changelog
 
+## 2026-08-05
+
+### RevitAPP v1.8.0 Release Candidate — Model From CAD: Grid và Structural Column
+
+- Mở cửa sổ tùy chọn rỗng ngay khi bấm ribbon `Model From CAD`; người dùng chọn tab `Create Grid` hoặc `Create Column` trước khi quét AutoCAD.
+- Thêm `Select From CAD` trong từng tab. Kết quả quét được nạp vào Data dùng chung của cùng cửa sổ, cho phép đổi tab để tái sử dụng dữ liệu và quét lại từ bất kỳ tab nào.
+- Đọc Grid line, rectangle cột, polyline kín và hình học 2D trong block/nested block theo chế độ read-only; dùng điểm móc nguồn AutoCAD và điểm móc đích Revit cho cùng phép biến đổi.
+- Tab Column có bảng chọn candidate, cấu hình family/kích thước/level/offset/rotation và preview 2D/3D trước khi tạo. Toolbar 2D được đặt trên một hàng riêng để không đè canvas; preview 3D hỗ trợ lăn chuột để zoom và giữ-kéo chuột trái để orbit, kể cả khi bắt đầu kéo trên vùng nền trống.
+- Tối ưu vòng quét CAD và giới hạn hình học để tránh UI quay lâu trên vùng chọn quá lớn; bổ sung validation cho polyline, block transform, tham số Length và duplicate semantics.
+- Xác minh hiện tại: `RevitAPP.Tests` đạt **357/357**; build `Release.R22` đến `Release.R27` đều thành công với deploy/launch/publish tắt.
+- Đã kiểm tra runtime cục bộ cho luồng mở tùy chọn trước, độ phản hồi khi quét CAD, bố cục toolbar 2D và thao tác zoom/orbit 3D. Chưa ghi nhận smoke end-to-end đầy đủ cho tạo phần tử, chạy lại duplicate và Undo.
+- Trạng thái: **Release Candidate**; chỉ chuyển sang phát hành chính thức sau khi GitHub Release thành công và hoàn tất các smoke còn thiếu nêu trên.
+
 ## 2026-07-29
 
 ### RevitAPP v1.2.4 — Giữ nguyên bố cục sheet khi thêm mặt cắt ngang dầm

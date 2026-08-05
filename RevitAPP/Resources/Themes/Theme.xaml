@@ -17,6 +17,7 @@
     <Color x:Key="Color.Accent">#FF007ACC</Color>
     <Color x:Key="Color.AccentHover">#FF1C97EA</Color>
     <Color x:Key="Color.Danger">#FFD13438</Color>
+    <Color x:Key="Color.Warning">#FFFFB900</Color>
 
     <SolidColorBrush x:Key="Brush.Background" Color="{DynamicResource Color.Background}"/>
     <SolidColorBrush x:Key="Brush.Surface" Color="{DynamicResource Color.Surface}"/>
@@ -27,6 +28,7 @@
     <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}"/>
     <SolidColorBrush x:Key="Brush.AccentHover" Color="{DynamicResource Color.AccentHover}"/>
     <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}"/>
+    <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}"/>
 
     <!-- ============ Spacing tokens (multiples of 4) ============ -->
     <Thickness x:Key="Spacing.Small">4</Thickness>
@@ -270,6 +272,35 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="ItemContainerStyle" Value="{StaticResource TabItem.Standard}"/>
+    </Style>
+
+    <Style x:Key="TabItem.Navigation" TargetType="TabItem">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Family}"/>
+        <Setter Property="FontSize" Value="{DynamicResource Font.Size.Body}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="NavBorder" Background="Transparent"
+                            BorderBrush="Transparent" BorderThickness="3,0,0,0"
+                            Padding="14,12" MinWidth="142">
+                        <ContentPresenter ContentSource="Header"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="NavBorder" Property="Background" Value="{DynamicResource Brush.Surface}"/>
+                            <Setter TargetName="NavBorder" Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="NavBorder" Property="Background" Value="{DynamicResource Brush.Header}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ============ CheckBox (dark) ============ -->

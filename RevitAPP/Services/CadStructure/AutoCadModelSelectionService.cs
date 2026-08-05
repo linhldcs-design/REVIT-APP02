@@ -1,0 +1,573 @@
+using System.IO;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using RevitAPP.Core.Models.CadStructure;
+using RevitAPP.Core.Services;
+using Serilog;
+
+namespace RevitAPP.Services.CadStructure;
+
+internal sealed record AutoCadModelSelectionResult(
+    CadStructureTransferPackage? Package,
+    string? Error)
+{
+    public bool IsValid => Package is not null && string.IsNullOrWhiteSpace(Error);
+    public static AutoCadModelSelectionResult Failed(string error) => new(null, error);
+}
+
+/// <summary>
+/// Reads LINE/POLYLINE/INSERT geometry from the active AutoCAD document through late-bound
+/// COM. Block definitions are traversed read-only; no EXPLODE or database mutation occurs.
+/// </summary>
+internal static class AutoCadModelSelectionService
+{
+    private static readonly string[] ProgIds =
+    {
+        "AutoCAD.Application.26",
+        "AutoCAD.Application.25.1",
+        "AutoCAD.Application.25",
+        "AutoCAD.Application.24.3",
+        "AutoCAD.Application"
+    };
+
+    private const string SelectionSetName = "LDL_MODEL_FROM_CAD_PICK";
+    private const short DxfEntityType = 0;
+    private const int MaximumBlockDepth = 5;
+    private const int MaximumSelectedEntityCount = 5000;
+    private static readonly TimeSpan MaximumReadDuration = TimeSpan.FromSeconds(15);
+
+    public static AutoCadModelSelectionResult Select()
+    {
+        object? application = null;
+        object? document = null;
+        object? selection = null;
+        object? utility = null;
+        try
+        {
+            application = GetRunningInstance();
+            if (application is null)
+                return AutoCadModelSelectionResult.Failed(
+                    "Không tìm thấy AutoCAD đang mở.\n\nHãy mở bản vẽ chứa lưới và cột rồi thử lại.");
+
+            document = Get(application, "ActiveDocument");
+            if (document is null)
+                return AutoCadModelSelectionResult.Failed("AutoCAD đang mở nhưng không có bản vẽ nào.");
+
+            Set(application, "Visible", true);
+            TryActivate(application, document);
+            selection = CreateSelectionSet(document);
+            if (selection is null)
+                return AutoCadModelSelectionResult.Failed("Không tạo được vùng chọn trong AutoCAD.");
+
+            utility = Get(document, "Utility");
+            SafeCall(utility, "Prompt", "\nQuét chọn lưới và rectangle/block cột rồi nhấn Enter...\n");
+            Call(selection, "SelectOnScreen",
+                new short[] { DxfEntityType },
+                new object[] { "LINE,LWPOLYLINE,POLYLINE,INSERT" });
+
+            var selectedCount = Convert.ToInt32(Get(selection, "Count"));
+            if (selectedCount > MaximumSelectedEntityCount)
+                return AutoCadModelSelectionResult.Failed(
+                    $"Vùng chọn có {selectedCount:N0} đối tượng, vượt giới hạn {MaximumSelectedEntityCount:N0}.\n\n"
+                    + "Hãy chỉ quét layer lưới/cột hoặc chia bản vẽ thành nhiều vùng nhỏ.");
+
+            SafeCall(utility, "Prompt", "\nChọn điểm móc nguồn của lưới/cột...\n");
+            var anchorValue = Call(utility!, "GetPoint", Type.Missing,
+                "\nChọn điểm móc nguồn của lưới/cột: ");
+            var anchor = ToPoint(anchorValue);
+            if (anchor is null)
+                return AutoCadModelSelectionResult.Failed("Không đọc được điểm móc AutoCAD.");
+
+            SafeCall(utility, "Prompt", "\nĐang đọc LINE/BLOCK đã chọn, vui lòng chờ...\n");
+            var reader = new BlockAwareEntityReader(document);
+            var segments = reader.ReadSelection(selection);
+            if (segments.Count == 0)
+                return AutoCadModelSelectionResult.Failed(
+                    "Vùng chọn không có LINE, POLYLINE hoặc BLOCK chứa rectangle dùng được.");
+
+            Log.Information(
+                "Picked {SegmentCount} normalized segments and anchor ({AnchorX}, {AnchorY}) from AutoCAD",
+                segments.Count, anchor.Value.X, anchor.Value.Y);
+
+            return new AutoCadModelSelectionResult(
+                new CadStructureTransferPackage(
+                    CadStructureTransferPackage.CurrentSchemaVersion,
+                    Guid.NewGuid().ToString("N"),
+                    DateTime.UtcNow,
+                    Safe(() => Get(document, "Name")?.ToString()) ?? "AutoCAD",
+                    Safe(() => Get(application, "Version")?.ToString()) ?? string.Empty,
+                    ReadInsUnits(document),
+                    anchor.Value,
+                    segments),
+                null);
+        }
+        catch (Exception exception) when (IsUserCancel(exception))
+        {
+            return AutoCadModelSelectionResult.Failed(string.Empty);
+        }
+        catch (Exception exception)
+        {
+            Log.Error(exception, "AutoCAD model selection failed");
+            return AutoCadModelSelectionResult.Failed(
+                "Không lấy được lưới/cột từ AutoCAD.\n\n" + Innermost(exception).Message);
+        }
+        finally
+        {
+            if (selection is not null) TryDelete(selection);
+            Release(selection);
+            Release(utility);
+            Release(document);
+            Release(application);
+        }
+    }
+
+    private sealed class BlockAwareEntityReader
+    {
+        private readonly object _document;
+        private readonly List<CadStructureSegment> _segments = new();
+        private readonly Stopwatch _readStopwatch = new();
+        private object? _blocks;
+        private int _nextId = 1;
+
+        public BlockAwareEntityReader(object document) => _document = document;
+
+        public IReadOnlyList<CadStructureSegment> ReadSelection(object selection)
+        {
+            _readStopwatch.Restart();
+            _blocks = Get(_document, "Blocks");
+            try
+            {
+                var count = Convert.ToInt32(Get(selection, "Count"));
+                for (var index = 0; index < count; index++)
+                {
+                    ThrowIfReadBudgetExceeded();
+                    object? entity = null;
+                    try
+                    {
+                        entity = Call(selection, "Item", index);
+                        if (entity is not null)
+                            ReadEntity(entity, Transform2.Identity, string.Empty, null, null, 0,
+                                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                    }
+                    catch (InvalidDataException)
+                    {
+                        throw;
+                    }
+                    catch (TimeoutException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        Log.Warning(exception, "Skipped unreadable selected AutoCAD entity {EntityIndex}", index);
+                    }
+                    finally
+                    {
+                        Release(entity);
+                    }
+                }
+
+                return _segments;
+            }
+            finally
+            {
+                Release(_blocks);
+                _blocks = null;
+            }
+        }
+
+        private void ReadEntity(
+            object entity,
+            Transform2 transform,
+            string sourcePath,
+            string? inheritedText,
+            string? inheritedLayer,
+            int depth,
+            ISet<string> blockStack)
+        {
+            ThrowIfReadBudgetExceeded();
+            var objectName = Safe(() => Get(entity, "ObjectName")?.ToString()) ?? string.Empty;
+            var entityLayer = Safe(() => Get(entity, "Layer")?.ToString()) ?? string.Empty;
+            var layer = string.Equals(entityLayer, "0", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(inheritedLayer)
+                ? inheritedLayer!
+                : entityLayer;
+
+            if (string.Equals(objectName, "AcDbLine", StringComparison.Ordinal))
+            {
+                var start = ToPoint(Get(entity, "StartPoint"));
+                var end = ToPoint(Get(entity, "EndPoint"));
+                if (start is not null && end is not null)
+                    AddSegment(transform.Apply(start.Value), transform.Apply(end.Value), layer,
+                        sourcePath, inheritedText);
+                return;
+            }
+
+            if (objectName is "AcDbPolyline" or "AcDb2dPolyline")
+            {
+                var normal = ToDoubles(Safe(() => Get(entity, "Normal")));
+                if (normal.Length >= 3
+                    && (Math.Abs(normal[0]) > 1e-9
+                        || Math.Abs(normal[1]) > 1e-9
+                        || Math.Abs(normal[2] - 1.0) > 1e-9))
+                {
+                    Log.Warning("Skipped non-WCS polyline on layer {Layer}", layer);
+                    return;
+                }
+                ReadPolyline(entity, transform, layer, sourcePath, inheritedText, objectName);
+                return;
+            }
+
+            if (objectName == "AcDbBlockReference")
+                ReadBlock(entity, transform, sourcePath, inheritedText, layer, depth, blockStack);
+        }
+
+        private void ReadPolyline(
+            object entity,
+            Transform2 transform,
+            string layer,
+            string sourcePath,
+            string? sourceText,
+            string objectName)
+        {
+            var values = ToDoubles(Safe(() => Get(entity, "Coordinates")));
+            var stride = objectName == "AcDbPolyline" ? 2 : 3;
+            if (values.Length < stride * 2) return;
+            if (Safe(() => Convert.ToBoolean(Get(entity, "Closed"))) != true)
+            {
+                Log.Warning("Skipped open polyline on layer {Layer}; grid axes must be LINE entities", layer);
+                return;
+            }
+
+            var handle = Safe(() => Get(entity, "Handle")?.ToString()) ?? string.Empty;
+            var polylinePath = string.IsNullOrWhiteSpace(handle)
+                ? sourcePath
+                : sourcePath + "/PL@" + handle;
+
+            var points = new List<CadStructurePoint2>();
+            for (var index = 0; index + 1 < values.Length; index += stride)
+                points.Add(transform.Apply(new CadStructurePoint2(values[index], values[index + 1])));
+
+            // V1 detects straight rectangular outlines only. Treating arc chords as
+            // straight sides could turn a rounded/curved block into a false column.
+            if (objectName is "AcDbPolyline" or "AcDb2dPolyline")
+            {
+                for (var index = 0; index < points.Count; index++)
+                {
+                    var bulge = Safe(() => Convert.ToDouble(Call(entity, "GetBulge", index)));
+                    if (Math.Abs(bulge) <= 1e-9) continue;
+                    Log.Warning("Skipped curved polyline on layer {Layer}", layer);
+                    return;
+                }
+            }
+
+            for (var index = 0; index < points.Count - 1; index++)
+                AddSegment(points[index], points[index + 1], layer, polylinePath, sourceText);
+
+            if (points.Count > 2)
+                AddSegment(points[^1], points[0], layer, polylinePath, sourceText);
+        }
+
+        private void ReadBlock(
+            object reference,
+            Transform2 parent,
+            string parentPath,
+            string? inheritedText,
+            string? inheritedLayer,
+            int depth,
+            ISet<string> blockStack)
+        {
+            if (depth >= MaximumBlockDepth)
+            {
+                Log.Warning("Skipped AutoCAD block deeper than {MaximumDepth}: {BlockPath}",
+                    MaximumBlockDepth, parentPath);
+                return;
+            }
+
+            var name = Safe(() => Get(reference, "Name")?.ToString()) ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name) || !blockStack.Add(name)) return;
+
+            object? definition = null;
+            try
+            {
+                definition = _blocks is null ? null : Call(_blocks, "Item", name);
+                if (definition is null) return;
+                if (Safe(() => Convert.ToBoolean(Get(definition, "IsXRef"))) == true) return;
+
+                var insertion = ToPoint(Get(reference, "InsertionPoint")) ?? default;
+                var rotation = Safe(() => Convert.ToDouble(Get(reference, "Rotation")));
+                var scaleX = Safe(() => Convert.ToDouble(Get(reference, "XScaleFactor")));
+                var scaleY = Safe(() => Convert.ToDouble(Get(reference, "YScaleFactor")));
+                if (Math.Abs(scaleX) < 1e-12) scaleX = 1.0;
+                if (Math.Abs(scaleY) < 1e-12) scaleY = 1.0;
+                var origin = ToPoint(Safe(() => Get(definition, "Origin"))) ?? default;
+                var local = Transform2.ForBlock(insertion, rotation, scaleX, scaleY, origin);
+                var combined = parent.Compose(local);
+                var effectiveName = Safe(() => Get(reference, "EffectiveName")?.ToString()) ?? name;
+                var handle = Safe(() => Get(reference, "Handle")?.ToString()) ?? string.Empty;
+                var instanceName = string.IsNullOrWhiteSpace(handle)
+                    ? effectiveName
+                    : effectiveName + "@" + handle;
+                var path = string.IsNullOrWhiteSpace(parentPath)
+                    ? instanceName
+                    : parentPath + "/" + instanceName;
+                var text = ReadFirstAttribute(reference) ?? inheritedText;
+                var blockLayer = string.Equals(inheritedLayer, "0", StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : inheritedLayer;
+
+                var count = Convert.ToInt32(Get(definition, "Count"));
+                for (var index = 0; index < count; index++)
+                {
+                    ThrowIfReadBudgetExceeded();
+                    object? child = null;
+                    try
+                    {
+                        child = Call(definition, "Item", index);
+                        if (child is not null)
+                            ReadEntity(child, combined, path, text, blockLayer, depth + 1, blockStack);
+                    }
+                    finally
+                    {
+                        Release(child);
+                    }
+                }
+            }
+            finally
+            {
+                blockStack.Remove(name);
+                Release(definition);
+            }
+        }
+
+        private static string? ReadFirstAttribute(object reference)
+        {
+            try
+            {
+                if (!Convert.ToBoolean(Get(reference, "HasAttributes"))) return null;
+                var attributes = Call(reference, "GetAttributes") as Array;
+                if (attributes is null) return null;
+                string? first = null;
+                foreach (var value in attributes)
+                {
+                    try
+                    {
+                        var text = value is null ? null : Get(value, "TextString")?.ToString();
+                        if (first is null && !string.IsNullOrWhiteSpace(text)) first = text;
+                    }
+                    finally
+                    {
+                        Release(value);
+                    }
+                }
+                return first;
+            }
+            catch (Exception exception)
+            {
+                Log.Debug(exception, "Could not read AutoCAD block attributes");
+            }
+            return null;
+        }
+
+        private void AddSegment(
+            CadStructurePoint2 start,
+            CadStructurePoint2 end,
+            string layer,
+            string sourcePath,
+            string? sourceText)
+        {
+            ThrowIfReadBudgetExceeded();
+            if (start.DistanceTo(end) < 1e-9) return;
+            if (_segments.Count >= CadStructureAnalyzer.MaximumSegmentCount)
+                throw new InvalidDataException(
+                    $"CAD selection exceeds {CadStructureAnalyzer.MaximumSegmentCount:N0} segments. Split it into smaller batches.");
+            _segments.Add(new CadStructureSegment(
+                _nextId++, start, end, layer, sourcePath, sourceText));
+        }
+
+        private void ThrowIfReadBudgetExceeded()
+        {
+            if (_readStopwatch.Elapsed <= MaximumReadDuration) return;
+            throw new TimeoutException(
+                "Đọc hình học AutoCAD vượt quá 15 giây. Hãy chỉ chọn layer lưới/cột hoặc chia nhỏ vùng quét.");
+        }
+    }
+
+    private readonly record struct Transform2(
+        double M11, double M12, double M21, double M22, double Tx, double Ty)
+    {
+        public static Transform2 Identity => new(1, 0, 0, 1, 0, 0);
+
+        public static Transform2 ForBlock(
+            CadStructurePoint2 insertion,
+            double rotation,
+            double scaleX,
+            double scaleY,
+            CadStructurePoint2 origin)
+        {
+            var cosine = Math.Cos(rotation);
+            var sine = Math.Sin(rotation);
+            var m11 = cosine * scaleX;
+            var m12 = -sine * scaleY;
+            var m21 = sine * scaleX;
+            var m22 = cosine * scaleY;
+            return new Transform2(
+                m11, m12, m21, m22,
+                insertion.X - m11 * origin.X - m12 * origin.Y,
+                insertion.Y - m21 * origin.X - m22 * origin.Y);
+        }
+
+        public CadStructurePoint2 Apply(CadStructurePoint2 point) => new(
+            M11 * point.X + M12 * point.Y + Tx,
+            M21 * point.X + M22 * point.Y + Ty);
+
+        /// <summary>Returns this ∘ child: child-local coordinates become world coordinates.</summary>
+        public Transform2 Compose(Transform2 child) => new(
+            M11 * child.M11 + M12 * child.M21,
+            M11 * child.M12 + M12 * child.M22,
+            M21 * child.M11 + M22 * child.M21,
+            M21 * child.M12 + M22 * child.M22,
+            M11 * child.Tx + M12 * child.Ty + Tx,
+            M21 * child.Tx + M22 * child.Ty + Ty);
+    }
+
+    private static object? CreateSelectionSet(object document)
+    {
+        object? sets = Get(document, "SelectionSets");
+        if (sets is null) return null;
+        try
+        {
+            var count = Convert.ToInt32(Get(sets, "Count"));
+            for (var index = count - 1; index >= 0; index--)
+            {
+                object? existing = null;
+                try
+                {
+                    existing = Call(sets, "Item", index);
+                    if (string.Equals(Get(existing!, "Name")?.ToString(), SelectionSetName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        Call(existing!, "Delete");
+                        break;
+                    }
+                }
+                finally
+                {
+                    Release(existing);
+                }
+            }
+            return Call(sets, "Add", SelectionSetName);
+        }
+        finally
+        {
+            Release(sets);
+        }
+    }
+
+    private static int ReadInsUnits(object document)
+    {
+        try
+        {
+            var value = Call(document, "GetVariable", "INSUNITS");
+            return value is null ? 4 : Convert.ToInt32(value);
+        }
+        catch
+        {
+            return 4;
+        }
+    }
+
+    private static CadStructurePoint2? ToPoint(object? value)
+    {
+        var values = ToDoubles(value);
+        return values.Length < 2 ? null : new CadStructurePoint2(values[0], values[1]);
+    }
+
+    private static double[] ToDoubles(object? value)
+    {
+        if (value is double[] doubles) return doubles;
+        if (value is not Array array) return Array.Empty<double>();
+        var result = new double[array.Length];
+        for (var index = 0; index < array.Length; index++)
+            result[index] = Convert.ToDouble(array.GetValue(index));
+        return result;
+    }
+
+    private static void TryActivate(object application, object document)
+    {
+        try
+        {
+            Call(document, "Activate");
+            Set(application, "WindowState", 3);
+        }
+        catch (Exception exception)
+        {
+            Log.Debug(exception, "Could not focus AutoCAD");
+        }
+    }
+
+    private static void TryDelete(object selection)
+    {
+        try { Call(selection, "Delete"); }
+        catch (Exception exception) { Log.Debug(exception, "Could not delete AutoCAD selection set"); }
+    }
+
+    private static object? Get(object target, string name) => target.GetType().InvokeMember(
+        name, BindingFlags.GetProperty, null, target, null);
+
+    private static void Set(object target, string name, object value) => target.GetType().InvokeMember(
+        name, BindingFlags.SetProperty, null, target, new[] { value });
+
+    private static object? Call(object target, string name, params object[] arguments) =>
+        target.GetType().InvokeMember(name, BindingFlags.InvokeMethod, null, target, arguments);
+
+    private static void SafeCall(object? target, string name, params object[] arguments)
+    {
+        if (target is null) return;
+        try { Call(target, name, arguments); }
+        catch (Exception exception) { Log.Debug(exception, "AutoCAD COM call {Method} failed", name); }
+    }
+
+    private static T? Safe<T>(Func<T?> read)
+    {
+        try { return read(); }
+        catch { return default; }
+    }
+
+    private static void Release(object? value)
+    {
+        if (value is null || !Marshal.IsComObject(value)) return;
+        try { Marshal.ReleaseComObject(value); }
+        catch (Exception exception) { Log.Debug(exception, "Could not release AutoCAD COM object"); }
+    }
+
+    private static Exception Innermost(Exception exception) =>
+        exception.InnerException is null ? exception : Innermost(exception.InnerException);
+
+    private static bool IsUserCancel(Exception exception)
+    {
+        var hresult = Innermost(exception).HResult;
+        return hresult is unchecked((int)0x80004004) or unchecked((int)0x8004005E);
+    }
+
+    private static object? GetRunningInstance()
+    {
+        foreach (var progId in ProgIds)
+        {
+            if (CLSIDFromProgID(progId, out var classId) < 0) continue;
+            if (GetActiveObject(ref classId, IntPtr.Zero, out var instance) >= 0
+                && instance is not null) return instance;
+        }
+        return null;
+    }
+
+    [DllImport("ole32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int CLSIDFromProgID(string progId, out Guid classId);
+
+    [DllImport("oleaut32.dll", ExactSpelling = true)]
+    private static extern int GetActiveObject(
+        ref Guid classId,
+        IntPtr reserved,
+        [MarshalAs(UnmanagedType.IUnknown)] out object instance);
+}

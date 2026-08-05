@@ -336,3 +336,38 @@ Current status: Phase 00-02 complete; 196/196 `RevitAPP.Tests` pass and `Debug.R
 provides selection validation, settings, presets, and mandatory preview confirmation, but still does not create any
 Revit view or modify the model. View generation, annotation, sheet output, runtime smoke testing, deployment, and
 release hand-off remain pending in Phase 03-06; the feature is not released.
+
+## 14. Model From CAD (v1.8.0 Release Candidate)
+
+`ModelFromCadCommand` opens one modal options window before any AutoCAD selection begins. The user chooses
+`Create Grid` or `Create Column`, then starts acquisition with the `Select From CAD` button inside that tab.
+Both tabs write the selection result to the same in-window Data state, so the user can switch tabs and review the
+same scan without repeating it. Either tab can also reselect CAD data while keeping the window open.
+
+```text
+Ribbon: Model From CAD
+  -> empty ModelFromCadWindow (options first)
+  -> choose Create Grid or Create Column
+  -> Select From CAD in the active tab
+  -> AutoCAD COM selection + source anchor
+  -> shared CadStructureAnalysis Data
+       |-> Grid table + 2D preview
+       `-> Column table + 2D/3D preview
+  -> Create
+  -> target anchor in Revit
+  -> Grid or Structural Column transaction
+```
+
+Responsibilities are separated as follows:
+
+- `AutoCadModelSelectionService` reads supported AutoCAD entities and nested block geometry without modifying the DWG.
+- `CadStructureAnalyzer` in `RevitAPP.Core` performs unit normalization and deterministic Grid/rectangle analysis without a Revit API dependency.
+- `ModelFromCadViewModel` owns the shared Data state, active tab, settings, validation, selection state and preview projection.
+- `ModelFromCadWindow` renders Grid/Column review surfaces. The 2D controls occupy a dedicated toolbar row; the Column 3D viewport supports wheel zoom and left-drag orbit, including drag gestures started over the blank host area.
+- `CadGridDirectLineBuilder` and `CadColumnCreationService` own the Revit creation paths after the user picks the target anchor.
+
+Verification baseline for this release candidate: `RevitAPP.Tests` passes **357/357**. `Release.R22` through
+`Release.R27` build successfully with deployment, Revit launch and publish disabled. Local runtime iteration has
+verified the options-first window, responsive CAD scanning, the dedicated 2D toolbar layout, and 3D wheel zoom and
+left-drag orbit fixes. A documented end-to-end smoke of element creation, duplicate handling and Undo is still
+required before declaring the feature production-ready.

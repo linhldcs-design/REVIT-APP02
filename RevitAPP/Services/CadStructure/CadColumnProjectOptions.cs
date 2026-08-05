@@ -1,0 +1,74 @@
+using Autodesk.Revit.DB;
+
+namespace RevitAPP.Services.CadStructure;
+
+internal sealed record CadColumnFamilyOption(
+    string DisplayName,
+    Family Family,
+    FamilySymbol SeedSymbol,
+    IReadOnlyList<string> LengthParameters,
+    IReadOnlyList<FamilySymbol> Symbols)
+{
+    public override string ToString() => DisplayName;
+}
+
+internal sealed record CadColumnLevelOption(Level Level)
+{
+    public string Name => Level.Name;
+    public double Elevation => Level.Elevation;
+    public override string ToString() => Name;
+}
+
+internal sealed record CadColumnProjectOptions(
+    IReadOnlyList<CadColumnFamilyOption> Families,
+    IReadOnlyList<CadColumnLevelOption> Levels);
+
+internal static class CadColumnProjectOptionsReader
+{
+    public static CadColumnProjectOptions Read(Document document)
+    {
+        var symbols = new FilteredElementCollector(document)
+            .OfCategory(BuiltInCategory.OST_StructuralColumns)
+            .OfClass(typeof(FamilySymbol))
+            .Cast<FamilySymbol>()
+            .OrderBy(symbol => symbol.FamilyName)
+            .ThenBy(symbol => symbol.Name)
+            .ToArray();
+
+        var families = symbols
+            .GroupBy(symbol => symbol.Family.Id)
+            .Select(group =>
+            {
+                var familySymbols = group.ToArray();
+                var seed = familySymbols[0];
+                var parameters = seed.Parameters
+                    .Cast<Parameter>()
+                    .Where(parameter => parameter.StorageType == StorageType.Double
+                                        && !parameter.IsReadOnly
+                                        && parameter.Definition.GetDataType() == SpecTypeId.Length
+                                        && !string.IsNullOrWhiteSpace(parameter.Definition?.Name))
+                    .Select(parameter => parameter.Definition.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name)
+                    .ToArray();
+                return new CadColumnFamilyOption(
+                    seed.FamilyName,
+                    seed.Family,
+                    seed,
+                    parameters,
+                    familySymbols);
+            })
+            .Where(option => option.LengthParameters.Count >= 2)
+            .OrderBy(option => option.DisplayName)
+            .ToArray();
+
+        var levels = new FilteredElementCollector(document)
+            .OfClass(typeof(Level))
+            .Cast<Level>()
+            .OrderBy(level => level.Elevation)
+            .Select(level => new CadColumnLevelOption(level))
+            .ToArray();
+
+        return new CadColumnProjectOptions(families, levels);
+    }
+}

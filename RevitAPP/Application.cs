@@ -46,12 +46,9 @@ namespace RevitAPP
             var drawingRebarPanel = Application.CreatePanel("Drawing Rebar", ribbonTabName);
             var cadPanel = Application.CreatePanel("CAD Tools", ribbonTabName);
 
-            // Multi-version: Create Grid from CAD is released for Revit 2025 only.
-#if REVIT2025
-            cadPanel.AddPushButton<CreateGridFromCadCommand>("Tạo Lưới\ntừ Cad")
+            cadPanel.AddPushButton<ModelFromCadCommand>("Model From\nCAD")
                 .SetImage("/RevitAPP;component/Resources/Icons/GridExtentIcon16.png")
                 .SetLargeImage("/RevitAPP;component/Resources/Icons/GridExtentIcon32.png");
-#endif
 
             cadPanel.AddPushButton<ExportSheetsToDwgCommand>("Xuất DWG\nModel")
                 .SetImage("/RevitAPP;component/Resources/Icons/AlignViewIcon16.png")

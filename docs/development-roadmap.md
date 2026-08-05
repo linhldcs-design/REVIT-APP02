@@ -1,5 +1,20 @@
 # Development Roadmap
 
+## Model From CAD — v1.8.0
+
+Status: **Release Candidate**; chờ GitHub Release thành công.
+
+- Hoàn thành luồng options-first: ribbon mở cửa sổ rỗng, sau đó người dùng chọn tab Grid/Column và bấm `Select From CAD` ngay trong tab.
+- Hoàn thành Data dùng chung trong cùng cửa sổ: có thể đổi tab để tái sử dụng một lần quét và reselect từ cả hai tab.
+- Hoàn thành nhận Grid, rectangle cột và block/nested block được hỗ trợ; preview Grid/Column, cấu hình Structural Column và phép đặt theo hai điểm móc.
+- Hoàn thành chỉnh UI preview: toolbar 2D có hàng riêng; preview 3D có wheel zoom và left-drag orbit trên toàn bộ host, kể cả nền trống.
+- Đã xác minh `RevitAPP.Tests` **357/357** và build `Release.R22`–`Release.R27` với deploy/launch/publish tắt.
+- Runtime cục bộ đã xác minh cửa sổ options-first, độ phản hồi quét CAD, bố cục toolbar và sửa lỗi zoom/orbit 3D.
+
+Trước khi chuyển sang production-ready: ghi nhận smoke end-to-end trên model thử cho tạo Grid/Column, vị trí và kích thước, chạy lại duplicate, Cancel và Undo; sau đó tạo GitHub Release v1.8.0.
+
+Tài liệu sử dụng: [Model From CAD](create-grid-from-cad.md).
+
 ## IsolatedFootingRebar
 
 Status: complete for Revit 2025 (`Debug.R25`).
