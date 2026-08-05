@@ -71,7 +71,7 @@ Z của CAD không được dùng. Grid đặt theo mặt bằng đang mở; Col
 - Chưa hiển thị lý do reject riêng cho từng candidate ambiguous/skipped; warning hiện tại chủ yếu ở mức tổng quát/log.
 - `RevitAPP.Tests` hiện đạt **357/357**; nhóm test feature đã đạt **74/74** ở checkpoint trước. Build `Release.R22` đến `Release.R27` đều thành công với deploy, Revit launch và publish tắt tại lần xác minh ngày 2026-08-05.
 - Runtime cục bộ đã xác minh luồng cửa sổ tùy chọn xuất hiện trước, độ phản hồi khi quét CAD, toolbar 2D không đè canvas, wheel zoom và left-drag orbit trong preview 3D.
-- Chưa có smoke end-to-end đầy đủ được ghi nhận cho tạo Grid/Column, xử lý duplicate khi chạy lại và Undo. v1.8.0 vẫn là **Release Candidate** cho đến khi hoàn tất xác minh này và GitHub Release thành công.
+- Chưa có smoke end-to-end đầy đủ được ghi nhận cho tạo Grid/Column, xử lý duplicate khi chạy lại và Undo; đây là bước production hardening còn lại. v1.8.0 đã phát hành ngày 2026-08-05 với đủ installer, sáu gói Revit 2022–2027 và `latest.json`.
 
 ## Thành phần chính
 

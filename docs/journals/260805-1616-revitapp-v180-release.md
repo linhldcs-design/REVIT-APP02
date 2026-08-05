@@ -5,7 +5,7 @@ version: 1.8.0
 status: release-candidate
 ---
 
-# Journal: 2026-08-05 — RevitAPP v1.8.0 Release Candidate
+# Journal: 2026-08-05 — RevitAPP v1.8.0 Release
 
 ## Context
 
@@ -67,4 +67,11 @@ Separating CAD analysis from Revit creation remains the strongest architectural 
 - Commit only v1.8.0-related files; exclude local build output, temporary files, unrelated untracked work, and user-specific configuration.
 - Push `main`, create and push tag `v1.8.0`, then monitor installer, six Revit build jobs, and the release job to completion.
 - Verify all eight GitHub Release assets and confirm `releases/latest/download/latest.json` returns HTTP 200 with version `1.8.0`.
+
+## Publication result
+
+- Published GitHub Release `v1.8.0` on 2026-08-05 from commit `decb601`.
+- GitHub Actions run `30993277099` completed successfully: installer, build 22–27 and release jobs all passed.
+- Verified eight uploaded assets: installer, `latest.json` and six Revit 2022–2027 ZIP packages.
+- Verified the public latest manifest returns HTTP 200, declares version `1.8.0`, and contains six valid SHA-256 package entries.
 - Preserve license and user preset data during update, then record any post-release AutoCAD/Revit compatibility findings in a follow-up journal.

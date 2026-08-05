@@ -2,7 +2,7 @@
 
 ## Model From CAD — v1.8.0
 
-Status: **Release Candidate**; chờ GitHub Release thành công.
+Status: **Released** ngày 2026-08-05; tiếp tục production smoke trên model thử.
 
 - Hoàn thành luồng options-first: ribbon mở cửa sổ rỗng, sau đó người dùng chọn tab Grid/Column và bấm `Select From CAD` ngay trong tab.
 - Hoàn thành Data dùng chung trong cùng cửa sổ: có thể đổi tab để tái sử dụng một lần quét và reselect từ cả hai tab.
@@ -11,7 +11,7 @@ Status: **Release Candidate**; chờ GitHub Release thành công.
 - Đã xác minh `RevitAPP.Tests` **357/357** và build `Release.R22`–`Release.R27` với deploy/launch/publish tắt.
 - Runtime cục bộ đã xác minh cửa sổ options-first, độ phản hồi quét CAD, bố cục toolbar và sửa lỗi zoom/orbit 3D.
 
-Trước khi chuyển sang production-ready: ghi nhận smoke end-to-end trên model thử cho tạo Grid/Column, vị trí và kích thước, chạy lại duplicate, Cancel và Undo; sau đó tạo GitHub Release v1.8.0.
+Follow-up production hardening: ghi nhận smoke end-to-end trên model thử cho tạo Grid/Column, vị trí và kích thước, chạy lại duplicate, Cancel và Undo. GitHub Release v1.8.0 đã phát hành đủ installer, sáu gói Revit và manifest cập nhật.
 
 Tài liệu sử dụng: [Model From CAD](create-grid-from-cad.md).
 
