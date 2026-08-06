@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Model From CAD"
         Width="1220" Height="780"
-        MinWidth="980" MinHeight="640"
+        MinWidth="1120" MinHeight="680"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Brush.Background}">
     <Window.Resources>
@@ -270,6 +270,202 @@
                                     <DataGridTextColumn Header="Góc" Width="58" IsReadOnly="True" Binding="{Binding AngleLabel}"/>
                                     <DataGridTextColumn Header="Trạng thái" Width="92" IsReadOnly="True" Binding="{Binding Status}"/>
                                     <DataGridTextColumn Header="Text / Block" Width="*" IsReadOnly="True" Binding="{Binding Text}"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="▰  Create Beam">
+                <Grid Margin="12,0,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="1. Select Grid Axes" Style="{DynamicResource Button.Secondary}"
+                                Command="{Binding ReselectCommand}"/>
+                        <Button Content="2. Select Beam Lines" Margin="8,0,0,0"
+                                Style="{DynamicResource Button.Secondary}"
+                                Command="{Binding SelectBeamLinesCommand}"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*" MinWidth="400"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="2*" MinWidth="390"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TabControl Grid.Column="0" SelectedIndex="{Binding BeamPreviewModeIndex, Mode=TwoWay}"
+                                    Style="{DynamicResource TabControl.Standard}">
+                            <TabItem Header="2D" Style="{DynamicResource TabItem.Standard}">
+                                <Border Background="{DynamicResource Brush.Surface}"
+                                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" ClipToBounds="True">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <WrapPanel Grid.Row="0" HorizontalAlignment="Right" Margin="8,6">
+                                            <CheckBox Content="Lưới" Margin="0,0,8,0"
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding ShowBeamGridOverlay}"/>
+                                            <CheckBox Content="Nhãn" Margin="0,0,8,0"
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding ShowBeamLabels}"/>
+                                            <Button Content="+" Width="34" Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomInCommand}"/>
+                                            <Button Content="-" Width="34" Margin="4,0,0,0"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomOutCommand}"/>
+                                            <Button Content="Vừa màn hình" Margin="4,0,0,0"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomToFitCommand}"/>
+                                        </WrapPanel>
+                                        <ScrollViewer Grid.Row="1" x:Name="BeamPreviewScroll"
+                                                      HorizontalScrollBarVisibility="Auto"
+                                                      VerticalScrollBarVisibility="Auto" Cursor="SizeAll">
+                                            <Canvas x:Name="BeamPreviewCanvas"
+                                                    Background="{DynamicResource Brush.Surface}"/>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Border>
+                            </TabItem>
+                            <TabItem Header="3D" Style="{DynamicResource TabItem.Standard}">
+                                <Border Background="{DynamicResource Brush.Surface}"
+                                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                                    <Grid x:Name="BeamPreview3DHost" Background="Transparent" Cursor="SizeAll">
+                                        <Viewport3D x:Name="BeamPreview3D" ClipToBounds="True" IsHitTestVisible="False"/>
+                                        <Button Content="Vừa màn hình" HorizontalAlignment="Right"
+                                                VerticalAlignment="Top" Margin="8"
+                                                Style="{DynamicResource Button.Secondary}"
+                                                Command="{Binding ZoomToFitCommand}"/>
+                                        <TextBlock Text="3D preview — kéo chuột trái để xoay, lăn chuột để zoom"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                    </Grid>
+                                </Border>
+                            </TabItem>
+                        </TabControl>
+
+                        <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource Brush.Border}"/>
+
+                        <Grid Grid.Column="2" Margin="12,0,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                                    Padding="{DynamicResource Spacing.Medium}" Margin="0,0,0,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="260">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="92"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="82"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Family:"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3"
+                                                  ItemsSource="{Binding BeamFamilies}"
+                                                  SelectedItem="{Binding SelectedBeamFamily}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  Style="{DynamicResource ComboBox.Standard}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Width:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,8,8,0"
+                                                  ItemsSource="{Binding BeamWidthParameters}"
+                                                  SelectedItem="{Binding SelectedBeamWidthParameter}"
+                                                  Style="{DynamicResource ComboBox.Standard}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Height:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="3" Margin="0,8,0,0"
+                                                  ItemsSource="{Binding BeamHeightParameters}"
+                                                  SelectedItem="{Binding SelectedBeamHeightParameter}"
+                                                  Style="{DynamicResource ComboBox.Standard}"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Level:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <ComboBox Grid.Row="2" Grid.Column="1" Margin="0,8,8,0"
+                                                  ItemsSource="{Binding Levels}" SelectedItem="{Binding SelectedBeamLevel}"
+                                                  DisplayMemberPath="Name" Style="{DynamicResource ComboBox.Standard}"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="Z Offset:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="2" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding BeamZOffsetText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Min Line:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1" Margin="0,8,8,0"
+                                                 Text="{Binding MinimumBeamLineText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="2" Text="Gap Join:" Margin="0,8,0,0"
+                                                   ToolTip="Nối các đoạn cùng phương/cùng đường có khe hở không vượt giá trị này (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="3" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding GapJoinText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Text Search:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1" Margin="0,8,8,0"
+                                                 Text="{Binding TextSearchDistanceText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <Button Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                                                Content="Apply / Re-analyze"
+                                                Style="{DynamicResource Button.Secondary}"
+                                                Command="{Binding ApplyBeamAnalysisCommand}"/>
+                                    </Grid>
+                                </ScrollViewer>
+                            </Border>
+
+                            <WrapPanel Grid.Row="1" Margin="0,0,0,6">
+                                <Button Content="Chọn tất cả" Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding SelectAllBeamsCommand}"/>
+                                <Button Content="Bỏ chọn" Margin="6,0,0,0"
+                                        Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding SelectNoBeamsCommand}"/>
+                                <Button Content="Reset CAD/Text" Margin="6,0,0,0"
+                                        Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding ResetSelectedBeamSectionCommand}"/>
+                            </WrapPanel>
+
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding Beams}"
+                                      SelectedItem="{Binding SelectedBeam, Mode=TwoWay}"
+                                      Style="{DynamicResource DataGrid.Standard}"
+                                      CellStyle="{DynamicResource DataGridCell.Standard}"
+                                      ColumnHeaderStyle="{DynamicResource DataGridHeader.Standard}"
+                                      HorizontalScrollBarVisibility="Auto" CanUserAddRows="False">
+                                <DataGrid.Columns>
+                                    <DataGridCheckBoxColumn Header="Tạo" Width="44"
+                                                            Binding="{Binding IsIncluded, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="b CAD" Width="58" IsReadOnly="True"
+                                                        Binding="{Binding GeometryWidthLabel}"/>
+                                    <DataGridTextColumn Header="b Text" Width="58" IsReadOnly="True"
+                                                        Binding="{Binding TextWidthLabel}"/>
+                                    <DataGridTextColumn Header="h Text" Width="58" IsReadOnly="True"
+                                                        Binding="{Binding TextHeightLabel}"/>
+                                    <DataGridTextColumn Header="b Tạo" Width="62"
+                                                        Binding="{Binding EffectiveWidthMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="h Tạo" Width="62"
+                                                        Binding="{Binding EffectiveHeightMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="Mark" Width="70"
+                                                        Binding="{Binding Mark, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="Trạng thái" Width="112" IsReadOnly="True"
+                                                        Binding="{Binding Status}"/>
+                                    <DataGridTextColumn Header="Text" Width="*" IsReadOnly="True"
+                                                        Binding="{Binding MatchedText}"/>
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>

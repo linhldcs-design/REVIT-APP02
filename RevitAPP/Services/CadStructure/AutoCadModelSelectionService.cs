@@ -37,7 +37,12 @@ internal static class AutoCadModelSelectionService
     private const int MaximumSelectedEntityCount = 5000;
     private static readonly TimeSpan MaximumReadDuration = TimeSpan.FromSeconds(15);
 
-    public static AutoCadModelSelectionResult Select()
+    public static AutoCadModelSelectionResult Select() => SelectInternal(null);
+
+    public static AutoCadModelSelectionResult SelectBeam(CadStructureTransferPackage gridPackage) =>
+        SelectInternal(gridPackage);
+
+    private static AutoCadModelSelectionResult SelectInternal(CadStructureTransferPackage? gridPackage)
     {
         object? application = null;
         object? document = null;
@@ -56,6 +61,15 @@ internal static class AutoCadModelSelectionService
 
             Set(application, "Visible", true);
             TryActivate(application, document);
+            var drawingName = Safe(() => Get(document, "FullName")?.ToString());
+            if (string.IsNullOrWhiteSpace(drawingName))
+                drawingName = Safe(() => Get(document, "Name")?.ToString()) ?? "AutoCAD";
+            var insUnits = ReadInsUnits(document);
+            if (gridPackage is not null
+                && (!string.Equals(drawingName, gridPackage.SourceDrawing, StringComparison.OrdinalIgnoreCase)
+                    || insUnits != gridPackage.InsUnits))
+                return AutoCadModelSelectionResult.Failed(
+                    "Beam Lines phải được chọn trong cùng bản vẽ và cùng INSUNITS với Grid Axes.");
             selection = CreateSelectionSet(document);
             if (selection is null)
                 return AutoCadModelSelectionResult.Failed("Không tạo được vùng chọn trong AutoCAD.");
@@ -64,7 +78,9 @@ internal static class AutoCadModelSelectionService
             SafeCall(utility, "Prompt", "\nQuét chọn lưới và rectangle/block cột rồi nhấn Enter...\n");
             Call(selection, "SelectOnScreen",
                 new short[] { DxfEntityType },
-                new object[] { "LINE,LWPOLYLINE,POLYLINE,INSERT" });
+                new object[] { gridPackage is null
+                    ? "LINE,LWPOLYLINE,POLYLINE,INSERT"
+                    : "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
 
             var selectedCount = Convert.ToInt32(Get(selection, "Count"));
             if (selectedCount > MaximumSelectedEntityCount)
@@ -72,10 +88,18 @@ internal static class AutoCadModelSelectionService
                     $"Vùng chọn có {selectedCount:N0} đối tượng, vượt giới hạn {MaximumSelectedEntityCount:N0}.\n\n"
                     + "Hãy chỉ quét layer lưới/cột hoặc chia bản vẽ thành nhiều vùng nhỏ.");
 
-            SafeCall(utility, "Prompt", "\nChọn điểm móc nguồn của lưới/cột...\n");
-            var anchorValue = Call(utility!, "GetPoint", Type.Missing,
-                "\nChọn điểm móc nguồn của lưới/cột: ");
-            var anchor = ToPoint(anchorValue);
+            CadStructurePoint2? anchor;
+            if (gridPackage is null)
+            {
+                SafeCall(utility, "Prompt", "\nChọn điểm móc nguồn của Grid/Column...\n");
+                var anchorValue = Call(utility!, "GetPoint", Type.Missing,
+                    "\nChọn điểm móc nguồn của Grid/Column: ");
+                anchor = ToPoint(anchorValue);
+            }
+            else
+            {
+                anchor = gridPackage.SourceAnchor;
+            }
             if (anchor is null)
                 return AutoCadModelSelectionResult.Failed("Không đọc được điểm móc AutoCAD.");
 
@@ -95,11 +119,14 @@ internal static class AutoCadModelSelectionService
                     CadStructureTransferPackage.CurrentSchemaVersion,
                     Guid.NewGuid().ToString("N"),
                     DateTime.UtcNow,
-                    Safe(() => Get(document, "Name")?.ToString()) ?? "AutoCAD",
+                    drawingName,
                     Safe(() => Get(application, "Version")?.ToString()) ?? string.Empty,
-                    ReadInsUnits(document),
+                    insUnits,
                     anchor.Value,
-                    segments),
+                    segments)
+                {
+                    Annotations = reader.Annotations
+                },
                 null);
         }
         catch (Exception exception) when (IsUserCancel(exception))
@@ -126,11 +153,14 @@ internal static class AutoCadModelSelectionService
     {
         private readonly object _document;
         private readonly List<CadStructureSegment> _segments = new();
+        private readonly List<CadStructureAnnotation> _annotations = new();
         private readonly Stopwatch _readStopwatch = new();
         private object? _blocks;
         private int _nextId = 1;
 
         public BlockAwareEntityReader(object document) => _document = document;
+
+        public IReadOnlyList<CadStructureAnnotation> Annotations => _annotations;
 
         public IReadOnlyList<CadStructureSegment> ReadSelection(object selection)
         {
@@ -204,6 +234,17 @@ internal static class AutoCadModelSelectionService
                 return;
             }
 
+            if (objectName is "AcDbText" or "AcDbMText")
+            {
+                var position = ToPoint(Safe(() => Get(entity, "InsertionPoint")));
+                var text = Safe(() => Get(entity, "TextString")?.ToString()) ?? inheritedText;
+                var rotation = Safe(() => Convert.ToDouble(Get(entity, "Rotation"))) * 180.0 / Math.PI;
+                if (position is not null && !string.IsNullOrWhiteSpace(text))
+                    AddAnnotation(transform.Apply(position.Value), text!, rotation, layer,
+                        sourcePath, objectName == "AcDbMText");
+                return;
+            }
+
             if (objectName is "AcDbPolyline" or "AcDb2dPolyline")
             {
                 var normal = ToDoubles(Safe(() => Get(entity, "Normal")));
@@ -234,11 +275,7 @@ internal static class AutoCadModelSelectionService
             var values = ToDoubles(Safe(() => Get(entity, "Coordinates")));
             var stride = objectName == "AcDbPolyline" ? 2 : 3;
             if (values.Length < stride * 2) return;
-            if (Safe(() => Convert.ToBoolean(Get(entity, "Closed"))) != true)
-            {
-                Log.Warning("Skipped open polyline on layer {Layer}; grid axes must be LINE entities", layer);
-                return;
-            }
+            var closed = Safe(() => Convert.ToBoolean(Get(entity, "Closed"))) == true;
 
             var handle = Safe(() => Get(entity, "Handle")?.ToString()) ?? string.Empty;
             var polylinePath = string.IsNullOrWhiteSpace(handle)
@@ -265,8 +302,21 @@ internal static class AutoCadModelSelectionService
             for (var index = 0; index < points.Count - 1; index++)
                 AddSegment(points[index], points[index + 1], layer, polylinePath, sourceText);
 
-            if (points.Count > 2)
+            if (closed && points.Count > 2)
                 AddSegment(points[^1], points[0], layer, polylinePath, sourceText);
+        }
+
+        private void AddAnnotation(
+            CadStructurePoint2 position,
+            string text,
+            double rotationDegrees,
+            string layer,
+            string sourcePath,
+            bool isMText)
+        {
+            ThrowIfReadBudgetExceeded();
+            _annotations.Add(new CadStructureAnnotation(
+                _nextId++, position, text, rotationDegrees, layer, sourcePath, isMText));
         }
 
         private void ReadBlock(

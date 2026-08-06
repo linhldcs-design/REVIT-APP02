@@ -19,9 +19,23 @@ internal sealed record CadColumnLevelOption(Level Level)
     public override string ToString() => Name;
 }
 
+internal sealed record CadBeamFamilyOption(
+    string DisplayName,
+    Family Family,
+    FamilySymbol SeedSymbol,
+    IReadOnlyList<string> LengthParameters,
+    IReadOnlyList<FamilySymbol> Symbols)
+{
+    public override string ToString() => DisplayName;
+}
+
 internal sealed record CadColumnProjectOptions(
     IReadOnlyList<CadColumnFamilyOption> Families,
-    IReadOnlyList<CadColumnLevelOption> Levels);
+    IReadOnlyList<CadColumnLevelOption> Levels)
+{
+    public IReadOnlyList<CadBeamFamilyOption> BeamFamilies { get; init; } =
+        Array.Empty<CadBeamFamilyOption>();
+}
 
 internal static class CadColumnProjectOptionsReader
 {
@@ -69,6 +83,41 @@ internal static class CadColumnProjectOptionsReader
             .Select(level => new CadColumnLevelOption(level))
             .ToArray();
 
-        return new CadColumnProjectOptions(families, levels);
+        var beamSymbols = new FilteredElementCollector(document)
+            .OfCategory(BuiltInCategory.OST_StructuralFraming)
+            .OfClass(typeof(FamilySymbol))
+            .Cast<FamilySymbol>()
+            .OrderBy(symbol => symbol.FamilyName)
+            .ThenBy(symbol => symbol.Name)
+            .ToArray();
+        var beamFamilies = beamSymbols
+            .GroupBy(symbol => symbol.Family.Id)
+            .Select(group =>
+            {
+                var familySymbols = group.ToArray();
+                var seed = familySymbols[0];
+                var parameters = seed.Parameters
+                    .Cast<Parameter>()
+                    .Where(parameter => parameter.StorageType == StorageType.Double
+                                        && !parameter.IsReadOnly
+                                        && parameter.Definition.GetDataType() == SpecTypeId.Length
+                                        && !string.IsNullOrWhiteSpace(parameter.Definition?.Name))
+                    .Select(parameter => parameter.Definition.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name)
+                    .ToArray();
+                return new CadBeamFamilyOption(seed.FamilyName, seed.Family, seed,
+                    parameters, familySymbols);
+            })
+            .Where(option => option.LengthParameters.Count >= 2)
+            .Where(option => option.SeedSymbol.Family.FamilyPlacementType
+                             == FamilyPlacementType.CurveDrivenStructural)
+            .OrderBy(option => option.DisplayName)
+            .ToArray();
+
+        return new CadColumnProjectOptions(families, levels)
+        {
+            BeamFamilies = beamFamilies
+        };
     }
 }

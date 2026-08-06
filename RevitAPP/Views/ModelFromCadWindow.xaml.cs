@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using RevitAPP.Core.Models.CadStructure;
+using RevitAPP.Core.Services;
 using RevitAPP.ViewModels;
 using Line = System.Windows.Shapes.Line;
 using Point = System.Windows.Point;
@@ -28,6 +29,7 @@ public partial class ModelFromCadWindow : Window
     private double _cameraDistance = 5000.0;
     private double _cameraMinimumDistance = 100.0;
     private Point3D _cameraTarget;
+    private System.Windows.Controls.Grid? _orbitHost;
 
     internal ModelFromCadWindow(ModelFromCadViewModel viewModel)
     {
@@ -41,6 +43,7 @@ public partial class ModelFromCadWindow : Window
             Close();
         };
         viewModel.RenderRequested += (_, _) => RenderAll();
+        viewModel.FitRequested += (_, _) => _cameraInitialized = false;
         viewModel.ReselectCompleted += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             _cameraInitialized = false;
@@ -54,10 +57,15 @@ public partial class ModelFromCadWindow : Window
         Loaded += (_, _) => RenderAll();
         AttachInteraction(GridPreviewScroll, GridPreviewCanvas);
         AttachInteraction(ColumnPreviewScroll, ColumnPreviewCanvas);
+        AttachInteraction(BeamPreviewScroll, BeamPreviewCanvas);
         ColumnPreview3DHost.PreviewMouseWheel += On3DMouseWheel;
         ColumnPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
         ColumnPreview3DHost.MouseMove += On3DOrbitMove;
         ColumnPreview3DHost.MouseLeftButtonUp += On3DOrbitEnd;
+        BeamPreview3DHost.PreviewMouseWheel += On3DMouseWheel;
+        BeamPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
+        BeamPreview3DHost.MouseMove += On3DOrbitMove;
+        BeamPreview3DHost.MouseLeftButtonUp += On3DOrbitEnd;
     }
 
     private void AttachInteraction(ScrollViewer viewer, Canvas canvas)
@@ -76,8 +84,15 @@ public partial class ModelFromCadWindow : Window
             return;
         }
 
-        if (_viewModel.PreviewModeIndex == 0) RenderColumns();
-        else RenderColumns3D();
+        if (_viewModel.SelectedMode == ModelFromCadMode.Column)
+        {
+            if (_viewModel.PreviewModeIndex == 0) RenderColumns();
+            else RenderColumns3D();
+            return;
+        }
+
+        if (_viewModel.BeamPreviewModeIndex == 0) RenderBeams();
+        else RenderBeams3D();
     }
 
     private void RenderGrid()
@@ -251,6 +266,191 @@ public partial class ModelFromCadWindow : Window
         ColumnPreview3D.Children.Add(new ModelVisual3D { Content = models });
     }
 
+    private void RenderBeams()
+    {
+        BeamPreviewCanvas.Children.Clear();
+        if (_viewModel.BeamData is null) return;
+        var analysis = _viewModel.BeamData.Analysis;
+        var scale = CadGridUnitConverter.MillimetresPerDrawingUnit(_viewModel.BeamData.Package.InsUnits);
+        var sourceSegments = _viewModel.BeamData.Package.Segments.Select(segment => segment with
+        {
+            Start = segment.Start * scale - analysis.SourceOriginMm,
+            End = segment.End * scale - analysis.SourceOriginMm
+        }).ToArray();
+        var gridSegments = _viewModel.Data.Package.Segments.Select(segment => segment with
+        {
+            Start = segment.Start * scale - analysis.SourceOriginMm,
+            End = segment.End * scale - analysis.SourceOriginMm
+        }).ToArray();
+        var points = sourceSegments.SelectMany(segment => new[] { BeamPoint(segment.Start), BeamPoint(segment.End) })
+            .Concat(_viewModel.ShowBeamGridOverlay
+                ? gridSegments.SelectMany(segment => new[] { BeamPoint(segment.Start), BeamPoint(segment.End) })
+                : Array.Empty<CadStructurePoint2>())
+            .Concat(_viewModel.Beams.SelectMany(row => new[]
+            {
+                BeamPoint(row.Source.StartMm), BeamPoint(row.Source.EndMm)
+            })).ToArray();
+        var viewport = Prepare(BeamPreviewCanvas, BoundsOf(points));
+
+        if (_viewModel.ShowBeamGridOverlay)
+        {
+            foreach (var segment in gridSegments)
+            {
+                var start = viewport.ToCanvas(BeamPoint(segment.Start));
+                var end = viewport.ToCanvas(BeamPoint(segment.End));
+                BeamPreviewCanvas.Children.Add(new Line
+                {
+                    X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                    Stroke = Brush("Brush.TextSecondary"), StrokeThickness = 1,
+                    StrokeDashArray = new DoubleCollection { 6, 4 }, Opacity = 0.35
+                });
+            }
+        }
+
+        var selectedSourceIds = _viewModel.SelectedBeam?.Source.SourceSegmentIds.ToHashSet()
+                                ?? new HashSet<int>();
+        foreach (var segment in sourceSegments)
+        {
+            var start = viewport.ToCanvas(BeamPoint(segment.Start));
+            var end = viewport.ToCanvas(BeamPoint(segment.End));
+            var highlighted = selectedSourceIds.Contains(segment.Id);
+            BeamPreviewCanvas.Children.Add(new Line
+            {
+                X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                Stroke = highlighted ? Brush("Brush.Accent") : Brush("Brush.TextSecondary"),
+                StrokeThickness = highlighted ? 1.8 : 1,
+                Opacity = highlighted ? 0.75 : 0.28
+            });
+        }
+
+        foreach (var row in _viewModel.Beams)
+        {
+            var startMm = BeamPoint(row.Source.StartMm);
+            var endMm = BeamPoint(row.Source.EndMm);
+            var vector = endMm - startMm;
+            var length = Math.Sqrt(vector.X * vector.X + vector.Y * vector.Y);
+            if (length < 1.0) continue;
+            var half = row.EffectiveWidthMm / 2.0;
+            var normal = new CadStructurePoint2(-vector.Y / length * half, vector.X / length * half);
+            var corners = new[] { startMm + normal, endMm + normal, endMm - normal, startMm - normal };
+            var polygon = new Polygon
+            {
+                Points = new PointCollection(corners.Select(viewport.ToCanvas)),
+                Fill = Brush("Brush.Accent"),
+                Stroke = Brush("Brush.Accent"),
+                StrokeThickness = row == _viewModel.SelectedBeam ? 2.5 : 1.2,
+                Opacity = row.IsIncluded ? 0.52 : 0.18,
+                Cursor = Cursors.Hand,
+                Tag = row
+            };
+            polygon.MouseLeftButtonDown += OnBeamClicked;
+            BeamPreviewCanvas.Children.Add(polygon);
+
+            var start = viewport.ToCanvas(startMm);
+            var end = viewport.ToCanvas(endMm);
+            var centerline = new Line
+            {
+                X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                Stroke = Brush("Brush.Accent"), StrokeThickness = 2.2,
+                StrokeDashArray = row.Source.ReconstructedOnGridAxis
+                    ? new DoubleCollection { 8, 3 }
+                    : null,
+                IsHitTestVisible = false
+            };
+            BeamPreviewCanvas.Children.Add(centerline);
+            var annotation = _viewModel.BeamData.Package.Annotations.FirstOrDefault(item =>
+                row.Source.SourceAnnotationIds.Contains(item.Id));
+            if (annotation is not null)
+            {
+                var annotationPoint = BeamPoint(annotation.Position * scale - analysis.SourceOriginMm);
+                var textPoint = viewport.ToCanvas(annotationPoint);
+                BeamPreviewCanvas.Children.Add(new Line
+                {
+                    X1 = textPoint.X, Y1 = textPoint.Y,
+                    X2 = (start.X + end.X) / 2.0, Y2 = (start.Y + end.Y) / 2.0,
+                    Stroke = Brush("Brush.TextSecondary"), StrokeThickness = 0.8,
+                    StrokeDashArray = new DoubleCollection { 3, 3 }, Opacity = 0.55,
+                    IsHitTestVisible = false
+                });
+            }
+            if (!_viewModel.ShowBeamLabels) continue;
+            var mid = new Point((start.X + end.X) / 2.0, (start.Y + end.Y) / 2.0);
+            var label = new TextBlock
+            {
+                Text = $"{row.Mark}  {row.EffectiveWidthMm:0}×{row.EffectiveHeightMm:0}",
+                Foreground = Brush("Brush.Text"), Background = Brush("Brush.Background"),
+                FontSize = 11, Padding = new Thickness(3, 1, 3, 1), Opacity = 0.92
+            };
+            Canvas.SetLeft(label, mid.X + 5);
+            Canvas.SetTop(label, mid.Y - 18);
+            BeamPreviewCanvas.Children.Add(label);
+        }
+    }
+
+    private void RenderBeams3D()
+    {
+        BeamPreview3D.Children.Clear();
+        var rows = _viewModel.Beams.Where(row => row.IsValid).ToArray();
+        var points = rows.SelectMany(row => new[] { BeamPoint(row.Source.StartMm), BeamPoint(row.Source.EndMm) })
+            .ToArray();
+        var bounds = BoundsOf(points);
+        var planSpan = Math.Max(Math.Max(bounds.MaxX - bounds.MinX, bounds.MaxY - bounds.MinY), 1000.0);
+        var maxHeight = rows.Length == 0 ? 500.0 : rows.Max(row => row.EffectiveHeightMm);
+        _cameraTarget = new Point3D((bounds.MinX + bounds.MaxX) / 2.0,
+            (bounds.MinY + bounds.MaxY) / 2.0, -maxHeight / 2.0);
+        _cameraMinimumDistance = Math.Max(planSpan * 0.08, 100.0);
+        if (!_cameraInitialized)
+        {
+            _cameraDistance = Math.Max(planSpan, maxHeight) * 1.8;
+            _cameraYaw = -0.93;
+            _cameraPitch = 0.48;
+            _cameraInitialized = true;
+        }
+        Update3DCamera();
+        var lights = new Model3DGroup();
+        lights.Children.Add(new AmbientLight(Colors.DimGray));
+        lights.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-1, 1, -2)));
+        BeamPreview3D.Children.Add(new ModelVisual3D { Content = lights });
+        var models = new Model3DGroup();
+        foreach (var row in rows)
+        {
+            var start = BeamPoint(row.Source.StartMm);
+            var end = BeamPoint(row.Source.EndMm);
+            var vector = end - start;
+            var length = Math.Sqrt(vector.X * vector.X + vector.Y * vector.Y);
+            if (length < 1.0) continue;
+            var normal = new CadStructurePoint2(
+                -vector.Y / length * row.EffectiveWidthMm / 2.0,
+                vector.X / length * row.EffectiveWidthMm / 2.0);
+            models.Children.Add(BoxModel(new[]
+            {
+                start + normal, end + normal, end - normal, start - normal
+            }, -row.EffectiveHeightMm, ColorOf("Brush.Accent"), row.IsIncluded ? 0.82 : 0.16));
+        }
+        BeamPreview3D.Children.Add(new ModelVisual3D { Content = models });
+    }
+
+    private CadStructurePoint2 BeamPoint(CadStructurePoint2 point)
+    {
+        var anchor = _viewModel.BeamData?.Analysis.SourceAnchorRelativeMm ?? default;
+        var radians = _viewModel.RotationDegrees * Math.PI / 180.0;
+        if (Math.Abs(radians) < 1e-12) return point;
+        var local = point - anchor;
+        var cosine = Math.Cos(radians);
+        var sine = Math.Sin(radians);
+        return anchor + new CadStructurePoint2(
+            local.X * cosine - local.Y * sine,
+            local.X * sine + local.Y * cosine);
+    }
+
+    private void OnBeamClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Polygon { Tag: CadBeamRowViewModel row }) return;
+        _viewModel.SelectedBeam = row;
+        row.IsIncluded = !row.IsIncluded;
+        e.Handled = true;
+    }
+
     private void On3DMouseWheel(object sender, MouseWheelEventArgs e)
     {
         var factor = e.Delta > 0 ? 0.84 : 1.19;
@@ -264,16 +464,18 @@ public partial class ModelFromCadWindow : Window
 
     private void On3DOrbitStart(object sender, MouseButtonEventArgs e)
     {
-        _orbitOrigin = e.GetPosition(ColumnPreview3DHost);
+        _orbitHost = sender as System.Windows.Controls.Grid ?? ColumnPreview3DHost;
+        _orbitOrigin = e.GetPosition(_orbitHost);
         _isOrbiting = true;
-        ColumnPreview3DHost.CaptureMouse();
+        _orbitHost.CaptureMouse();
         e.Handled = true;
     }
 
     private void On3DOrbitMove(object sender, MouseEventArgs e)
     {
         if (!_isOrbiting || e.LeftButton != MouseButtonState.Pressed) return;
-        var current = e.GetPosition(ColumnPreview3DHost);
+        var host = _orbitHost ?? ColumnPreview3DHost;
+        var current = e.GetPosition(host);
         _cameraYaw += (current.X - _orbitOrigin.X) * 0.008;
         _cameraPitch = Math.Clamp(
             _cameraPitch - (current.Y - _orbitOrigin.Y) * 0.008,
@@ -287,7 +489,8 @@ public partial class ModelFromCadWindow : Window
     private void On3DOrbitEnd(object sender, MouseButtonEventArgs e)
     {
         _isOrbiting = false;
-        ColumnPreview3DHost.ReleaseMouseCapture();
+        _orbitHost?.ReleaseMouseCapture();
+        _orbitHost = null;
         e.Handled = true;
     }
 
@@ -298,13 +501,15 @@ public partial class ModelFromCadWindow : Window
             _cameraTarget.X + horizontal * Math.Cos(_cameraYaw),
             _cameraTarget.Y + horizontal * Math.Sin(_cameraYaw),
             _cameraTarget.Z + _cameraDistance * Math.Sin(_cameraPitch));
-        ColumnPreview3D.Camera = new PerspectiveCamera
+        var camera = new PerspectiveCamera
         {
             Position = position,
             LookDirection = _cameraTarget - position,
             UpDirection = new Vector3D(0, 0, 1),
             FieldOfView = 42
         };
+        if (_viewModel.SelectedMode == ModelFromCadMode.Beam) BeamPreview3D.Camera = camera;
+        else ColumnPreview3D.Camera = camera;
     }
 
     private GeometryModel3D BoxModel(

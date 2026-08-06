@@ -3,6 +3,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Nice3point.Revit.Toolkit.External;
+using RevitAPP.Core.Models.CadStructure;
 using RevitAPP.Services.CadGrid;
 using RevitAPP.Services.CadStructure;
 using RevitAPP.ViewModels;
@@ -42,7 +43,8 @@ public sealed class ModelFromCadCommand : ExternalCommand
         {
             var projectOptions = CadColumnProjectOptionsReader.Read(document);
             var viewModel = new ModelFromCadViewModel(
-                CadModelPreviewFactory.Empty(), projectOptions, SelectAndBuildPreview);
+                CadModelPreviewFactory.Empty(), projectOptions, SelectAndBuildPreview,
+                SelectAndBuildBeamPreview);
             var window = new ModelFromCadWindow(viewModel);
             new WindowInteropHelper(window) { Owner = Application.MainWindowHandle };
             if (window.ShowDialog() != true) return;
@@ -59,6 +61,34 @@ public sealed class ModelFromCadCommand : ExternalCommand
                     viewModel.RotationDegrees);
                 var result = new CadGridCreationService().CreateFromLines(document, planned);
                 ShowGridResult(result);
+                return;
+            }
+
+            if (viewModel.SelectedMode == ModelFromCadMode.Beam)
+            {
+                if (!viewModel.BeamSettingsValid
+                    || viewModel.BeamData is null
+                    || viewModel.SelectedBeamFamily is null
+                    || viewModel.SelectedBeamLevel is null
+                    || string.IsNullOrWhiteSpace(viewModel.SelectedBeamWidthParameter)
+                    || string.IsNullOrWhiteSpace(viewModel.SelectedBeamHeightParameter))
+                {
+                    TaskDialog.Show(Title, "Thiết lập Family, b/h, Level hoặc Beam scan chưa hợp lệ.");
+                    return;
+                }
+
+                var beamResult = CadBeamCreationService.Create(
+                    document,
+                    viewModel.SelectedBeams,
+                    viewModel.BeamData.Analysis.SourceAnchorRelativeMm,
+                    targetAnchor,
+                    viewModel.RotationDegrees,
+                    viewModel.SelectedBeamFamily,
+                    viewModel.SelectedBeamWidthParameter!,
+                    viewModel.SelectedBeamHeightParameter!,
+                    viewModel.SelectedBeamLevel,
+                    viewModel.BeamZOffsetMm);
+                ShowBeamResult(beamResult);
                 return;
             }
 
@@ -116,6 +146,15 @@ public sealed class ModelFromCadCommand : ExternalCommand
         return preview;
     }
 
+    private static CadBeamPreviewData? SelectAndBuildBeamPreview(
+        CadStructureTransferPackage gridPackage,
+        CadBeamAnalysisOptions options)
+    {
+        var preview = CadBeamPreviewFactory.SelectAndBuild(gridPackage, options, out var error);
+        if (preview is null && !string.IsNullOrWhiteSpace(error)) TaskDialog.Show(Title, error);
+        return preview;
+    }
+
     private static void ShowGridResult(CadGridCreationResult result)
     {
         var message = $"Đã tạo: {result.CreatedIds.Count} Grid"
@@ -129,6 +168,15 @@ public sealed class ModelFromCadCommand : ExternalCommand
     {
         var message = $"Đã tạo: {result.CreatedIds.Count} Column"
                       + $"\nColumn đã tồn tại: {result.ExistingCount}"
+                      + $"\nLỗi: {result.Errors.Count}";
+        if (result.Errors.Count > 0) message += "\n\n" + string.Join("\n", result.Errors.Take(3));
+        TaskDialog.Show(Title, message);
+    }
+
+    private static void ShowBeamResult(CadBeamCreationResult result)
+    {
+        var message = $"Đã tạo: {result.CreatedIds.Count} Beam"
+                      + $"\nBeam đã tồn tại: {result.ExistingCount}"
                       + $"\nLỗi: {result.Errors.Count}";
         if (result.Errors.Count > 0) message += "\n\n" + string.Join("\n", result.Errors.Take(3));
         TaskDialog.Show(Title, message);

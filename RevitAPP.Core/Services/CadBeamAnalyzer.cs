@@ -1,0 +1,644 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+using RevitAPP.Core.Models.CadStructure;
+
+namespace RevitAPP.Core.Services;
+
+/// <summary>
+/// Pure geometry analyzer for straight structural beams represented by two CAD boundary rails.
+/// Fragment count and gaps never define Revit beam count; section changes do.
+/// </summary>
+public static class CadBeamAnalyzer
+{
+    private const double AngleToleranceDegrees = 2.0;
+    private const double RailOffsetToleranceMm = 2.0;
+    private const double GridAxisSnapToleranceMm = 50.0;
+    private const double EndpointSnapToleranceMm = 300.0;
+    private const double TextOwnershipBandToleranceMm = 300.0;
+    private const double SectionToleranceMm = 2.0;
+
+    private static readonly Regex SectionRegex = new(
+        @"(?<b>\d+(?:[\.,]\d+)?)\s*[xX×*]\s*(?<h>\d+(?:[\.,]\d+)?)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MTextControlRegex = new(
+        @"\\[ACFHQTW][^;]*;|\\[LlOoKk]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    public static CadBeamAnalysis Analyze(
+        CadStructureTransferPackage beamPackage,
+        IReadOnlyList<CadStructureSegment> gridSegments,
+        CadBeamAnalysisOptions? options = null)
+    {
+        options ??= new CadBeamAnalysisOptions();
+        var validation = Validate(beamPackage, options);
+        if (validation is not null) return Invalid(validation);
+
+        double scale;
+        try
+        {
+            scale = CadGridUnitConverter.MillimetresPerDrawingUnit(beamPackage.InsUnits);
+        }
+        catch (InvalidDataException exception)
+        {
+            return Invalid(exception.Message);
+        }
+
+        var scaled = beamPackage.Segments
+            .Where(segment => Finite(segment.Start) && Finite(segment.End))
+            .Select(segment => segment with
+            {
+                Start = segment.Start * scale,
+                End = segment.End * scale
+            })
+            .Where(segment => segment.Start.DistanceTo(segment.End) >= 1.0)
+            .ToArray();
+        if (scaled.Length == 0) return Invalid("Vùng chọn Beam không có LINE/POLYLINE hợp lệ.");
+
+        var origin = new CadStructurePoint2(
+            scaled.Min(segment => Math.Min(segment.Start.X, segment.End.X)),
+            scaled.Min(segment => Math.Min(segment.Start.Y, segment.End.Y)));
+        var segments = scaled.Select(segment => segment with
+        {
+            Start = segment.Start - origin,
+            End = segment.End - origin
+        }).ToArray();
+        var annotations = beamPackage.Annotations
+            .Where(annotation => Finite(annotation.Position))
+            .Select(annotation => annotation with
+            {
+                Position = annotation.Position * scale - origin,
+                Text = NormalizeText(annotation.Text)
+            })
+            .Where(annotation => !string.IsNullOrWhiteSpace(annotation.Text))
+            .ToArray();
+        var grids = gridSegments
+            .Where(segment => Finite(segment.Start) && Finite(segment.End))
+            .Select(segment => segment with
+            {
+                Start = segment.Start * scale - origin,
+                End = segment.End * scale - origin
+            })
+            .Where(segment => segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm)
+            .ToArray();
+
+        var shortLines = segments.Count(segment =>
+            segment.Start.DistanceTo(segment.End) < options.MinimumLineLengthMm);
+        var longSegments = segments.Where(segment =>
+            segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm).ToArray();
+        var rails = BuildRails(longSegments, options.GapJoinToleranceMm);
+        var raw = PairRails(rails, grids, annotations, options);
+        var merged = MergeRuns(raw)
+            .OrderBy(candidate => candidate.StartMm.X)
+            .ThenBy(candidate => candidate.StartMm.Y)
+            .Select((candidate, index) => candidate with { Id = index + 1 })
+            .ToArray();
+
+        var warnings = new List<string>();
+        if (shortLines > 0) warnings.Add($"Đã bỏ qua {shortLines} line ngắn hơn {options.MinimumLineLengthMm:0} mm.");
+        if (annotations.Length == 0) warnings.Add("Vùng chọn Beam không có TEXT/MTEXT hợp lệ.");
+        if (merged.Length == 0) warnings.Add("Không nhận dạng được cặp biên dầm phù hợp.");
+        var anchor = beamPackage.SourceAnchor * scale - origin;
+        return new CadBeamAnalysis(origin, anchor, merged, shortLines, warnings, null);
+    }
+
+    private static IReadOnlyList<Rail> BuildRails(
+        IReadOnlyList<CadStructureSegment> segments,
+        double gapToleranceMm)
+    {
+        var pieces = segments.Select(segment =>
+        {
+            var vector = segment.End - segment.Start;
+            var length = Length(vector);
+            var direction = CanonicalDirection(vector * (1.0 / length));
+            var normal = new CadStructurePoint2(-direction.Y, direction.X);
+            var offset = Dot(segment.Start, normal);
+            var start = Dot(segment.Start, direction);
+            var end = Dot(segment.End, direction);
+            if (start > end) (start, end) = (end, start);
+            return new Piece(segment, direction, normal, offset, start, end);
+        }).ToArray();
+
+        var groups = pieces
+            .GroupBy(piece => new RailBucket(
+                (int)Math.Round(Angle(piece.Direction) / AngleToleranceDegrees),
+                (long)Math.Round(piece.Offset / RailOffsetToleranceMm)))
+            .Select(group => group.ToList())
+            .ToArray();
+
+        return groups.Select((group, index) =>
+        {
+            var direction = Normalize(new CadStructurePoint2(
+                group.Average(piece => piece.Direction.X),
+                group.Average(piece => piece.Direction.Y)));
+            var normal = new CadStructurePoint2(-direction.Y, direction.X);
+            var offset = group.Average(piece =>
+                (Dot(piece.Segment.Start, normal) + Dot(piece.Segment.End, normal)) / 2.0);
+            var intervals = MergeIntervals(group.Select(piece =>
+            {
+                var a = Dot(piece.Segment.Start, direction);
+                var b = Dot(piece.Segment.End, direction);
+                return new Interval(Math.Min(a, b), Math.Max(a, b));
+            }), gapToleranceMm);
+            return new Rail(index + 1, direction, normal, offset, intervals,
+                group.Select(piece => piece.Segment.Id).Distinct().ToArray());
+        }).ToArray();
+    }
+
+    private static IReadOnlyList<CadBeamCandidate> PairRails(
+        IReadOnlyList<Rail> rails,
+        IReadOnlyList<CadStructureSegment> grids,
+        IReadOnlyList<CadStructureAnnotation> annotations,
+        CadBeamAnalysisOptions options)
+    {
+        var pairs = new List<ScoredPair>();
+        var railFamilies = rails.GroupBy(rail =>
+            (int)Math.Round(Angle(rail.Direction) / AngleToleranceDegrees));
+        foreach (var family in railFamilies)
+        {
+            var orderedRails = family.OrderBy(rail => rail.Offset).ToArray();
+            for (var firstIndex = 0; firstIndex < orderedRails.Length; firstIndex++)
+            {
+            // BuildRails has already collapsed every 2 mm offset bucket to one rail. Starting at
+            // MinimumWidth avoids rescanning dense duplicate/near-duplicate rails; the remaining
+            // search is bounded by the configured width window, not total family size.
+            var secondIndex = LowerBoundOffset(
+                orderedRails, firstIndex + 1, orderedRails[firstIndex].Offset + options.MinimumWidthMm);
+            for (; secondIndex < orderedRails.Length; secondIndex++)
+            {
+            var first = orderedRails[firstIndex];
+            var second = orderedRails[secondIndex];
+            var width = Math.Abs(first.Offset - second.Offset);
+            if (width > options.MaximumWidthMm) break;
+            if (width < options.MinimumWidthMm || width > options.MaximumWidthMm) continue;
+
+            var start = Math.Min(first.Start, second.Start);
+            var end = Math.Max(first.End, second.End);
+            var extent = end - start;
+            if (extent < options.MinimumLineLengthMm) continue;
+            var firstCoverage = first.CoveredLength / extent;
+            var secondCoverage = second.CoveredLength / extent;
+            var centerOffset = (first.Offset + second.Offset) / 2.0;
+            var grid = FindGridAxis(grids, first.Direction, centerOffset);
+            var onGrid = grid is not null;
+            if (grid is not null) centerOffset = grid.Value.Offset;
+            var coverageValid = firstCoverage >= options.MinimumRailCoverageRatio
+                                && secondCoverage >= options.MinimumRailCoverageRatio;
+            if (!coverageValid) continue;
+
+            (start, end) = SnapEndpointStations(
+                grids, first.Direction, first.Normal, centerOffset, start, end);
+            var axisStart = first.Direction * start + first.Normal * centerOffset;
+            var axisEnd = first.Direction * end + first.Normal * centerOffset;
+            var matches = MatchAnnotations(annotations, axisStart, axisEnd, options.TextSearchDistanceMm);
+            var best = matches.OrderBy(match => Math.Abs(match.WidthMm - width))
+                .ThenBy(match => match.Score).FirstOrDefault();
+            var candidate = CreateCandidate(axisStart, axisEnd, width, best, onGrid,
+                first.SourceIds.Concat(second.SourceIds).Distinct().ToArray());
+            var widthPenalty = best is null ? 500.0 : Math.Abs(best.WidthMm - width);
+            var gridBonus = onGrid ? -100.0 : 0.0;
+            var coveragePenalty = (2.0 - firstCoverage - secondCoverage) * 1000.0;
+            var baseScore = gridBonus + coveragePenalty;
+            pairs.Add(new ScoredPair(candidate, widthPenalty + baseScore, matches, baseScore));
+            }
+            }
+        }
+
+        pairs = AssignAnnotationOwnership(pairs).ToList();
+
+        // Competing pairs may overlap on an axis, while a real section-width transition produces
+        // adjacent, non-overlapping pairs. Retain the best compatible interval set rather than one
+        // pair for the whole axis, otherwise a 200 -> 300 width transition loses half the run.
+        return pairs
+            .GroupBy(item => AxisKey(item.Candidate))
+            .SelectMany(SelectCompatiblePairs)
+            .SelectMany(pair => ExpandSections(pair, grids))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ScoredPair> SelectCompatiblePairs(IEnumerable<ScoredPair> source)
+    {
+        var accepted = new List<ScoredPair>();
+        foreach (var pair in source.OrderBy(item => item.Score)
+                     .ThenByDescending(item => item.Candidate.LengthMm))
+        {
+            if (accepted.Any(item => InteriorOverlap(item.Candidate, pair.Candidate) > SectionToleranceMm))
+                continue;
+            accepted.Add(pair);
+        }
+        return accepted;
+    }
+
+    private static double InteriorOverlap(CadBeamCandidate first, CadBeamCandidate second)
+    {
+        var direction = Normalize(first.EndMm - first.StartMm);
+        var firstStart = Math.Min(Dot(first.StartMm, direction), Dot(first.EndMm, direction));
+        var firstEnd = Math.Max(Dot(first.StartMm, direction), Dot(first.EndMm, direction));
+        var secondStart = Math.Min(Dot(second.StartMm, direction), Dot(second.EndMm, direction));
+        var secondEnd = Math.Max(Dot(second.StartMm, direction), Dot(second.EndMm, direction));
+        return Math.Max(0.0, Math.Min(firstEnd, secondEnd) - Math.Max(firstStart, secondStart));
+    }
+
+    private static IReadOnlyList<AnnotationMatch> FilterMatchesForGeometry(
+        IReadOnlyList<AnnotationMatch> matches,
+        double geometryWidth)
+    {
+        if (matches.Count <= 1) return matches;
+        var closestDelta = matches.Min(match => Math.Abs(match.WidthMm - geometryWidth));
+        var widthMatches = matches.Where(match =>
+                Math.Abs(match.WidthMm - geometryWidth) <= closestDelta + SectionToleranceMm)
+            .ToArray();
+        var closestPerpendicular = widthMatches.Min(match => match.PerpendicularDistanceMm);
+        return widthMatches.Where(match =>
+                match.PerpendicularDistanceMm <= closestPerpendicular + TextOwnershipBandToleranceMm)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ScoredPair> AssignAnnotationOwnership(
+        IReadOnlyList<ScoredPair> pairs)
+    {
+        var owners = pairs
+            .SelectMany(pair => pair.Matches.Select(match => new { Pair = pair, Match = match }))
+            .GroupBy(item => item.Match.Annotation.Id)
+            .ToDictionary(
+                group => group.Key,
+                group => AxisKey(group.OrderBy(item =>
+                        item.Match.Score
+                        + Math.Abs(item.Match.WidthMm - item.Pair.Candidate.GeometryWidthMm) * 10.0)
+                    .ThenBy(item => item.Pair.Score)
+                    .First().Pair.Candidate));
+
+        return pairs.Select(pair =>
+        {
+            var axisKey = AxisKey(pair.Candidate);
+            var owned = FilterMatchesForGeometry(pair.Matches
+                .Where(match => owners.TryGetValue(match.Annotation.Id, out var owner)
+                                && owner == axisKey)
+                .ToArray(), pair.Candidate.GeometryWidthMm);
+            var best = owned.OrderBy(match => Math.Abs(match.WidthMm - pair.Candidate.GeometryWidthMm))
+                .ThenBy(match => match.Score).FirstOrDefault();
+            var candidate = CreateCandidate(
+                pair.Candidate.StartMm, pair.Candidate.EndMm, pair.Candidate.GeometryWidthMm,
+                best, pair.Candidate.ReconstructedOnGridAxis, pair.Candidate.SourceSegmentIds);
+            var widthPenalty = best is null
+                ? 500.0
+                : Math.Abs(best.WidthMm - pair.Candidate.GeometryWidthMm);
+            return pair with
+            {
+                Candidate = candidate,
+                Score = pair.BaseScore + widthPenalty,
+                Matches = owned
+            };
+        }).ToArray();
+    }
+
+    private static IReadOnlyList<CadBeamCandidate> ExpandSections(
+        ScoredPair pair,
+        IReadOnlyList<CadStructureSegment> grids)
+    {
+        if (pair.Matches.Count == 0) return new[] { pair.Candidate };
+        var ordered = pair.Matches.OrderBy(match => match.Station).ToArray();
+        for (var index = 1; index < ordered.Length; index++)
+        {
+            if (Math.Abs(ordered[index].Station - ordered[index - 1].Station) > 100.0) continue;
+            if (SameSection(ordered[index], ordered[index - 1])) continue;
+            return new[] { pair.Candidate with { Status = CadBeamCandidateStatus.AmbiguousText } };
+        }
+
+        var zones = new List<AnnotationMatch>();
+        foreach (var match in ordered)
+        {
+            if (zones.Count > 0 && SameSection(zones[^1], match)) continue;
+            zones.Add(match);
+        }
+        if (zones.Count == 1)
+            return new[] { CreateCandidate(pair.Candidate.StartMm, pair.Candidate.EndMm,
+                pair.Candidate.GeometryWidthMm, zones[0], pair.Candidate.ReconstructedOnGridAxis,
+                pair.Candidate.SourceSegmentIds) };
+
+        var direction = Normalize(pair.Candidate.EndMm - pair.Candidate.StartMm);
+        var length = pair.Candidate.LengthMm;
+        var result = new List<CadBeamCandidate>();
+        for (var index = 0; index < zones.Count; index++)
+        {
+            var zoneStart = index == 0
+                ? 0.0
+                : SnapTransitionStation(pair.Candidate, grids,
+                    (zones[index - 1].Station + zones[index].Station) / 2.0);
+            var zoneEnd = index == zones.Count - 1
+                ? length
+                : SnapTransitionStation(pair.Candidate, grids,
+                    (zones[index].Station + zones[index + 1].Station) / 2.0);
+            result.Add(CreateCandidate(
+                pair.Candidate.StartMm + direction * zoneStart,
+                pair.Candidate.StartMm + direction * zoneEnd,
+                pair.Candidate.GeometryWidthMm,
+                zones[index],
+                pair.Candidate.ReconstructedOnGridAxis,
+                pair.Candidate.SourceSegmentIds));
+        }
+        return result;
+    }
+
+    private static double SnapTransitionStation(
+        CadBeamCandidate candidate,
+        IReadOnlyList<CadStructureSegment> grids,
+        double proposedStation)
+    {
+        var direction = Normalize(candidate.EndMm - candidate.StartMm);
+        var stations = new List<double>();
+        foreach (var grid in grids)
+        {
+            var gridVector = grid.End - grid.Start;
+            var denominator = Cross(direction, gridVector);
+            if (Math.Abs(denominator) < 1e-9) continue;
+            var station = Cross(grid.Start - candidate.StartMm, gridVector) / denominator;
+            if (station > SectionToleranceMm && station < candidate.LengthMm - SectionToleranceMm)
+                stations.Add(station);
+        }
+        if (stations.Count == 0) return proposedStation;
+        var closest = stations.OrderBy(station => Math.Abs(station - proposedStation)).First();
+        return Math.Abs(closest - proposedStation) <= EndpointSnapToleranceMm
+            ? closest
+            : proposedStation;
+    }
+
+    private static int LowerBoundOffset(Rail[] rails, int startIndex, double targetOffset)
+    {
+        var low = startIndex;
+        var high = rails.Length;
+        while (low < high)
+        {
+            var middle = low + (high - low) / 2;
+            if (rails[middle].Offset < targetOffset) low = middle + 1;
+            else high = middle;
+        }
+        return low;
+    }
+
+    private static CadBeamCandidate CreateCandidate(
+        CadStructurePoint2 start,
+        CadStructurePoint2 end,
+        double geometryWidth,
+        AnnotationMatch? match,
+        bool onGrid,
+        IReadOnlyList<int> sourceIds)
+    {
+        var status = match is null
+            ? CadBeamCandidateStatus.MissingText
+            : Math.Abs(match.WidthMm - geometryWidth) > SectionToleranceMm
+                ? CadBeamCandidateStatus.TextWidthMismatch
+                : CadBeamCandidateStatus.Ready;
+        return new CadBeamCandidate(
+            0, start, end, geometryWidth, match?.WidthMm, match?.HeightMm,
+            geometryWidth, match?.HeightMm ?? 0.0, match?.Mark ?? string.Empty,
+            match?.Annotation.Text ?? string.Empty, status, onGrid, sourceIds,
+            match is null ? Array.Empty<int>() : new[] { match.Annotation.Id });
+    }
+
+    private static bool SameSection(AnnotationMatch first, AnnotationMatch second) =>
+        Math.Abs(first.WidthMm - second.WidthMm) <= SectionToleranceMm
+        && Math.Abs(first.HeightMm - second.HeightMm) <= SectionToleranceMm;
+
+    private static IReadOnlyList<CadBeamCandidate> MergeRuns(IReadOnlyList<CadBeamCandidate> candidates)
+    {
+        var result = new List<CadBeamCandidate>();
+        foreach (var group in candidates.GroupBy(AxisKey))
+        {
+            var seed = group.First();
+            var direction = Normalize(seed.EndMm - seed.StartMm);
+            var ordered = group.OrderBy(candidate => Math.Min(
+                Dot(candidate.StartMm, direction), Dot(candidate.EndMm, direction))).ToArray();
+            foreach (var candidate in ordered)
+            {
+                if (result.Count == 0 || AxisKey(result[^1]) != AxisKey(candidate)
+                    || Math.Abs(result[^1].EffectiveWidthMm - candidate.EffectiveWidthMm) > SectionToleranceMm
+                    || Math.Abs(result[^1].EffectiveHeightMm - candidate.EffectiveHeightMm) > SectionToleranceMm)
+                {
+                    result.Add(candidate);
+                    continue;
+                }
+                var previous = result[^1];
+                result[^1] = previous with
+                {
+                    EndMm = candidate.EndMm,
+                    SourceSegmentIds = previous.SourceSegmentIds.Concat(candidate.SourceSegmentIds).Distinct().ToArray(),
+                    SourceAnnotationIds = previous.SourceAnnotationIds.Concat(candidate.SourceAnnotationIds).Distinct().ToArray()
+                };
+            }
+        }
+        return result;
+    }
+
+    private static GridAxis? FindGridAxis(
+        IReadOnlyList<CadStructureSegment> grids,
+        CadStructurePoint2 direction,
+        double centerOffset)
+    {
+        GridAxis? best = null;
+        foreach (var grid in grids)
+        {
+            var vector = grid.End - grid.Start;
+            if (Length(vector) < 1.0) continue;
+            var gridDirection = CanonicalDirection(Normalize(vector));
+            if (AngleDifference(gridDirection, direction) > AngleToleranceDegrees) continue;
+            var normal = new CadStructurePoint2(-direction.Y, direction.X);
+            var offset = (Dot(grid.Start, normal) + Dot(grid.End, normal)) / 2.0;
+            var distance = Math.Abs(offset - centerOffset);
+            if (distance > GridAxisSnapToleranceMm || best is not null && best.Value.Distance <= distance) continue;
+            best = new GridAxis(offset, distance);
+        }
+        return best;
+    }
+
+    private static (double Start, double End) SnapEndpointStations(
+        IReadOnlyList<CadStructureSegment> grids,
+        CadStructurePoint2 direction,
+        CadStructurePoint2 normal,
+        double centerOffset,
+        double start,
+        double end)
+    {
+        var origin = normal * centerOffset;
+        var stations = new List<double>();
+        foreach (var grid in grids)
+        {
+            var gridVector = grid.End - grid.Start;
+            var denominator = Cross(direction, gridVector);
+            if (Math.Abs(denominator) < 1e-9) continue;
+            var station = Cross(grid.Start - origin, gridVector) / denominator;
+            stations.Add(station);
+        }
+        var startSnap = stations.Count == 0
+            ? start
+            : stations.OrderBy(station => Math.Abs(station - start)).First();
+        var endSnap = stations.Count == 0
+            ? end
+            : stations.OrderBy(station => Math.Abs(station - end)).First();
+        if (Math.Abs(startSnap - start) > EndpointSnapToleranceMm) startSnap = start;
+        if (Math.Abs(endSnap - end) > EndpointSnapToleranceMm) endSnap = end;
+        return startSnap < endSnap ? (startSnap, endSnap) : (start, end);
+    }
+
+    private static IReadOnlyList<AnnotationMatch> MatchAnnotations(
+        IReadOnlyList<CadStructureAnnotation> annotations,
+        CadStructurePoint2 start,
+        CadStructurePoint2 end,
+        double searchDistanceMm)
+    {
+        var direction = Normalize(end - start);
+        var length = start.DistanceTo(end);
+        var matches = new List<AnnotationMatch>();
+        foreach (var annotation in annotations)
+        {
+            var parsed = ParseSection(annotation.Text);
+            if (parsed is null) continue;
+            var relative = annotation.Position - start;
+            var station = Dot(relative, direction);
+            if (station < -searchDistanceMm || station > length + searchDistanceMm) continue;
+            var perpendicular = Math.Abs(Cross(relative, direction));
+            if (perpendicular > searchDistanceMm) continue;
+            var longitudinalPenalty = station < 0 ? -station : station > length ? station - length : 0.0;
+            matches.Add(new AnnotationMatch(annotation, parsed.Value.Width, parsed.Value.Height,
+                parsed.Value.Mark, Math.Max(0.0, Math.Min(length, station)),
+                perpendicular + longitudinalPenalty * 0.5, perpendicular));
+        }
+        return matches.OrderBy(match => match.Score).ToArray();
+    }
+
+    private static (double Width, double Height, string Mark)? ParseSection(string text)
+    {
+        var match = SectionRegex.Match(text);
+        if (!match.Success) return null;
+        if (!TryInvariant(match.Groups["b"].Value, out var width)
+            || !TryInvariant(match.Groups["h"].Value, out var height)
+            || width <= 0 || height <= 0) return null;
+        var mark = text[..match.Index].Trim(' ', '-', '(', '[', ':');
+        return (width, height, mark);
+    }
+
+    private static string NormalizeText(string value)
+    {
+        var normalized = MTextControlRegex.Replace(value, string.Empty);
+        return normalized.Replace("\\P", " ")
+            .Replace("\\p", " ")
+            .Replace("{", string.Empty)
+            .Replace("}", string.Empty)
+            .Trim();
+    }
+
+    private static IReadOnlyList<Interval> MergeIntervals(IEnumerable<Interval> source, double gap)
+    {
+        var ordered = source.OrderBy(item => item.Start).ToArray();
+        if (ordered.Length == 0) return Array.Empty<Interval>();
+        var merged = new List<Interval> { ordered[0] };
+        foreach (var current in ordered.Skip(1))
+        {
+            var last = merged[^1];
+            if (current.Start <= last.End + gap)
+                merged[^1] = new Interval(last.Start, Math.Max(last.End, current.End));
+            else
+                merged.Add(current);
+        }
+        return merged;
+    }
+
+    private static string AxisKey(CadBeamCandidate candidate)
+    {
+        var direction = CanonicalDirection(Normalize(candidate.EndMm - candidate.StartMm));
+        var normal = new CadStructurePoint2(-direction.Y, direction.X);
+        var offset = Dot(candidate.StartMm, normal);
+        return $"{Math.Round(Angle(direction) / AngleToleranceDegrees)}:{Math.Round(offset / GridAxisSnapToleranceMm)}";
+    }
+
+    private static string? Validate(CadStructureTransferPackage package, CadBeamAnalysisOptions options)
+    {
+        if (package.SchemaVersion != CadStructureTransferPackage.CurrentSchemaVersion)
+            return $"Schema CAD {package.SchemaVersion} không được hỗ trợ.";
+        if (package.Segments.Count > CadStructureAnalyzer.MaximumSegmentCount)
+            return $"Vùng chọn Beam vượt {CadStructureAnalyzer.MaximumSegmentCount:N0} segment.";
+        if (!Finite(options.MinimumLineLengthMm) || options.MinimumLineLengthMm < 0)
+            return "Min Line không hợp lệ.";
+        if (!Finite(options.GapJoinToleranceMm)
+            || options.GapJoinToleranceMm < 0 || options.GapJoinToleranceMm > 2000)
+            return "Gap Join phải nằm trong khoảng 0–2000 mm.";
+        if (!Finite(options.TextSearchDistanceMm) || options.TextSearchDistanceMm < 0)
+            return "Text Search không hợp lệ.";
+        if (options.MinimumRailCoverageRatio is < 0 or > 1)
+            return "Minimum Rail Coverage phải nằm trong khoảng 0–1.";
+        return null;
+    }
+
+    private static CadBeamAnalysis Invalid(string error) => new(
+        default, default, Array.Empty<CadBeamCandidate>(), 0, Array.Empty<string>(), error);
+
+    private static bool TryInvariant(string value, out double result) =>
+        double.TryParse(value.Replace(',', '.'), NumberStyles.Float,
+            CultureInfo.InvariantCulture, out result);
+
+    private static bool Finite(CadStructurePoint2 point) => Finite(point.X) && Finite(point.Y);
+    private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+    private static double Dot(CadStructurePoint2 first, CadStructurePoint2 second) =>
+        first.X * second.X + first.Y * second.Y;
+    private static double Cross(CadStructurePoint2 first, CadStructurePoint2 second) =>
+        first.X * second.Y - first.Y * second.X;
+    private static double Length(CadStructurePoint2 value) => Math.Sqrt(Dot(value, value));
+    private static CadStructurePoint2 Normalize(CadStructurePoint2 value)
+    {
+        var length = Length(value);
+        return length <= 1e-12 ? new CadStructurePoint2(1, 0) : value * (1.0 / length);
+    }
+    private static CadStructurePoint2 CanonicalDirection(CadStructurePoint2 direction) =>
+        direction.X < -1e-12 || Math.Abs(direction.X) <= 1e-12 && direction.Y < 0
+            ? direction * -1
+            : direction;
+    private static double Angle(CadStructurePoint2 direction)
+    {
+        var angle = Math.Atan2(direction.Y, direction.X) * 180.0 / Math.PI;
+        while (angle < 0) angle += 180.0;
+        while (angle >= 180) angle -= 180.0;
+        return angle;
+    }
+    private static double AngleDifference(CadStructurePoint2 first, CadStructurePoint2 second)
+    {
+        var difference = Math.Abs(Angle(first) - Angle(second));
+        return Math.Min(difference, 180.0 - difference);
+    }
+
+    private sealed record Piece(
+        CadStructureSegment Segment,
+        CadStructurePoint2 Direction,
+        CadStructurePoint2 Normal,
+        double Offset,
+        double Start,
+        double End);
+
+    private sealed record Rail(
+        int Id,
+        CadStructurePoint2 Direction,
+        CadStructurePoint2 Normal,
+        double Offset,
+        IReadOnlyList<Interval> Intervals,
+        IReadOnlyList<int> SourceIds)
+    {
+        public double Start => Intervals.Min(interval => interval.Start);
+        public double End => Intervals.Max(interval => interval.End);
+        public double CoveredLength => Intervals.Sum(interval => interval.End - interval.Start);
+    }
+
+    private readonly record struct Interval(double Start, double End);
+    private readonly record struct RailBucket(int Angle, long Offset);
+    private readonly record struct GridAxis(double Offset, double Distance);
+    private sealed record AnnotationMatch(
+        CadStructureAnnotation Annotation,
+        double WidthMm,
+        double HeightMm,
+        string Mark,
+        double Station,
+        double Score,
+        double PerpendicularDistanceMm);
+    private sealed record ScoredPair(
+        CadBeamCandidate Candidate,
+        double Score,
+        IReadOnlyList<AnnotationMatch> Matches,
+        double BaseScore);
+}

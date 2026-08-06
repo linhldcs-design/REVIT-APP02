@@ -27,6 +27,15 @@ public sealed record CadStructureSegment(
     string SourcePath,
     string? SourceText = null);
 
+public sealed record CadStructureAnnotation(
+    int Id,
+    CadStructurePoint2 Position,
+    string Text,
+    double RotationDegrees,
+    string Layer,
+    string SourcePath,
+    bool IsMText);
+
 public sealed record CadStructureTransferPackage(
     int SchemaVersion,
     string SelectionId,
@@ -38,6 +47,64 @@ public sealed record CadStructureTransferPackage(
     IReadOnlyList<CadStructureSegment> Segments)
 {
     public const int CurrentSchemaVersion = 1;
+
+    /// <summary>
+    /// TEXT/MTEXT metadata is optional so schema V1 packages created by the Grid/Column
+    /// workflow remain source and binary compatible.
+    /// </summary>
+    public IReadOnlyList<CadStructureAnnotation> Annotations { get; init; } =
+        Array.Empty<CadStructureAnnotation>();
+}
+
+public sealed record CadBeamAnalysisOptions(
+    double MinimumLineLengthMm = 500.0,
+    double GapJoinToleranceMm = 300.0,
+    double TextSearchDistanceMm = 1000.0,
+    double MinimumRailCoverageRatio = 0.5,
+    double MinimumWidthMm = 100.0,
+    double MaximumWidthMm = 1000.0);
+
+public enum CadBeamCandidateStatus
+{
+    Ready,
+    MissingText,
+    TextWidthMismatch,
+    AmbiguousText,
+    AmbiguousGeometry,
+    InsufficientRailCoverage
+}
+
+public sealed record CadBeamCandidate(
+    int Id,
+    CadStructurePoint2 StartMm,
+    CadStructurePoint2 EndMm,
+    double GeometryWidthMm,
+    double? TextWidthMm,
+    double? TextHeightMm,
+    double EffectiveWidthMm,
+    double EffectiveHeightMm,
+    string Mark,
+    string MatchedText,
+    CadBeamCandidateStatus Status,
+    bool ReconstructedOnGridAxis,
+    IReadOnlyList<int> SourceSegmentIds,
+    IReadOnlyList<int> SourceAnnotationIds)
+{
+    public double LengthMm => StartMm.DistanceTo(EndMm);
+    public bool CanCreate => TextHeightMm is > 0
+                             && Status is CadBeamCandidateStatus.Ready
+                                 or CadBeamCandidateStatus.TextWidthMismatch;
+}
+
+public sealed record CadBeamAnalysis(
+    CadStructurePoint2 SourceOriginMm,
+    CadStructurePoint2 SourceAnchorRelativeMm,
+    IReadOnlyList<CadBeamCandidate> Beams,
+    int ShortLinesIgnored,
+    IReadOnlyList<string> Warnings,
+    string? Error)
+{
+    public bool IsValid => Error is null && Beams.Count > 0;
 }
 
 public sealed record CadColumnCandidate(
