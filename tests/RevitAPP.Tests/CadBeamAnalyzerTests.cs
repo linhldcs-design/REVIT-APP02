@@ -286,6 +286,69 @@ public sealed class CadBeamAnalyzerTests
         Assert.Equal(300, stub.TextHeightMm);
     }
 
+    [Fact]
+    public void Analyze_BoundaryTrimmedIntoShortPieces_ReturnsOneFullLengthBeam()
+    {
+        // Boundaries get trimmed at every column face, leaving pieces well under the minimum
+        // line length. They still form one real boundary once assembled.
+        var segments = new List<CadStructureSegment>();
+        var id = 1;
+        for (var x = 0.0; x < 12000; x += 500)
+            segments.Add(Segment(id++, x, -100, x + 300, -100));
+        segments.Add(Segment(id, 0, 100, 12000, 100));
+
+        var result = CadBeamAnalyzer.Analyze(
+            Package(segments, Annotation(100, 6000, 300, "DK1-200x450")),
+            new[] { Segment(90, 0, 0, 12000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal(12000, beam.LengthMm, 3);
+        Assert.Equal(200, beam.GeometryWidthMm, 3);
+        Assert.Equal(CadBeamCandidateStatus.Ready, beam.Status);
+        Assert.Equal(0, result.ShortLinesIgnored);
+    }
+
+    [Fact]
+    public void Analyze_OneBoundaryTrimmedShort_KeepsBeamAtFullLength()
+    {
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, -100, 12000, -100),
+                    Segment(2, 4000, 100, 8000, 100)
+                },
+                Annotation(100, 6000, 300, "DK1-200x450")),
+            new[] { Segment(90, 0, 0, 12000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal(12000, beam.LengthMm, 3);
+        Assert.Equal("DK1", beam.Mark);
+    }
+
+    [Fact]
+    public void Analyze_BoundaryOffsetDrift_KeepsBeamAsOneRun()
+    {
+        // The right half of the lower boundary sits a few millimetres off, as trimming and
+        // snapping leave it in a real drawing.
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, 100, 12000, 100),
+                    Segment(2, 0, -100, 5000, -100),
+                    Segment(3, 5200, -96, 12000, -96)
+                },
+                Annotation(100, 6000, 300, "DK1-200x450")),
+            new[] { Segment(90, 0, 0, 12000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal(12000, beam.LengthMm, 3);
+    }
+
     private static CadStructureTransferPackage Package(
         IReadOnlyList<CadStructureSegment> segments,
         params CadStructureAnnotation[] annotations) =>

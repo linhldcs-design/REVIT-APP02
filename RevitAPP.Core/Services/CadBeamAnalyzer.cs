@@ -81,11 +81,17 @@ public static class CadBeamAnalyzer
             .Where(segment => segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm)
             .ToArray();
 
-        var shortLines = segments.Count(segment =>
-            segment.Start.DistanceTo(segment.End) < options.MinimumLineLengthMm);
-        var longSegments = segments.Where(segment =>
-            segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm).ToArray();
-        var rails = BuildRails(longSegments, options.GapJoinToleranceMm, options.RailOffsetToleranceMm);
+        // Boundaries are routinely trimmed at every column face, which leaves pieces far shorter
+        // than a beam. Assemble rails from every segment first and apply the length gate to the
+        // assembled boundary: a short piece that joins others into a long rail is part of a real
+        // beam, while one that stays isolated is a tick, a dimension witness line or similar.
+        var allRails = BuildRails(segments, options.GapJoinToleranceMm, options.RailOffsetToleranceMm);
+        var rails = allRails
+            .Where(rail => rail.End - rail.Start >= options.MinimumLineLengthMm)
+            .ToArray();
+        var shortLines = allRails
+            .Where(rail => rail.End - rail.Start < options.MinimumLineLengthMm)
+            .Sum(rail => rail.SourceIds.Count);
         var raw = PairRails(rails, grids, annotations, options);
         var merged = MergeRuns(raw)
             .OrderBy(candidate => candidate.StartMm.X)
@@ -250,7 +256,8 @@ public static class CadBeamAnalyzer
             .SelectMany(SelectCompatiblePairs)
             .ToArray();
 
-        return RemoveEnvelopePairs(selected)
+        var kept = RemoveEnvelopePairs(selected);
+        return ExtendTrimmedEnds(kept, rails)
             .SelectMany(pair => ExpandSections(pair, grids))
             .ToArray();
     }
@@ -284,6 +291,65 @@ public static class CadBeamAnalyzer
 
         var overlap = InteriorOverlap(outer.Candidate, inner.Candidate);
         return overlap >= inner.Candidate.LengthMm - SectionToleranceMm;
+    }
+
+    /// <summary>
+    /// Restores the length of a beam whose boundaries were trimmed to different stations. A pair
+    /// only spans the stretch both boundaries share, so a beam whose top boundary stops early at a
+    /// column face comes out short. Where one boundary continues alone and no other beam claims
+    /// that stretch, the beam really does run on, so the end is pushed out to it. A stretch that a
+    /// neighbouring beam already occupies is left alone -- that is a second beam sharing the rail,
+    /// not this one continuing.
+    /// </summary>
+    private static IReadOnlyList<ScoredPair> ExtendTrimmedEnds(
+        IReadOnlyList<ScoredPair> pairs,
+        IReadOnlyList<Rail> rails)
+    {
+        return pairs.Select(pair =>
+        {
+            var direction = Normalize(pair.Candidate.EndMm - pair.Candidate.StartMm);
+            var normal = new CadStructurePoint2(-direction.Y, direction.X);
+            var offset = Dot(pair.Candidate.StartMm, normal);
+            var start = Dot(pair.Candidate.StartMm, direction);
+            var end = Dot(pair.Candidate.EndMm, direction);
+
+            var half = pair.Candidate.GeometryWidthMm / 2.0;
+            var reach = rails.Where(rail =>
+                AngleDifference(rail.Direction, direction) <= AngleToleranceDegrees
+                && Math.Abs(Math.Abs(rail.Offset - offset) - half) <= SectionToleranceMm).ToArray();
+            if (reach.Length == 0) return pair;
+
+            var grown = new Interval(
+                Math.Min(start, reach.Min(rail => rail.Start)),
+                Math.Max(end, reach.Max(rail => rail.End)));
+
+            foreach (var other in pairs)
+            {
+                if (ReferenceEquals(other, pair)) continue;
+                var otherStart = Dot(other.Candidate.StartMm, direction);
+                var otherEnd = Dot(other.Candidate.EndMm, direction);
+                if (otherStart > otherEnd) (otherStart, otherEnd) = (otherEnd, otherStart);
+                if (Math.Min(otherEnd, grown.End) - Math.Max(otherStart, grown.Start)
+                    <= SectionToleranceMm) continue;
+                // Another beam sits in the stretch we would grow into: stop at its boundary.
+                if (otherEnd <= start + SectionToleranceMm) grown = new Interval(
+                    Math.Max(grown.Start, otherEnd), grown.End);
+                else if (otherStart >= end - SectionToleranceMm) grown = new Interval(
+                    grown.Start, Math.Min(grown.End, otherStart));
+                else return pair;
+            }
+
+            if (grown.End - grown.Start <= end - start + SectionToleranceMm) return pair;
+            var origin = pair.Candidate.StartMm - direction * start;
+            return pair with
+            {
+                Candidate = pair.Candidate with
+                {
+                    StartMm = origin + direction * grown.Start,
+                    EndMm = origin + direction * grown.End
+                }
+            };
+        }).ToArray();
     }
 
     private static IReadOnlyList<ScoredPair> SelectCompatiblePairs(IEnumerable<ScoredPair> source)
@@ -622,6 +688,10 @@ public static class CadBeamAnalyzer
     /// </summary>
     private static IReadOnlyList<Interval> FacingIntervals(Rail first, Rail second, double gap)
     {
+        // The two boundaries of one beam rarely stop at the same station: one gets trimmed at a
+        // column face while the other runs on. Ending the beam where the shorter rail stops would
+        // cut it short, so a stretch runs as far as either boundary reaches and the coverage gate
+        // in the caller decides whether that stretch is really one beam.
         var shared = new Interval(
             Math.Max(first.Start, second.Start),
             Math.Min(first.End, second.End));
@@ -639,6 +709,14 @@ public static class CadBeamAnalyzer
         }
         return windows;
     }
+
+    private static double RailStartWithin(Rail rail, Interval window) =>
+        rail.Intervals.Where(interval => Overlaps(interval, window))
+            .Select(interval => interval.Start).DefaultIfEmpty(window.Start).Min();
+
+    private static double RailEndWithin(Rail rail, Interval window) =>
+        rail.Intervals.Where(interval => Overlaps(interval, window))
+            .Select(interval => interval.End).DefaultIfEmpty(window.End).Max();
 
     private static bool Overlaps(Interval first, Interval second) =>
         Math.Min(first.End, second.End) - Math.Max(first.Start, second.Start) > 0.0;
