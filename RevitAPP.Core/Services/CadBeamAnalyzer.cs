@@ -16,6 +16,13 @@ public static class CadBeamAnalyzer
     private const double EndpointSnapToleranceMm = 300.0;
     private const double TextOwnershipBandToleranceMm = 300.0;
     private const double SectionToleranceMm = 2.0;
+    private const double SplitLabelAcrossToleranceMm = 150.0;
+    private const double SplitLabelAlongToleranceMm = 2000.0;
+
+    // A beam name such as DK1 or D2A: letters then digits, optionally a trailing letter.
+    private static readonly Regex MarkRegex = new(
+        @"^[A-Za-zĐđ]{1,4}\d{1,3}[A-Za-z]?$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex SectionRegex = new(
         @"(?<b>\d+(?:[\.,]\d+)?)\s*[xX×*]\s*(?<h>\d+(?:[\.,]\d+)?)",
@@ -75,6 +82,7 @@ public static class CadBeamAnalyzer
             })
             .Where(annotation => !string.IsNullOrWhiteSpace(annotation.Text))
             .ToArray();
+        annotations = JoinSplitLabels(annotations);
         var grids = gridSegments
             .Where(segment => Finite(segment.Start) && Finite(segment.End))
             .Select(segment => segment with
@@ -717,6 +725,67 @@ public static class CadBeamAnalyzer
         if (lastControl >= 0) prefix = prefix[(lastControl + 1)..];
         var mark = prefix.Trim(' ', '-', '(', '[', ':', '_');
         return (width, height, mark);
+    }
+
+    /// <summary>
+    /// Rejoins a label drawn as two pieces of text. Plans often carry the name and the section as
+    /// separate entities so each can be placed or styled on its own, which leaves the section text
+    /// with no name in front of it and the beam with a blank mark. A name sitting beside a section,
+    /// on the same line and close enough to read as one label, is folded into it.
+    /// </summary>
+    private static CadStructureAnnotation[] JoinSplitLabels(CadStructureAnnotation[] annotations)
+    {
+        var sections = annotations
+            .Where(annotation => SectionRegex.IsMatch(annotation.Text))
+            .ToArray();
+        if (sections.Length == 0) return annotations;
+
+        var names = annotations
+            .Where(annotation => !SectionRegex.IsMatch(annotation.Text)
+                                 && MarkRegex.IsMatch(annotation.Text))
+            .ToArray();
+        if (names.Length == 0) return annotations;
+
+        var consumed = new HashSet<int>();
+        var joined = sections.Select(section =>
+        {
+            if (!string.IsNullOrEmpty(ParseSection(section.Text)?.Mark)) return section;
+            var radians = section.RotationDegrees * Math.PI / 180.0;
+            var along = new CadStructurePoint2(Math.Cos(radians), Math.Sin(radians));
+            var best = names
+                .Where(name => !consumed.Contains(name.Id)
+                               && AngleDifference(
+                                   new CadStructurePoint2(
+                                       Math.Cos(name.RotationDegrees * Math.PI / 180.0),
+                                       Math.Sin(name.RotationDegrees * Math.PI / 180.0)),
+                                   along) <= AngleToleranceDegrees)
+                .Select(name => new
+                {
+                    Name = name,
+                    Along = Dot(name.Position - section.Position, along),
+                    Across = Math.Abs(Cross(name.Position - section.Position, along))
+                })
+                .Where(item => item.Across <= SplitLabelAcrossToleranceMm
+                               && item.Along < 0
+                               && -item.Along <= SplitLabelAlongToleranceMm)
+                .OrderBy(item => -item.Along)
+                .FirstOrDefault();
+            if (best is null) return section;
+            consumed.Add(best.Name.Id);
+            // Separate the two pieces unless the section already starts with a separator, so a
+            // name running straight into the digits cannot be read as part of the width.
+            var name = best.Name.Text.Trim();
+            var separator = section.Text.Length > 0 && !char.IsLetterOrDigit(section.Text[0])
+                ? string.Empty
+                : "-";
+            return section with { Text = name + separator + section.Text };
+        }).ToArray();
+
+        return annotations
+            .Where(annotation => !SectionRegex.IsMatch(annotation.Text)
+                                 && !consumed.Contains(annotation.Id))
+            .Concat(joined)
+            .ToArray();
     }
 
     private static string NormalizeText(string value)

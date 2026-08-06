@@ -463,6 +463,30 @@ public sealed class CadBeamAnalyzerTests
         Assert.Equal(3, result.Beams.Count(beam => beam.Mark == "DK2"));
     }
 
+    [Theory]
+    [InlineData("DK1", "-200x450")]
+    [InlineData("DK1", "200x450")]
+    public void Analyze_LabelSplitAcrossTwoTexts_RecoversTheMark(string name, string section)
+    {
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, -100, 10000, -100),
+                    Segment(2, 0, 100, 10000, 100)
+                },
+                Annotation(1, 4200, 400, name),
+                Annotation(2, 5000, 400, section)),
+            new[] { Segment(900, 0, 0, 10000, 0, "GRID") },
+            new CadBeamAnalysisOptions(TextSearchDistanceMm: 2000));
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal("DK1", beam.Mark);
+        Assert.Equal(200, beam.TextWidthMm);
+        Assert.Equal(450, beam.TextHeightMm);
+        Assert.Equal(CadBeamCandidateStatus.Ready, beam.Status);
+    }
+
     private static CadStructureTransferPackage Package(
         IReadOnlyList<CadStructureSegment> segments,
         params CadStructureAnnotation[] annotations) =>
