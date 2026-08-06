@@ -204,7 +204,15 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         ModelFromCadMode.Column => $"Chọn {SelectedColumns.Count}/{Columns.Count} cột",
         _ => $"Chọn {SelectedBeams.Count}/{Beams.Count} dầm"
              + (BeamAnalysisDirty ? " — cần Apply/Re-analyze" : string.Empty)
+             + BeamWarningLabel
     };
+
+    // Boundaries the analyzer could not turn into beams stay grey in the preview and would be
+    // missing from the model, so the reason belongs next to the count rather than in a log.
+    private string BeamWarningLabel =>
+        BeamData is null || BeamData.Analysis.Warnings.Count == 0
+            ? string.Empty
+            : "  |  " + string.Join("  |  ", BeamData.Analysis.Warnings);
 
     public string CreateButtonText => SelectedMode switch
     {

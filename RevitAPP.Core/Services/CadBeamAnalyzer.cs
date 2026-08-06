@@ -272,15 +272,18 @@ public static class CadBeamAnalyzer
 
         pairs = AssignAnnotationOwnership(pairs).ToList();
 
-        // Parallel lines that are not beam boundaries -- a wall face beside a beam, the far side
-        // of an adjacent room, a short stub between two beams -- still satisfy the width and
-        // coverage gates and would surface as candidates no annotation claims. Those cannot be
-        // created and only clutter the review, so a section has to come from a nearby label.
-        // Pairs are kept when nothing in the selection carries a section at all, since then the
-        // whole scan is unlabelled and the review is the user's only way to see that.
-        if (pairs.Any(pair => !string.IsNullOrEmpty(pair.Candidate.MatchedText)))
+        // A label names a section, not one particular beam: a plan marks DK1 once and leaves the
+        // identical beams beside it unlabelled, so requiring a label per beam would drop most of
+        // them. What a stray pair does not share is the section itself -- a wall face or a room
+        // edge sits at its own spacing -- so keep the widths some label confirmed.
+        var labelledWidths = pairs
+            .Where(pair => !string.IsNullOrEmpty(pair.Candidate.MatchedText))
+            .Select(pair => pair.Candidate.GeometryWidthMm)
+            .ToArray();
+        if (labelledWidths.Length > 0)
             pairs = pairs
-                .Where(pair => !string.IsNullOrEmpty(pair.Candidate.MatchedText))
+                .Where(pair => labelledWidths.Any(width =>
+                    Math.Abs(width - pair.Candidate.GeometryWidthMm) <= SectionToleranceMm))
                 .ToList();
 
         // Competing pairs may overlap on an axis, while a real section-width transition produces
@@ -375,11 +378,13 @@ public static class CadBeamAnalyzer
                 if (otherStart > otherEnd) (otherStart, otherEnd) = (otherEnd, otherStart);
                 if (Math.Min(otherEnd, grown.End) - Math.Max(otherStart, grown.Start)
                     <= SectionToleranceMm) continue;
-                // Another beam sits in the stretch we would grow into: stop at its boundary.
+                // Another beam sits in the stretch we would grow into: stop at its boundary, but
+                // never inside this beam's own extent. Clipping past its ends would shorten a beam
+                // that was already correct and leave the difference belonging to nobody.
                 if (otherEnd <= start + SectionToleranceMm) grown = new Interval(
-                    Math.Max(grown.Start, otherEnd), grown.End);
+                    Math.Min(start, Math.Max(grown.Start, otherEnd)), grown.End);
                 else if (otherStart >= end - SectionToleranceMm) grown = new Interval(
-                    grown.Start, Math.Min(grown.End, otherStart));
+                    grown.Start, Math.Max(end, Math.Min(grown.End, otherStart)));
                 else return pair;
             }
 
