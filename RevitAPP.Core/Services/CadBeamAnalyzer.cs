@@ -11,7 +11,7 @@ namespace RevitAPP.Core.Services;
 public static class CadBeamAnalyzer
 {
     private const double AngleToleranceDegrees = 2.0;
-    private const double RailOffsetToleranceMm = 2.0;
+    private const double RailAngleBucketDegrees = 2.0;
     private const double GridAxisSnapToleranceMm = 50.0;
     private const double EndpointSnapToleranceMm = 300.0;
     private const double TextOwnershipBandToleranceMm = 300.0;
@@ -85,7 +85,7 @@ public static class CadBeamAnalyzer
             segment.Start.DistanceTo(segment.End) < options.MinimumLineLengthMm);
         var longSegments = segments.Where(segment =>
             segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm).ToArray();
-        var rails = BuildRails(longSegments, options.GapJoinToleranceMm);
+        var rails = BuildRails(longSegments, options.GapJoinToleranceMm, options.RailOffsetToleranceMm);
         var raw = PairRails(rails, grids, annotations, options);
         var merged = MergeRuns(raw)
             .OrderBy(candidate => candidate.StartMm.X)
@@ -103,7 +103,8 @@ public static class CadBeamAnalyzer
 
     private static IReadOnlyList<Rail> BuildRails(
         IReadOnlyList<CadStructureSegment> segments,
-        double gapToleranceMm)
+        double gapToleranceMm,
+        double railOffsetToleranceMm)
     {
         var pieces = segments.Select(segment =>
         {
@@ -118,11 +119,25 @@ public static class CadBeamAnalyzer
             return new Piece(segment, direction, normal, offset, start, end);
         }).ToArray();
 
+        // Cluster by actual distance rather than by rounding the offset into fixed cells: two
+        // pieces of one drawn boundary must stay together even when their offsets fall either
+        // side of a cell edge, which would otherwise split a beam over a millimetre of drift.
         var groups = pieces
-            .GroupBy(piece => new RailBucket(
-                (int)Math.Round(Angle(piece.Direction) / AngleToleranceDegrees),
-                (long)Math.Round(piece.Offset / RailOffsetToleranceMm)))
-            .Select(group => group.ToList())
+            .GroupBy(piece => (int)Math.Round(Angle(piece.Direction) / RailAngleBucketDegrees))
+            .SelectMany(family =>
+            {
+                var clusters = new List<List<Piece>>();
+                foreach (var piece in family.OrderBy(item => item.Offset))
+                {
+                    var current = clusters.Count == 0 ? null : clusters[^1];
+                    if (current is not null
+                        && piece.Offset - current[^1].Offset <= railOffsetToleranceMm)
+                        current.Add(piece);
+                    else
+                        clusters.Add(new List<Piece> { piece });
+                }
+                return clusters;
+            })
             .ToArray();
 
         return groups.Select((group, index) =>
@@ -164,7 +179,7 @@ public static class CadBeamAnalyzer
             var orderedRails = family.OrderBy(rail => rail.Offset).ToArray();
             for (var firstIndex = 0; firstIndex < orderedRails.Length; firstIndex++)
             {
-            // BuildRails has already collapsed every 2 mm offset bucket to one rail. Starting at
+            // BuildRails has already collapsed each cluster of near-equal offsets to one rail. Starting at
             // MinimumWidth avoids rescanning dense duplicate/near-duplicate rails; the remaining
             // search is bounded by the configured width window, not total family size.
             var secondIndex = LowerBoundOffset(
@@ -664,6 +679,11 @@ public static class CadBeamAnalyzer
             return "Text Search không hợp lệ.";
         if (options.MinimumRailCoverageRatio is < 0 or > 1)
             return "Minimum Rail Coverage phải nằm trong khoảng 0–1.";
+        // A tolerance approaching the narrowest beam would merge the two boundaries of that beam
+        // into one rail and lose it entirely, so keep it well below the minimum width.
+        if (!Finite(options.RailOffsetToleranceMm) || options.RailOffsetToleranceMm < 0
+            || options.RailOffsetToleranceMm >= options.MinimumWidthMm / 2.0)
+            return "Rail Offset phải nhỏ hơn nửa bề rộng dầm nhỏ nhất.";
         return null;
     }
 
@@ -728,7 +748,6 @@ public static class CadBeamAnalyzer
     private readonly record struct RailSource(int SegmentId, double Start, double End);
 
     private readonly record struct Interval(double Start, double End);
-    private readonly record struct RailBucket(int Angle, long Offset);
     private readonly record struct GridAxis(double Offset, double Distance);
     private sealed record AnnotationMatch(
         CadStructureAnnotation Annotation,

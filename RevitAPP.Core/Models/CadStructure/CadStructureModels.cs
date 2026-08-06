@@ -62,7 +62,12 @@ public sealed record CadBeamAnalysisOptions(
     double TextSearchDistanceMm = 1000.0,
     double MinimumRailCoverageRatio = 0.5,
     double MinimumWidthMm = 100.0,
-    double MaximumWidthMm = 1000.0);
+    double MaximumWidthMm = 1000.0,
+    // Pieces of one drawn boundary rarely share an exact offset: trimming, snapping to a nearby
+    // element or copying a bay leaves a few millimetres of drift. Grouping them within this
+    // distance keeps a broken boundary as one rail, so the beam stays a single run instead of
+    // splitting into shorter runs whose widths drift away from the annotated section.
+    double RailOffsetToleranceMm = 10.0);
 
 public enum CadBeamCandidateStatus
 {
