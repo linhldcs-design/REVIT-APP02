@@ -399,6 +399,70 @@ public sealed class CadBeamAnalyzerTests
         Assert.All(split.Beams, beam => Assert.Equal(5000, beam.LengthMm, 3));
     }
 
+    [Theory]
+    [InlineData(@"\W0.32;DK1-200x450")]
+    [InlineData(@"\pxqc;DK1-200x450")]
+    [InlineData(@"{\W0.32;DK1-200x450}")]
+    [InlineData(@"\A1;\W0.32;DK1-200x450")]
+    [InlineData(@"\H0.7x;DK1-200x450")]
+    [InlineData("xt0.32;DK1-200x450")]
+    public void Analyze_MTextFormattingCodes_DoNotLeakIntoTheMark(string text)
+    {
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, -100, 10000, -100),
+                    Segment(2, 0, 100, 10000, 100)
+                },
+                new CadStructureAnnotation(
+                    1, new CadStructurePoint2(5000, 400), text, 0, "MText", string.Empty, true)),
+            new[] { Segment(90, 0, 0, 10000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal("DK1", beam.Mark);
+        Assert.Equal(450, beam.TextHeightMm);
+    }
+
+    [Fact]
+    public void Analyze_BeamCrossedByBranches_KeepsTheBeamAndItsOwnLabel()
+    {
+        // Branches hanging off a main beam are within reach of the main beam's label. The label
+        // is written along the beam it names, which is what tells them apart.
+        var segments = new List<CadStructureSegment>
+        {
+            Segment(1, 0, -100, 12000, -100),
+            Segment(2, 0, 100, 12000, 100)
+        };
+        var annotations = new List<CadStructureAnnotation>
+        {
+            Annotation(1, 6000, -400, "DK1-200x450")
+        };
+        var id = 10;
+        var annotationId = 100;
+        foreach (var x in new[] { 3000.0, 6000.0, 9000.0 })
+        {
+            segments.Add(Segment(id++, x - 100, 100, x - 100, 4000));
+            segments.Add(Segment(id++, x + 100, 100, x + 100, 4000));
+            annotations.Add(new CadStructureAnnotation(
+                annotationId++, new CadStructurePoint2(x - 400, 2000),
+                "DK2-200x300", 90, "TEXT", string.Empty, false));
+        }
+
+        var result = CadBeamAnalyzer.Analyze(
+            Package(segments, annotations.ToArray()),
+            new[] { Segment(900, 0, 0, 12000, 0, "GRID") },
+            new CadBeamAnalysisOptions(
+                MinimumLineLengthMm: 300, GapJoinToleranceMm: 500, TextSearchDistanceMm: 2000));
+
+        Assert.Equal(4, result.Beams.Count);
+        var main = Assert.Single(result.Beams, beam => beam.Mark == "DK1");
+        Assert.Equal(12000, main.LengthMm, 3);
+        Assert.Equal(450, main.TextHeightMm);
+        Assert.Equal(3, result.Beams.Count(beam => beam.Mark == "DK2"));
+    }
+
     private static CadStructureTransferPackage Package(
         IReadOnlyList<CadStructureSegment> segments,
         params CadStructureAnnotation[] annotations) =>

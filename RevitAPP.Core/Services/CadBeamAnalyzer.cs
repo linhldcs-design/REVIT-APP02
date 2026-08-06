@@ -20,8 +20,12 @@ public static class CadBeamAnalyzer
     private static readonly Regex SectionRegex = new(
         @"(?<b>\d+(?:[\.,]\d+)?)\s*[xX×*]\s*(?<h>\d+(?:[\.,]\d+)?)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    // MTEXT formatting codes. \p (paragraph) carries its own argument list and must be matched
+    // before the single-letter toggles, otherwise \pxqc; loses only the backslash and leaves
+    // "xqc;" in the text. The trailing alternative catches an argument run whose backslash was
+    // already stripped upstream, which would otherwise be read as part of the beam mark.
     private static readonly Regex MTextControlRegex = new(
-        @"\\[ACFHQTW][^;]*;|\\[LlOoKk]",
+        @"\\[ACFHQTWp][^;]*;|\\[LlOoKk]|(?<=^|[;}])[ACFHQTWpxt][\d.,]+;",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static CadBeamAnalysis Analyze(
@@ -103,6 +107,18 @@ public static class CadBeamAnalyzer
         if (shortLines > 0) warnings.Add($"Đã bỏ qua {shortLines} line ngắn hơn {options.MinimumLineLengthMm:0} mm.");
         if (annotations.Length == 0) warnings.Add("Vùng chọn Beam không có TEXT/MTEXT hợp lệ.");
         if (merged.Length == 0) warnings.Add("Không nhận dạng được cặp biên dầm phù hợp.");
+
+        // Boundaries that never found a partner are the usual reason a line stays grey in the
+        // preview, so report them with the settings that decide the outcome. Without this the
+        // rejection is silent and the user cannot tell which value to change.
+        var pairedIds = merged.SelectMany(candidate => candidate.SourceSegmentIds).ToHashSet();
+        var unpaired = rails.Count(rail => !rail.SourceIds.Any(pairedIds.Contains));
+        if (unpaired > 0)
+            warnings.Add($"{unpaired} đường biên không ghép được thành dầm. "
+                + $"Kiểm tra Min Line ({options.MinimumLineLengthMm:0}), "
+                + $"Gap Join ({options.GapJoinToleranceMm:0}), "
+                + $"Text Search ({options.TextSearchDistanceMm:0}) và bề rộng "
+                + $"{options.MinimumWidthMm:0}–{options.MaximumWidthMm:0} mm.");
         var anchor = beamPackage.SourceAnchor * scale - origin;
         return new CadBeamAnalysis(origin, anchor, merged, shortLines, warnings, null);
     }
@@ -388,6 +404,12 @@ public static class CadBeamAnalyzer
     private static double InteriorOverlap(CadBeamCandidate first, CadBeamCandidate second)
     {
         var direction = Normalize(first.EndMm - first.StartMm);
+        // Only beams along the same line compete for a stretch. Projecting a branch that meets
+        // this beam at an angle onto this axis would read as overlap and discard the beam its
+        // branches hang off, leaving the branches and losing the run they share a node with.
+        var secondDirection = Normalize(second.EndMm - second.StartMm);
+        if (Math.Abs(Dot(CanonicalDirection(direction), CanonicalDirection(secondDirection)))
+            < Math.Cos(AngleToleranceDegrees * Math.PI / 180.0)) return 0.0;
         var firstStart = Math.Min(Dot(first.StartMm, direction), Dot(first.EndMm, direction));
         var firstEnd = Math.Max(Dot(first.StartMm, direction), Dot(first.EndMm, direction));
         var secondStart = Math.Min(Dot(second.StartMm, direction), Dot(second.EndMm, direction));
@@ -665,9 +687,18 @@ public static class CadBeamAnalyzer
             var perpendicular = Math.Abs(Cross(relative, direction));
             if (perpendicular > searchDistanceMm) continue;
             var longitudinalPenalty = station < 0 ? -station : station > length ? station - length : 0.0;
+            // A label is written along the beam it names. Where beams meet, several are within
+            // reach of the same label, and without this the one running across it can win on
+            // distance alone and leave the beam the label belongs to with no section at all.
+            var annotationRadians = annotation.RotationDegrees * Math.PI / 180.0;
+            var annotationDirection = new CadStructurePoint2(
+                Math.Cos(annotationRadians), Math.Sin(annotationRadians));
+            var alignment = Math.Abs(Dot(
+                CanonicalDirection(annotationDirection), CanonicalDirection(direction)));
+            var orientationPenalty = (1.0 - alignment) * searchDistanceMm;
             matches.Add(new AnnotationMatch(annotation, parsed.Value.Width, parsed.Value.Height,
                 parsed.Value.Mark, Math.Max(0.0, Math.Min(length, station)),
-                perpendicular + longitudinalPenalty * 0.5, perpendicular));
+                perpendicular + longitudinalPenalty * 0.5 + orientationPenalty, perpendicular));
         }
         return matches.OrderBy(match => match.Score).ToArray();
     }
@@ -679,7 +710,12 @@ public static class CadBeamAnalyzer
         if (!TryInvariant(match.Groups["b"].Value, out var width)
             || !TryInvariant(match.Groups["h"].Value, out var height)
             || width <= 0 || height <= 0) return null;
-        var mark = text[..match.Index].Trim(' ', '-', '(', '[', ':');
+        // A mark never contains a semicolon, so anything up to the last one is a formatting code
+        // that survived normalisation rather than part of the name.
+        var prefix = text[..match.Index];
+        var lastControl = prefix.LastIndexOf(';');
+        if (lastControl >= 0) prefix = prefix[(lastControl + 1)..];
+        var mark = prefix.Trim(' ', '-', '(', '[', ':', '_');
         return (width, height, mark);
     }
 
