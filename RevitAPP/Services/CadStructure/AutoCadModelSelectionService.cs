@@ -166,6 +166,7 @@ internal static class AutoCadModelSelectionService
         {
             _readStopwatch.Restart();
             _blocks = Get(_document, "Blocks");
+            var read = new List<object>();
             try
             {
                 var count = Convert.ToInt32(Get(selection, "Count"));
@@ -194,7 +195,11 @@ internal static class AutoCadModelSelectionService
                     }
                     finally
                     {
-                        Release(entity);
+                        // AutoCAD can hand back one shared wrapper for successive Item calls, so
+                        // releasing per iteration tears down the object the next read receives and
+                        // silently drops entities the drawing really has. Collect them and release
+                        // once the whole selection has been read.
+                        if (entity is not null) read.Add(entity);
                     }
                 }
 
@@ -202,6 +207,7 @@ internal static class AutoCadModelSelectionService
             }
             finally
             {
+                foreach (var entity in read) Release(entity);
                 Release(_blocks);
                 _blocks = null;
             }
@@ -350,6 +356,7 @@ internal static class AutoCadModelSelectionService
             if (string.IsNullOrWhiteSpace(name) || !blockStack.Add(name)) return;
 
             object? definition = null;
+            var children = new List<object>();
             try
             {
                 definition = _blocks is null ? null : Call(_blocks, "Item", name);
@@ -391,12 +398,15 @@ internal static class AutoCadModelSelectionService
                     }
                     finally
                     {
-                        Release(child);
+                        // Released after the whole definition has been read: a shared wrapper
+                        // would otherwise be torn down while later entities still need it.
+                        if (child is not null) children.Add(child);
                     }
                 }
             }
             finally
             {
+                foreach (var child in children) Release(child);
                 blockStack.Remove(name);
                 Release(definition);
             }
