@@ -11,7 +11,9 @@ namespace RevitAPP.Core.Services;
 public static class CadBeamAnalyzer
 {
     private const double AngleToleranceDegrees = 2.0;
-    private const double RailAngleBucketDegrees = 2.0;
+    // Boundaries of one beam are drawn parallel but rarely end up exactly so. This is how far
+    // apart two directions may be and still describe the same beam.
+    private const double RailAngleBucketDegrees = 5.0;
     private const double GridAxisSnapToleranceMm = 50.0;
     private const double EndpointSnapToleranceMm = 300.0;
     private const double TextOwnershipBandToleranceMm = 300.0;
@@ -202,8 +204,17 @@ public static class CadBeamAnalyzer
         CadBeamAnalysisOptions options)
     {
         var pairs = new List<ScoredPair>();
-        var railFamilies = rails.GroupBy(rail =>
-            (int)Math.Round(Angle(rail.Direction) / AngleToleranceDegrees));
+        // Group by how far apart the directions actually are. Rounding the angle into fixed cells
+        // splits the two boundaries of one beam whenever they straddle a cell edge, however small
+        // the difference between them, and the pair is then never even considered.
+        var railFamilies = new List<List<Rail>>();
+        foreach (var rail in rails.OrderBy(item => Angle(item.Direction)))
+        {
+            var family = railFamilies.FirstOrDefault(item =>
+                AngleDifference(item[0].Direction, rail.Direction) <= RailAngleBucketDegrees);
+            if (family is null) railFamilies.Add(new List<Rail> { rail });
+            else family.Add(rail);
+        }
         foreach (var family in railFamilies)
         {
             var orderedRails = family.OrderBy(rail => rail.Offset).ToArray();

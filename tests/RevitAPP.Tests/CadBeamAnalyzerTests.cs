@@ -487,6 +487,55 @@ public sealed class CadBeamAnalyzerTests
         Assert.Equal(CadBeamCandidateStatus.Ready, beam.Status);
     }
 
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.5)]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    public void Analyze_BoundariesNotExactlyParallel_StillFormOneBeam(double tiltDegrees)
+    {
+        // Boundaries drawn by hand are rarely exactly parallel, and a beam must not be lost
+        // because its two sides differ by a fraction of a degree.
+        var drift = 12000 * Math.Tan(tiltDegrees * Math.PI / 180.0);
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, -100, 12000, -100),
+                    Segment(2, 0, 100, 12000, 100 + drift)
+                },
+                Annotation(100, 6000, 400, "DK1-200x450")),
+            new[] { Segment(900, 0, 0, 12000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal(200, beam.GeometryWidthMm, 0);
+        Assert.Equal("DK1", beam.Mark);
+    }
+
+    [Fact]
+    public void Analyze_PerpendicularBeams_AreNotPairedWithEachOther()
+    {
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, -100, 10000, -100),
+                    Segment(2, 0, 100, 10000, 100),
+                    Segment(3, -100, 0, -100, 8000),
+                    Segment(4, 100, 0, 100, 8000)
+                },
+                Annotation(100, 5000, 400, "DK1-200x450"),
+                new CadStructureAnnotation(
+                    101, new CadStructurePoint2(-400, 4000), "DK1-200x450", 90,
+                    "TEXT", string.Empty, false)),
+            new[] { Segment(900, 0, 0, 10000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        Assert.Equal(2, result.Beams.Count);
+        Assert.All(result.Beams, beam => Assert.Equal(200, beam.GeometryWidthMm, 3));
+    }
+
     private static CadStructureTransferPackage Package(
         IReadOnlyList<CadStructureSegment> segments,
         params CadStructureAnnotation[] annotations) =>
