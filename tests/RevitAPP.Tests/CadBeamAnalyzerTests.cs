@@ -257,6 +257,35 @@ public sealed class CadBeamAnalyzerTests
         Assert.Single(joined.Beams);
     }
 
+    [Fact]
+    public void Analyze_ShortBeamSharingRailWithLongBeam_ReturnsBothBeams()
+    {
+        // A long DK1 spans the bay while a short DK2 stub starts on the same lower boundary
+        // line. Both boundaries land in one rail bucket, so rail coverage has to be measured
+        // over the pair extent, not over everything the rail touches elsewhere.
+        var package = Package(
+            new[]
+            {
+                Segment(1, 0, -100, 20000, -100),
+                Segment(2, 0, 100, 20000, 100),
+                Segment(3, 2000, -300, 4450, -300),
+                Segment(4, 2000, -100, 4450, -100)
+            },
+            Annotation(100, 10000, 400, "DK1-200x450"),
+            Annotation(101, 3200, -500, "DK2-200x300"));
+
+        var result = CadBeamAnalyzer.Analyze(package,
+            new[] { Segment(90, 0, 0, 20000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        Assert.Equal(2, result.Beams.Count);
+        Assert.Contains(result.Beams, beam => beam.Mark == "DK1" && beam.TextHeightMm == 450);
+        var stub = Assert.Single(result.Beams, beam => beam.Mark == "DK2");
+        Assert.Equal(2450, stub.LengthMm, 3);
+        Assert.Equal(200, stub.GeometryWidthMm, 3);
+        Assert.Equal(300, stub.TextHeightMm);
+    }
+
     private static CadStructureTransferPackage Package(
         IReadOnlyList<CadStructureSegment> segments,
         params CadStructureAnnotation[] annotations) =>

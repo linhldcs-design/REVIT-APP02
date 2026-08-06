@@ -139,8 +139,14 @@ public static class CadBeamAnalyzer
                 var b = Dot(piece.Segment.End, direction);
                 return new Interval(Math.Min(a, b), Math.Max(a, b));
             }), gapToleranceMm);
+            var sources = group.Select(piece =>
+            {
+                var a = Dot(piece.Segment.Start, direction);
+                var b = Dot(piece.Segment.End, direction);
+                return new RailSource(piece.Segment.Id, Math.Min(a, b), Math.Max(a, b));
+            }).ToArray();
             return new Rail(index + 1, direction, normal, offset, intervals,
-                group.Select(piece => piece.Segment.Id).Distinct().ToArray());
+                group.Select(piece => piece.Segment.Id).Distinct().ToArray(), sources);
         }).ToArray();
     }
 
@@ -171,12 +177,27 @@ public static class CadBeamAnalyzer
             if (width > options.MaximumWidthMm) break;
             if (width < options.MinimumWidthMm || width > options.MaximumWidthMm) continue;
 
-            var start = Math.Min(first.Start, second.Start);
-            var end = Math.Max(first.End, second.End);
+            var facings = FacingIntervals(first, second, options.GapJoinToleranceMm);
+            // Fragments that each look solid on their own can still be too sparse to be one beam.
+            // Measuring across the whole facing stretch keeps the gap tolerance meaningful: raising
+            // it bridges the fragments, lowering it leaves them below the coverage gate.
+            var span = facings.Count == 0
+                ? default
+                : new Interval(facings.Min(item => item.Start), facings.Max(item => item.End));
+            var spanLength = facings.Count == 0 ? 0.0 : span.End - span.Start;
+            var spanValid = spanLength <= 0.0
+                            || (CoveredWithin(first, span) / spanLength >= options.MinimumRailCoverageRatio
+                                && CoveredWithin(second, span) / spanLength >= options.MinimumRailCoverageRatio);
+            if (!spanValid) continue;
+
+            foreach (var facing in facings)
+            {
+            var start = facing.Start;
+            var end = facing.End;
             var extent = end - start;
             if (extent < options.MinimumLineLengthMm) continue;
-            var firstCoverage = first.CoveredLength / extent;
-            var secondCoverage = second.CoveredLength / extent;
+            var firstCoverage = CoveredWithin(first, facing) / extent;
+            var secondCoverage = CoveredWithin(second, facing) / extent;
             var centerOffset = (first.Offset + second.Offset) / 2.0;
             var grid = FindGridAxis(grids, first.Direction, centerOffset);
             var onGrid = grid is not null;
@@ -193,12 +214,13 @@ public static class CadBeamAnalyzer
             var best = matches.OrderBy(match => Math.Abs(match.WidthMm - width))
                 .ThenBy(match => match.Score).FirstOrDefault();
             var candidate = CreateCandidate(axisStart, axisEnd, width, best, onGrid,
-                first.SourceIds.Concat(second.SourceIds).Distinct().ToArray());
+                SourceIdsWithin(first, facing).Concat(SourceIdsWithin(second, facing)).Distinct().ToArray());
             var widthPenalty = best is null ? 500.0 : Math.Abs(best.WidthMm - width);
             var gridBonus = onGrid ? -100.0 : 0.0;
             var coveragePenalty = (2.0 - firstCoverage - secondCoverage) * 1000.0;
             var baseScore = gridBonus + coveragePenalty;
             pairs.Add(new ScoredPair(candidate, widthPenalty + baseScore, matches, baseScore));
+            }
             }
             }
         }
@@ -208,11 +230,45 @@ public static class CadBeamAnalyzer
         // Competing pairs may overlap on an axis, while a real section-width transition produces
         // adjacent, non-overlapping pairs. Retain the best compatible interval set rather than one
         // pair for the whole axis, otherwise a 200 -> 300 width transition loses half the run.
-        return pairs
+        var selected = pairs
             .GroupBy(item => AxisKey(item.Candidate))
             .SelectMany(SelectCompatiblePairs)
+            .ToArray();
+
+        return RemoveEnvelopePairs(selected)
             .SelectMany(pair => ExpandSections(pair, grids))
             .ToArray();
+    }
+
+    /// <summary>
+    /// Drops pairs formed from the outer boundaries of two neighbouring beams. When a stub meets a
+    /// longer beam, the stub's far rail can also pair with the long beam's far rail and yield a
+    /// candidate as wide as both beams together. Such a pair straddles a narrower pair that has an
+    /// annotation, so it is an envelope of real beams rather than a beam of its own.
+    /// </summary>
+    private static IReadOnlyList<ScoredPair> RemoveEnvelopePairs(IReadOnlyList<ScoredPair> pairs) =>
+        pairs.Where(pair => !pairs.Any(inner => IsEnvelopeOf(pair, inner))).ToArray();
+
+    private static bool IsEnvelopeOf(ScoredPair outer, ScoredPair inner)
+    {
+        if (ReferenceEquals(outer, inner)) return false;
+        if (inner.Candidate.GeometryWidthMm >= outer.Candidate.GeometryWidthMm - SectionToleranceMm)
+            return false;
+        if (string.IsNullOrEmpty(inner.Candidate.Mark) && !string.IsNullOrEmpty(outer.Candidate.Mark))
+            return false;
+
+        var outerDirection = Normalize(outer.Candidate.EndMm - outer.Candidate.StartMm);
+        var innerDirection = Normalize(inner.Candidate.EndMm - inner.Candidate.StartMm);
+        if (Math.Abs(Dot(CanonicalDirection(outerDirection), CanonicalDirection(innerDirection)))
+            < Math.Cos(AngleToleranceDegrees * Math.PI / 180.0)) return false;
+
+        var normal = new CadStructurePoint2(-outerDirection.Y, outerDirection.X);
+        var separation = Math.Abs(Dot(inner.Candidate.StartMm, normal) - Dot(outer.Candidate.StartMm, normal));
+        if (separation > (outer.Candidate.GeometryWidthMm - inner.Candidate.GeometryWidthMm) / 2.0
+            + SectionToleranceMm) return false;
+
+        var overlap = InteriorOverlap(outer.Candidate, inner.Candidate);
+        return overlap >= inner.Candidate.LengthMm - SectionToleranceMm;
     }
 
     private static IReadOnlyList<ScoredPair> SelectCompatiblePairs(IEnumerable<ScoredPair> source)
@@ -542,6 +598,49 @@ public static class CadBeamAnalyzer
         return merged;
     }
 
+    /// <summary>
+    /// Stretches of an axis where a pair of rails can form beams. A rail collects every collinear
+    /// boundary in the drawing, so a short stub sharing a line with a long beam would otherwise
+    /// inherit the long beam's extent. Stations covered by either rail stay in one stretch, which
+    /// keeps staggered fragments and interior gaps as a single continuous beam; a stretch ends
+    /// only where neither rail has geometry, which is what separates unrelated beams.
+    /// </summary>
+    private static IReadOnlyList<Interval> FacingIntervals(Rail first, Rail second, double gap)
+    {
+        var shared = new Interval(
+            Math.Max(first.Start, second.Start),
+            Math.Min(first.End, second.End));
+        if (shared.End <= shared.Start) return Array.Empty<Interval>();
+        var windows = new List<Interval>();
+        foreach (var window in MergeIntervals(first.Intervals.Concat(second.Intervals), gap))
+        {
+            var start = Math.Max(window.Start, shared.Start);
+            var end = Math.Min(window.End, shared.End);
+            if (end <= start) continue;
+            var clamped = new Interval(start, end);
+            if (!first.Intervals.Any(interval => Overlaps(interval, clamped))
+                || !second.Intervals.Any(interval => Overlaps(interval, clamped))) continue;
+            windows.Add(clamped);
+        }
+        return windows;
+    }
+
+    private static bool Overlaps(Interval first, Interval second) =>
+        Math.Min(first.End, second.End) - Math.Max(first.Start, second.Start) > 0.0;
+
+    private static double CoveredWithin(Rail rail, Interval window) =>
+        rail.Intervals.Sum(interval => Math.Max(
+            0.0,
+            Math.Min(interval.End, window.End) - Math.Max(interval.Start, window.Start)));
+
+    private static IReadOnlyList<int> SourceIdsWithin(Rail rail, Interval window) =>
+        rail.Sources
+            .Where(source => Math.Min(source.End, window.End)
+                             - Math.Max(source.Start, window.Start) > 0.0)
+            .Select(source => source.SegmentId)
+            .Distinct()
+            .ToArray();
+
     private static string AxisKey(CadBeamCandidate candidate)
     {
         var direction = CanonicalDirection(Normalize(candidate.EndMm - candidate.StartMm));
@@ -618,12 +717,15 @@ public static class CadBeamAnalyzer
         CadStructurePoint2 Normal,
         double Offset,
         IReadOnlyList<Interval> Intervals,
-        IReadOnlyList<int> SourceIds)
+        IReadOnlyList<int> SourceIds,
+        IReadOnlyList<RailSource> Sources)
     {
         public double Start => Intervals.Min(interval => interval.Start);
         public double End => Intervals.Max(interval => interval.End);
         public double CoveredLength => Intervals.Sum(interval => interval.End - interval.Start);
     }
+
+    private readonly record struct RailSource(int SegmentId, double Start, double End);
 
     private readonly record struct Interval(double Start, double End);
     private readonly record struct RailBucket(int Angle, long Offset);
