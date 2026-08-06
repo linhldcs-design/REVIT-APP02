@@ -286,24 +286,35 @@ internal static class AutoCadModelSelectionService
             for (var index = 0; index + 1 < values.Length; index += stride)
                 points.Add(transform.Apply(new CadStructurePoint2(values[index], values[index + 1])));
 
-            // V1 detects straight rectangular outlines only. Treating arc chords as
-            // straight sides could turn a rounded/curved block into a false column.
+            // V1 detects straight outlines only. Treating an arc chord as a straight side could
+            // turn a rounded block into a false column, so a bulged side is dropped -- but the
+            // straight sides of the same polyline are still real beam boundaries. Discarding the
+            // whole outline would lose a beam whenever one corner happens to be filleted.
+            var curved = new bool[points.Count];
+            var curvedSides = 0;
             if (objectName is "AcDbPolyline" or "AcDb2dPolyline")
             {
                 for (var index = 0; index < points.Count; index++)
                 {
                     var bulge = Safe(() => Convert.ToDouble(Call(entity, "GetBulge", index)));
                     if (Math.Abs(bulge) <= 1e-9) continue;
-                    Log.Warning("Skipped curved polyline on layer {Layer}", layer);
-                    return;
+                    curved[index] = true;
+                    curvedSides++;
                 }
             }
 
             for (var index = 0; index < points.Count - 1; index++)
+            {
+                if (curved[index]) continue;
                 AddSegment(points[index], points[index + 1], layer, polylinePath, sourceText);
+            }
 
-            if (closed && points.Count > 2)
+            if (closed && points.Count > 2 && !curved[points.Count - 1])
                 AddSegment(points[^1], points[0], layer, polylinePath, sourceText);
+
+            if (curvedSides > 0)
+                Log.Warning("Skipped {CurvedSides} curved side(s) of a polyline on layer {Layer}",
+                    curvedSides, layer);
         }
 
         private void AddAnnotation(
