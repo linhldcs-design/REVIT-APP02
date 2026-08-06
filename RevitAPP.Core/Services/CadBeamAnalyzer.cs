@@ -93,7 +93,7 @@ public static class CadBeamAnalyzer
             .Where(rail => rail.End - rail.Start < options.MinimumLineLengthMm)
             .Sum(rail => rail.SourceIds.Count);
         var raw = PairRails(rails, grids, annotations, options);
-        var merged = MergeRuns(raw)
+        var merged = MergeRuns(raw, options.MaximumRunGapMm)
             .OrderBy(candidate => candidate.StartMm.X)
             .ThenBy(candidate => candidate.StartMm.Y)
             .Select((candidate, index) => candidate with { Id = index + 1 })
@@ -248,6 +248,17 @@ public static class CadBeamAnalyzer
 
         pairs = AssignAnnotationOwnership(pairs).ToList();
 
+        // Parallel lines that are not beam boundaries -- a wall face beside a beam, the far side
+        // of an adjacent room, a short stub between two beams -- still satisfy the width and
+        // coverage gates and would surface as candidates no annotation claims. Those cannot be
+        // created and only clutter the review, so a section has to come from a nearby label.
+        // Pairs are kept when nothing in the selection carries a section at all, since then the
+        // whole scan is unlabelled and the review is the user's only way to see that.
+        if (pairs.Any(pair => !string.IsNullOrEmpty(pair.Candidate.MatchedText)))
+            pairs = pairs
+                .Where(pair => !string.IsNullOrEmpty(pair.Candidate.MatchedText))
+                .ToList();
+
         // Competing pairs may overlap on an axis, while a real section-width transition produces
         // adjacent, non-overlapping pairs. Retain the best compatible interval set rather than one
         // pair for the whole axis, otherwise a 200 -> 300 width transition loses half the run.
@@ -257,7 +268,7 @@ public static class CadBeamAnalyzer
             .ToArray();
 
         var kept = RemoveEnvelopePairs(selected);
-        return ExtendTrimmedEnds(kept, rails)
+        return ExtendTrimmedEnds(kept, rails, options.MaximumRunGapMm)
             .SelectMany(pair => ExpandSections(pair, grids))
             .ToArray();
     }
@@ -303,7 +314,8 @@ public static class CadBeamAnalyzer
     /// </summary>
     private static IReadOnlyList<ScoredPair> ExtendTrimmedEnds(
         IReadOnlyList<ScoredPair> pairs,
-        IReadOnlyList<Rail> rails)
+        IReadOnlyList<Rail> rails,
+        double maximumRunGapMm)
     {
         return pairs.Select(pair =>
         {
@@ -319,9 +331,17 @@ public static class CadBeamAnalyzer
                 && Math.Abs(Math.Abs(rail.Offset - offset) - half) <= SectionToleranceMm).ToArray();
             if (reach.Length == 0) return pair;
 
+            // Follow the surviving boundary only while its geometry keeps up: step out interval by
+            // interval and stop at the first break wider than a run may span. Reaching straight to
+            // the rail's far end would jump a gap that separates two beams.
+            var covered = MergeIntervals(
+                reach.SelectMany(rail => rail.Intervals), maximumRunGapMm);
+            var touching = covered.FirstOrDefault(interval =>
+                Math.Min(interval.End, end) - Math.Max(interval.Start, start) > SectionToleranceMm);
+            if (touching.End <= touching.Start) return pair;
             var grown = new Interval(
-                Math.Min(start, reach.Min(rail => rail.Start)),
-                Math.Max(end, reach.Max(rail => rail.End)));
+                Math.Min(start, touching.Start),
+                Math.Max(end, touching.End));
 
             foreach (var other in pairs)
             {
@@ -536,7 +556,9 @@ public static class CadBeamAnalyzer
         Math.Abs(first.WidthMm - second.WidthMm) <= SectionToleranceMm
         && Math.Abs(first.HeightMm - second.HeightMm) <= SectionToleranceMm;
 
-    private static IReadOnlyList<CadBeamCandidate> MergeRuns(IReadOnlyList<CadBeamCandidate> candidates)
+    private static IReadOnlyList<CadBeamCandidate> MergeRuns(
+        IReadOnlyList<CadBeamCandidate> candidates,
+        double maximumRunGapMm)
     {
         var result = new List<CadBeamCandidate>();
         foreach (var group in candidates.GroupBy(AxisKey))
@@ -555,6 +577,14 @@ public static class CadBeamAnalyzer
                     continue;
                 }
                 var previous = result[^1];
+                // A break wider than the configured maximum reads as two beams that happen to
+                // share an axis and a section, not as one beam interrupted by a support.
+                var gap = Dot(candidate.StartMm, direction) - Dot(previous.EndMm, direction);
+                if (gap > maximumRunGapMm)
+                {
+                    result.Add(candidate);
+                    continue;
+                }
                 result[^1] = previous with
                 {
                     EndMm = candidate.EndMm,

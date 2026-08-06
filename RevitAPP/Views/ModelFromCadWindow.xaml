@@ -376,6 +376,7 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Family:"
                                                    Style="{DynamicResource TextBlock.Label}"/>
@@ -422,7 +423,13 @@
                                         <TextBox Grid.Row="4" Grid.Column="1" Margin="0,8,8,0"
                                                  Text="{Binding TextSearchDistanceText, UpdateSourceTrigger=PropertyChanged}"
                                                  Style="{DynamicResource TextBox.Standard}"/>
-                                        <Button Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                                        <TextBlock Grid.Row="4" Grid.Column="2" Text="Gap Max:" Margin="0,8,0,0"
+                                                   ToolTip="Khe lớn hơn giá trị này sẽ tách thành hai dầm riêng, dù cùng trục và cùng tiết diện. Để trống nghĩa là không giới hạn (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="4" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding MaximumRunGapText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <Button Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,8,0,0"
                                                 Content="Apply / Re-analyze"
                                                 Style="{DynamicResource Button.Secondary}"
                                                 Command="{Binding ApplyBeamAnalysisCommand}"/>

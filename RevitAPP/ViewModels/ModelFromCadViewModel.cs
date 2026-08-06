@@ -158,7 +158,10 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private string _gapJoinText = "300";
 
     [ObservableProperty]
-    private string _textSearchDistanceText = "1000";
+    private string _textSearchDistanceText = "2000";
+
+    [ObservableProperty]
+    private string _maximumRunGapText = string.Empty;
 
     [ObservableProperty]
     private CadBeamRowViewModel? _selectedBeam;
@@ -240,11 +243,17 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     public double GapJoinMm => ParseNumber(GapJoinText);
     public double MinimumBeamLineMm => ParseNumber(MinimumBeamLineText);
     public double TextSearchDistanceMm => ParseNumber(TextSearchDistanceText);
+    // Blank means no limit, so collinear stretches of the same section stay one beam however far
+    // apart they sit. A number splits them once the break exceeds it.
+    public double MaximumRunGapMm =>
+        TryNumber(MaximumRunGapText, out var value) ? value : double.MaxValue;
     public bool CanSelectBeamLines => HasCadData && SelectedGridAxes.Count > 0 && BeamAnalysisSettingsValid;
     public bool BeamAnalysisSettingsValid =>
         TryNumber(MinimumBeamLineText, out var minLine) && minLine >= 0
         && TryNumber(GapJoinText, out var gap) && gap is >= 0 and <= 2000
-        && TryNumber(TextSearchDistanceText, out var textSearch) && textSearch >= 0;
+        && TryNumber(TextSearchDistanceText, out var textSearch) && textSearch >= 0
+        && (string.IsNullOrWhiteSpace(MaximumRunGapText)
+            || (TryNumber(MaximumRunGapText, out var runGap) && runGap >= 0));
     public bool BeamSettingsValid =>
         BeamAnalysisSettingsValid
         && !BeamAnalysisDirty
@@ -483,6 +492,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     partial void OnMinimumBeamLineTextChanged(string value) => NotifyBeamAnalysisSettings();
     partial void OnGapJoinTextChanged(string value) => NotifyBeamAnalysisSettings();
     partial void OnTextSearchDistanceTextChanged(string value) => NotifyBeamAnalysisSettings();
+    partial void OnMaximumRunGapTextChanged(string value) => NotifyBeamAnalysisSettings();
     partial void OnBeamAnalysisDirtyChanged(bool value) => NotifyState();
 
     private void OnItemChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -566,7 +576,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private CadBeamAnalysisOptions BeamOptions() => new(
         MinimumLineLengthMm: MinimumBeamLineMm,
         GapJoinToleranceMm: GapJoinMm,
-        TextSearchDistanceMm: TextSearchDistanceMm);
+        TextSearchDistanceMm: TextSearchDistanceMm,
+        MaximumRunGapMm: MaximumRunGapMm);
 
     private CadStructureTransferPackage GridPackageForBeam()
     {

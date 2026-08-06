@@ -59,7 +59,9 @@ public sealed record CadStructureTransferPackage(
 public sealed record CadBeamAnalysisOptions(
     double MinimumLineLengthMm = 500.0,
     double GapJoinToleranceMm = 300.0,
-    double TextSearchDistanceMm = 1000.0,
+    // Labels sit well clear of the beam they name so they stay readable among dimensions, so a
+    // metre is not far enough to reach them on a real drawing.
+    double TextSearchDistanceMm = 2000.0,
     double MinimumRailCoverageRatio = 0.5,
     double MinimumWidthMm = 100.0,
     double MaximumWidthMm = 1000.0,
@@ -67,7 +69,11 @@ public sealed record CadBeamAnalysisOptions(
     // element or copying a bay leaves a few millimetres of drift. Grouping them within this
     // distance keeps a broken boundary as one rail, so the beam stays a single run instead of
     // splitting into shorter runs whose widths drift away from the annotated section.
-    double RailOffsetToleranceMm = 10.0);
+    double RailOffsetToleranceMm = 10.0,
+    // Largest break that still reads as one beam interrupted by a support. Beyond it, two
+    // stretches sharing an axis and a section are taken to be separate beams. The default is
+    // wide enough that only a deliberately lowered value separates them.
+    double MaximumRunGapMm = 1_000_000.0);
 
 public enum CadBeamCandidateStatus
 {

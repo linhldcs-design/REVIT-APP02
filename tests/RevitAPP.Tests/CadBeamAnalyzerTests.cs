@@ -349,6 +349,56 @@ public sealed class CadBeamAnalyzerTests
         Assert.Equal(12000, beam.LengthMm, 3);
     }
 
+    [Fact]
+    public void Analyze_ParallelLineWithoutAnnotation_DoesNotBecomeCandidate()
+    {
+        // A wall face running beside a beam satisfies the width and coverage gates on its own.
+        // No label claims it, so it must not reach the review as an uncreatable row.
+        var result = CadBeamAnalyzer.Analyze(
+            Package(
+                new[]
+                {
+                    Segment(1, 0, -100, 10000, -100),
+                    Segment(2, 0, 100, 10000, 100),
+                    Segment(3, 0, 700, 10000, 700)
+                },
+                Annotation(100, 5000, 400, "DK1-200x450")),
+            new[] { Segment(90, 0, 0, 10000, 0, "GRID") },
+            new CadBeamAnalysisOptions());
+
+        var beam = Assert.Single(result.Beams);
+        Assert.Equal(200, beam.GeometryWidthMm, 3);
+        Assert.Equal("DK1", beam.Mark);
+    }
+
+    [Fact]
+    public void Analyze_MaximumRunGap_SplitsStretchesBeyondTheLimit()
+    {
+        var segments = new[]
+        {
+            Segment(1, 0, -100, 5000, -100),
+            Segment(2, 0, 100, 5000, 100),
+            Segment(3, 9000, -100, 14000, -100),
+            Segment(4, 9000, 100, 14000, 100)
+        };
+        var annotations = new[]
+        {
+            Annotation(100, 2500, 300, "DK1-200x450"),
+            Annotation(101, 11500, 300, "DK1-200x450")
+        };
+        var grids = new[] { Segment(90, 0, 0, 14000, 0, "GRID") };
+
+        var joined = CadBeamAnalyzer.Analyze(
+            Package(segments, annotations), grids, new CadBeamAnalysisOptions());
+        var split = CadBeamAnalyzer.Analyze(
+            Package(segments, annotations), grids,
+            new CadBeamAnalysisOptions(MaximumRunGapMm: 300));
+
+        Assert.Equal(14000, Assert.Single(joined.Beams).LengthMm, 3);
+        Assert.Equal(2, split.Beams.Count);
+        Assert.All(split.Beams, beam => Assert.Equal(5000, beam.LengthMm, 3));
+    }
+
     private static CadStructureTransferPackage Package(
         IReadOnlyList<CadStructureSegment> segments,
         params CadStructureAnnotation[] annotations) =>
