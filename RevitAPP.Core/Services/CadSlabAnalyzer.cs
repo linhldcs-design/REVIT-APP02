@@ -320,20 +320,29 @@ public static class CadSlabAnalyzer
         // edge. Tracing over the columns would leave a saw-tooth outline with a sliver of slab
         // beside every one of them.
         var poursAndInteriorVoids = cells.Where(cell => !cell.IsColumn).ToArray();
+        // The floor has one outside edge and nothing else. Whatever stitching left inside it --
+        // loops round bays the trace stepped over -- is discarded here, so the next steps start
+        // from a clean outline and cut into it only what the plan asks for.
         var totalBoundary = BuildGroupBoundary(poursAndInteriorVoids);
         if (totalBoundary is not null)
         {
+            totalBoundary = totalBoundary with { Holes = Array.Empty<CadSlabLoop>() };
             var plainCells = resolved
                 .Where(cell => string.IsNullOrEmpty(cell.HatchStyleKey))
                 .ToArray();
-            // The floor is one pour unless the plan states more than one section for it. Where it
-            // does, each stated section is a slab and the single edge no longer describes them.
+            // The floor has one outside edge. Where the plan states more than one section for it,
+            // the largest section keeps that edge and the rest are cut out of it, the same way a
+            // hatched area is: the edge is traced once and never per section.
             var plainSections = plainCells
                 .GroupBy(cell => (
                     Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
                     Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
+                .OrderByDescending(section => section.Sum(cell => cell.Loop.AreaMm2))
                 .ToArray();
-            var plain = plainSections.Length == 1 ? plainCells : Array.Empty<CadSlabCell>();
+            var plain = plainSections.Length > 0
+                ? plainSections[0].ToArray()
+                : Array.Empty<CadSlabCell>();
+            var otherSections = plainSections.Skip(1).ToArray();
             if (plain.Length > 0)
             {
                 var outerEdge = totalBoundary.Outer;
@@ -395,7 +404,21 @@ public static class CadSlabAnalyzer
                     .Select(region => region!)
                     .ToArray();
 
-                return new[] { wholeFloor }.Concat(hatchedRegions).ToArray();
+                // A plain area the plan gives another level is a slab inside the floor, exactly
+                // like a hatched one, so it is built the same way rather than by tracing a second
+                // outside edge.
+                var otherRegions = otherSections
+                    .SelectMany(section => ConnectedParts(section.ToArray()))
+                    .Select((part, index) =>
+                        BuildRegion(part, index + 2 + hatchedRegions.Length, cells, marks, options))
+                    .Where(region => region is not null)
+                    .Select(region => region!)
+                    .ToArray();
+
+                return new[] { wholeFloor }
+                    .Concat(hatchedRegions)
+                    .Concat(otherRegions)
+                    .ToArray();
             }
         }
 
@@ -421,21 +444,16 @@ public static class CadSlabAnalyzer
             // does not push the edge of the floor inwards, it makes a hole in it. Leaving the
             // marked cells out of this step would shrink the slab to the shape around them.
             var enclosed = members
-                .Concat(cells.Where(cell => (cell.IsOpening || cell.IsColumn)
-                                            && TouchesAnyCell(cell, members)))
+                .Concat(cells.Where(cell => cell.IsOpening && TouchesAnyCell(cell, members)))
                 .ToArray();
             var boundary = BuildGroupBoundary(enclosed);
             if (boundary is null) continue;
             var outer = boundary.Outer;
             if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) continue;
 
-            // Voids inside the pour come from two places: stitching leaves a loop around a part
-            // the group never covered, and cells marked as openings or columns sit inside it.
-            // Adjacent marked cells form one void, so a stair core drawn as several bays is cut
-            // as a single opening rather than as a grid of small ones.
-            var voidCells = enclosed
-                .Where(cell => cell.IsColumn)
-                .ToArray();
+            // A column is cast with the floor around it, so nothing is cut for it. The only voids
+            // are the areas the user picked, handled below.
+            var voidCells = Array.Empty<CadSlabCell>();
             // An outline the user selected is the hole, exactly as drawn. Rebuilding it from the
             // bays it covers would follow the slab lines crossing it instead of its own shape.
             var selectedHoles = marks
