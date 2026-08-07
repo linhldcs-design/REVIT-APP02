@@ -117,9 +117,21 @@ public static class CadSlabAnalyzer
         if (regions.Count == 0)
             warnings.Add("Không dựng được vùng sàn kín nào từ line đã quét.");
 
+        var styles = cells
+            .Select(cell => cell.HatchStyleKey)
+            .Where(key => !string.IsNullOrEmpty(key))
+            .Distinct()
+            .OrderBy(key => key)
+            .ToArray();
+        if (styles.Length > 1)
+            warnings.Add($"Bản vẽ dùng {styles.Length} kiểu hatch — mỗi kiểu là một mức sàn riêng.");
+
         var anchor = slabPackage.SourceAnchor * scale - origin;
         return new CadSlabAnalysis(origin, anchor, regions, cells,
-            shortLines, unclosed, orphanHatches, warnings, null);
+            shortLines, unclosed, orphanHatches, warnings, null)
+        {
+            HatchStyles = styles
+        };
     }
 
     private static IReadOnlyList<CadSlabCell> ClassifyCells(
@@ -140,7 +152,8 @@ public static class CadSlabAnalyzer
 
             var thickness = ReadThickness(inside, options);
             var elevation = ReadElevation(inside);
-            var lowered = hatches.Any(hatch => ContainsPoint(hatch.BoundaryMm, centroid));
+            var hatch = hatches.FirstOrDefault(item => ContainsPoint(item.BoundaryMm, centroid));
+            var lowered = hatch is not null;
             var opening = HasCrossMark(face, segments);
             var text = inside.Length > 0 ? string.Join(" ", inside.Select(item => item.Text)) : string.Empty;
 
@@ -150,6 +163,7 @@ public static class CadSlabAnalyzer
                 ElevationMm = elevation.Value,
                 IsOpening = opening,
                 IsLowered = lowered,
+                HatchStyleKey = hatch?.StyleKey ?? string.Empty,
                 IsBeamStrip = IsNarrowStrip(face, options.MaximumBeamStripWidthMm),
                 MatchedText = text
             });
@@ -245,10 +259,27 @@ public static class CadSlabAnalyzer
         CadSlabAnalysisOptions options)
     {
         var poured = cells.Where(cell => !cell.IsOpening).ToArray();
-        var groups = poured
+
+        // A beam drawn by both its faces leaves a narrow strip between two bays. The pour runs
+        // across it, so the strip takes the elevation and thickness of the bays it separates
+        // instead of standing as a slab of its own with no label of its own.
+        var resolved = poured.Select(cell =>
+        {
+            if (!cell.IsBeamStrip || cell.ThicknessMm is not null) return cell;
+            var host = NearestLabelledNeighbour(cell, poured);
+            return host is null
+                ? cell
+                : cell with { ThicknessMm = host.ThicknessMm, ElevationMm = host.ElevationMm };
+        }).ToArray();
+
+        // Hatch style joins elevation and thickness as a key. A plan draws each drop with its own
+        // pattern, so bays hatched differently are different slabs even where neither carries a
+        // level label; the drawing distinguishes them and the model should too.
+        var groups = resolved
             .GroupBy(cell => (
                 Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
-                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
+                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm),
+                cell.HatchStyleKey))
             .ToArray();
 
         var regions = new List<CadSlabRegionCandidate>();
@@ -293,6 +324,21 @@ public static class CadSlabAnalyzer
         return regions;
     }
 
+    /// <summary>
+    /// The labelled bay a strip belongs to. A strip sits between the bays it separates, so the
+    /// nearest labelled cell is the slab it is part of.
+    /// </summary>
+    private static CadSlabCell? NearestLabelledNeighbour(
+        CadSlabCell strip,
+        IReadOnlyList<CadSlabCell> cells)
+    {
+        var centre = strip.CentroidMm;
+        return cells
+            .Where(cell => cell.Id != strip.Id && !cell.IsBeamStrip && cell.ThicknessMm is not null)
+            .OrderBy(cell => cell.CentroidMm.DistanceTo(centre))
+            .FirstOrDefault();
+    }
+
     private static CadSlabRegionStatus ResolveStatus(IReadOnlyList<CadSlabCell> members)
     {
         if (members.All(cell => cell.ThicknessMm is null)) return CadSlabRegionStatus.MissingThickness;
@@ -309,7 +355,10 @@ public static class CadSlabAnalyzer
     {
         if (options.OverrideElevation) return options.DefaultOffsetMm;
         if (cell.ElevationMm is not null) return cell.ElevationMm.Value;
-        return cell.IsLowered ? options.LoweredDefaultOffsetMm : options.DefaultOffsetMm;
+        if (!cell.IsLowered) return options.DefaultOffsetMm;
+        return options.HatchOffsetsMm.TryGetValue(cell.HatchStyleKey, out var perStyle)
+            ? perStyle
+            : options.LoweredDefaultOffsetMm;
     }
 
     /// <summary>

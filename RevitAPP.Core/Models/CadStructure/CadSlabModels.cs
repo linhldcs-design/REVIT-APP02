@@ -54,6 +54,12 @@ public sealed record CadSlabCell(
     public bool IsOpening { get; init; }
     public bool IsLowered { get; init; }
     /// <summary>
+    /// Which hatch style covers this cell, empty when none does. A plan draws each drop with its
+    /// own pattern, so cells hatched alike belong to the same slab and cells hatched differently
+    /// do not, however many styles the drawing uses.
+    /// </summary>
+    public string HatchStyleKey { get; init; } = string.Empty;
+    /// <summary>
     /// A narrow strip between two cells is the footprint of a beam drawn by both its faces, not a
     /// slab of its own, so it is absorbed into the slab rather than kept as a region.
     /// </summary>
@@ -118,13 +124,32 @@ public sealed record CadSlabAnalysis(
     string? Error)
 {
     public bool IsValid => Error is null;
+
+    /// <summary>
+    /// Hatch styles the scan found, so the user can set a drop for each one. However many the
+    /// drawing uses, each becomes its own slab.
+    /// </summary>
+    public IReadOnlyList<string> HatchStyles { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
 /// A hatched area from the drawing. Hatches mark a lowered slab rather than describe its boundary,
-/// so they classify cells and never contribute edges.
+/// so they classify cells and never contribute edges. A plan uses a different pattern or spacing
+/// for each drop, so the style is carried through and cells hatched alike are grouped together.
 /// </summary>
-public sealed record CadHatchRegion(int Id, IReadOnlyList<CadStructurePoint2> BoundaryMm);
+public sealed record CadHatchRegion(int Id, IReadOnlyList<CadStructurePoint2> BoundaryMm)
+{
+    public string PatternName { get; init; } = string.Empty;
+    public double PatternScale { get; init; }
+    public double PatternAngleDegrees { get; init; }
+
+    /// <summary>
+    /// Identity of the hatch style, used to tell one drop from another. Scale and angle are
+    /// rounded so that two areas hatched with the same settings compare equal.
+    /// </summary>
+    public string StyleKey =>
+        $"{PatternName}|{Math.Round(PatternScale, 3)}|{Math.Round(PatternAngleDegrees, 1)}";
+}
 
 public sealed record CadSlabAnalysisOptions(
     // Line ends almost never meet exactly in a drawing, and a boundary that does not close leaves
@@ -142,7 +167,18 @@ public sealed record CadSlabAnalysisOptions(
     double MaximumThicknessMm = 500.0,
     double DefaultThicknessMm = 100.0,
     double DefaultOffsetMm = 0.0,
+    // Fallback drop for a hatched bay whose label is missing. A plan may use several patterns for
+    // several drops, so the per-style values below take precedence when the user fills them in.
     double LoweredDefaultOffsetMm = -50.0,
     double TextSearchDistanceMm = 2000.0,
     bool OverrideThickness = false,
-    bool OverrideElevation = false);
+    bool OverrideElevation = false)
+{
+    /// <summary>
+    /// Drop per hatch style, keyed by <see cref="CadHatchRegion.StyleKey"/>. The analyzer reports
+    /// the styles it found so the user can give each one its own level; a style with no entry
+    /// falls back to <see cref="LoweredDefaultOffsetMm"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, double> HatchOffsetsMm { get; init; } =
+        new Dictionary<string, double>();
+}

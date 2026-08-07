@@ -191,6 +191,127 @@ public sealed class CadSlabAnalyzerTests
         Assert.Empty(result.Regions);
     }
 
+    [Fact]
+    public void Analyze_BaysSeparatedByBeamStrips_MergeIntoOneSlab()
+    {
+        // Three bays at one elevation with a beam drawn by both faces between them. The pour runs
+        // across the beams, so the strips are absorbed and the result is a single slab.
+        var segments = new List<CadStructureSegment>();
+        var id = 1;
+        double[] stations = { 0, 4000, 4200, 8000, 8200, 12000 };
+        foreach (var y in new[] { 0.0, 3000.0 })
+            for (var index = 0; index < stations.Length - 1; index++)
+                segments.Add(Segment(id++, stations[index], y, stations[index + 1], y));
+        foreach (var x in stations)
+            segments.Add(Segment(id++, x, 0, x, 3000));
+
+        var annotations = new[]
+        {
+            Annotation(200, 2000, 1500, "-0.050 Hs=120"),
+            Annotation(201, 6100, 1500, "-0.050 Hs=120"),
+            Annotation(202, 10100, 1500, "-0.050 Hs=120")
+        };
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments, annotations),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(120, slab.EffectiveThicknessMm, 3);
+        Assert.Equal(-50, slab.EffectiveOffsetMm, 3);
+        Assert.Equal(2, slab.AbsorbedStripCount);
+        Assert.Equal(CadSlabRegionStatus.Ready, slab.Status);
+    }
+
+    [Fact]
+    public void Analyze_LabelWrittenOnTwoLines_ReadsBothValues()
+    {
+        // The plan stacks the elevation above the thickness in one label.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Rectangle(1, 0, 0, 4000, 3000),
+                Annotation(100, 2000, 1500, "+0.000\\PHs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(0, slab.EffectiveOffsetMm, 3);
+        Assert.Equal(100, slab.EffectiveThicknessMm, 3);
+    }
+
+    [Fact]
+    public void Analyze_ThreeHatchStyles_ProduceThreeSlabsAtTheirOwnDrops()
+    {
+        // A plan draws each drop with its own pattern. However many patterns it uses, each is a
+        // slab of its own, and each takes the drop the user gave that style.
+        var segments = Grid(3, 1, 4000, 3000);
+        var annotations = new[]
+        {
+            Annotation(200, 2000, 1500, "Hs=100"),
+            Annotation(201, 6000, 1500, "Hs=100"),
+            Annotation(202, 10000, 1500, "Hs=100")
+        };
+        var hatches = new[]
+        {
+            Hatch(1, 0, 0, 4000, 3000, "ANSI31", 1.0),
+            Hatch(2, 4000, 0, 8000, 3000, "ANSI31", 2.0),
+            Hatch(3, 8000, 0, 12000, 3000, "ANSI37", 1.0)
+        };
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments, annotations), hatches,
+            new CadSlabAnalysisOptions
+            {
+                HatchOffsetsMm = new Dictionary<string, double>
+                {
+                    ["ANSI31|1|0"] = -50,
+                    ["ANSI31|2|0"] = -100,
+                    ["ANSI37|1|0"] = -300
+                }
+            });
+
+        Assert.Equal(3, result.HatchStyles.Count);
+        Assert.Equal(3, result.Regions.Count);
+        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm + 50) < 1);
+        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm + 100) < 1);
+        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm + 300) < 1);
+        Assert.All(result.Regions, region => Assert.True(region.IsLowered));
+    }
+
+    [Fact]
+    public void Analyze_SameHatchStyleInTwoBays_StaysOneSlab()
+    {
+        var segments = Grid(2, 1, 4000, 3000);
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments,
+                Annotation(200, 2000, 1500, "Hs=100"),
+                Annotation(201, 6000, 1500, "Hs=100")),
+            new[]
+            {
+                Hatch(1, 0, 0, 4000, 3000, "ANSI31", 1.0),
+                Hatch(2, 4000, 0, 8000, 3000, "ANSI31", 1.0)
+            },
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.True(slab.IsLowered);
+        Assert.Equal(2, slab.CellIds.Count);
+    }
+
+    private static CadHatchRegion Hatch(
+        int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
+        new(id, new[]
+        {
+            new CadStructurePoint2(x1, y1),
+            new CadStructurePoint2(x2, y1),
+            new CadStructurePoint2(x2, y2),
+            new CadStructurePoint2(x1, y2)
+        })
+        {
+            PatternName = pattern,
+            PatternScale = scale
+        };
+
     private static List<CadStructureSegment> Grid(int columns, int rows, double width, double height)
     {
         var segments = new List<CadStructureSegment>();
