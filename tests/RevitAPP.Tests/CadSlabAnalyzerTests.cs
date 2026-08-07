@@ -452,6 +452,34 @@ public sealed class CadSlabAnalyzerTests
             Assert.True(hole.SignedAreaMm2 < 0, "a hole must wind the other way"));
     }
 
+    [Fact]
+    public void Analyze_StairCoreSpanningBays_IsOneHoleInsideOneSlab()
+    {
+        // A core drawn across four bays is a single opening, and the floor still reaches past it
+        // to the far side: the core makes a hole, it does not cut the slab in two.
+        var segments = Grid(4, 3, 4000, 3000);
+        var marks = new List<CadStructureSegment>();
+        var id = 900;
+        foreach (var (x0, y0, x1, y1) in new[]
+                 {
+                     (4000.0, 3000.0, 8000.0, 6000.0), (8000.0, 3000.0, 4000.0, 6000.0),
+                     (8000.0, 3000.0, 12000.0, 6000.0), (12000.0, 3000.0, 8000.0, 6000.0),
+                     (4000.0, 6000.0, 8000.0, 9000.0), (8000.0, 6000.0, 4000.0, 9000.0),
+                     (8000.0, 6000.0, 12000.0, 9000.0), (12000.0, 6000.0, 8000.0, 9000.0)
+                 })
+            marks.Add(Segment(id++, x0, y0, x1, y1));
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments, Annotation(80, 2000, 1500, "+0.000 Hs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions { OpeningMarksMm = marks });
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(96.0, slab.AreaM2, 2);
+        Assert.Single(slab.Holes);
+        Assert.Equal(8, slab.CellIds.Count);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

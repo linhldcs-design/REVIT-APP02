@@ -206,15 +206,14 @@ public static class CadSlabAnalyzer
         CadSlabLoop face,
         IReadOnlyList<CadStructureSegment> marks)
     {
+        // Judge the mark by its middle alone. A stroke ends at the corner of a bay, which is a
+        // corner of the neighbouring bays too, so testing its ends marks them open as well.
         foreach (var mark in marks)
         {
             var mid = new CadStructurePoint2(
                 (mark.Start.X + mark.End.X) / 2.0,
                 (mark.Start.Y + mark.End.Y) / 2.0);
-            if (ContainsPoint(face.VerticesMm, mid)
-                || ContainsPoint(face.VerticesMm, mark.Start)
-                || ContainsPoint(face.VerticesMm, mark.End))
-                return true;
+            if (ContainsPoint(face.VerticesMm, mid)) return true;
         }
         return false;
     }
@@ -339,7 +338,10 @@ public static class CadSlabAnalyzer
         // A plan writes the section once in a bay and leaves the cells the lines carve out of it
         // unlabelled, so the label has to reach them before grouping. Without this the labelled
         // cell forms a slab on its own and everything around it falls back to the defaults.
-        resolved = SpreadLabelsAcrossNeighbours(resolved);
+        // Spreading walks between neighbouring cells, and the cells taking concrete are not always
+        // connected to each other: a stair core can separate one part of a floor from another. The
+        // marked cells are passed in so a label can travel across them without pouring into them.
+        resolved = SpreadLabelsAcrossNeighbours(resolved, cells);
         // Spreading runs over the cells that take concrete, and openings and columns were already
         // excluded from that set, so nothing here can revive them as slabs.
 
@@ -357,16 +359,28 @@ public static class CadSlabAnalyzer
         foreach (var group in groups)
         {
             var members = group.ToArray();
-            var boundary = BuildGroupBoundary(members);
+            // The outside edge comes from the pour together with the voids inside it: a stair core
+            // does not push the edge of the floor inwards, it makes a hole in it. Leaving the
+            // marked cells out of this step would shrink the slab to the shape around them.
+            var enclosed = members
+                .Concat(cells.Where(cell => (cell.IsOpening || cell.IsColumn)
+                                            && TouchesAnyCell(cell, members)))
+                .ToArray();
+            var boundary = BuildGroupBoundary(enclosed);
             if (boundary is null) continue;
             var outer = boundary.Outer;
             if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) continue;
 
+            // Voids inside the pour come from two places: stitching leaves a loop around a part
+            // the group never covered, and cells marked as openings or columns sit inside it.
+            // Adjacent marked cells form one void, so a stair core drawn as several bays is cut
+            // as a single opening rather than as a grid of small ones.
+            var voidCells = enclosed
+                .Where(cell => cell.IsOpening || cell.IsColumn)
+                .ToArray();
             var holes = boundary.Holes
-                .Concat(cells
-                    .Where(cell => (cell.IsOpening || cell.IsColumn)
-                                   && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
-                    .Select(cell => Orient(cell.Loop, counterClockwise: false)))
+                .Concat(MergeVoids(voidCells))
+                .Select(hole => Orient(hole, counterClockwise: false))
                 // A sliver left where beams cross is not a hole worth cutting, and Revit rejects a
                 // profile carrying a loop that small.
                 .Where(hole => hole.AreaMm2 >= 10_000.0)
@@ -409,10 +423,18 @@ public static class CadSlabAnalyzer
     /// carries a label of its own or that a hatch marks differently. A bay is drawn as many cells
     /// once beams and openings cut through it, and the plan labels the bay once.
     /// </summary>
-    private static CadSlabCell[] SpreadLabelsAcrossNeighbours(CadSlabCell[] cells)
+    private static CadSlabCell[] SpreadLabelsAcrossNeighbours(
+        CadSlabCell[] cells,
+        IReadOnlyList<CadSlabCell> allCells)
     {
-        var adjacency = BuildAdjacency(cells);
-        var result = cells.ToArray();
+        // Walk over every cell, including the voids, so a label reaches the far side of a stair
+        // core. Only the cells that take concrete are returned, so the voids gain nothing from it.
+        var pouredIds = cells.Select(cell => cell.Id).ToHashSet();
+        var walk = cells
+            .Concat(allCells.Where(cell => !pouredIds.Contains(cell.Id)))
+            .ToArray();
+        var adjacency = BuildAdjacency(walk);
+        var result = walk.ToArray();
         var pending = new Queue<int>();
         for (var index = 0; index < result.Length; index++)
             if (result[index].ThicknessMm is not null || result[index].ElevationMm is not null)
@@ -437,7 +459,7 @@ public static class CadSlabAnalyzer
                 pending.Enqueue(neighbour);
             }
         }
-        return result;
+        return result.Where(cell => pouredIds.Contains(cell.Id)).ToArray();
     }
 
     private static List<int>[] BuildAdjacency(IReadOnlyList<CadSlabCell> cells)
@@ -467,10 +489,12 @@ public static class CadSlabAnalyzer
     private sealed record GroupBoundary(CadSlabLoop Outer, IReadOnlyList<CadSlabLoop> Holes);
 
     /// <summary>
-    /// The outline of a merged group. An edge shared by two cells of the group is interior to the
-    /// pour and disappears; an edge belonging to one cell is on the outside. Stitching the
-    /// remaining edges gives the slab as it is poured, which may be L-shaped or enclose a
-    /// courtyard, rather than the largest single bay.
+    /// The outline of a merged group, read the way the plan is: the outside edge first, then the
+    /// openings inside it.
+    ///
+    /// An edge shared by two cells of the group is interior to the pour and disappears; an edge
+    /// belonging to one cell is on the outside. Stitching what remains gives one loop around the
+    /// outside and one around each void within, told apart by area: the outside encloses the rest.
     /// </summary>
     private static GroupBoundary? BuildGroupBoundary(IReadOnlyList<CadSlabCell> members)
     {
@@ -526,6 +550,69 @@ public static class CadSlabAnalyzer
             .Select(loop => Orient(loop, counterClockwise: false))
             .ToArray();
         return new GroupBoundary(outer, holes);
+    }
+
+    /// <summary>
+    /// Joins voids that touch into one outline. A stair core is drawn as several bays, and cutting
+    /// each of them separately would leave lines of slab between them that no plan shows.
+    /// </summary>
+    /// <summary>
+    /// Whether a cell shares an edge with any of the given cells, which is what puts a void inside
+    /// a pour rather than beside it.
+    /// </summary>
+    private static bool TouchesAnyCell(CadSlabCell cell, IReadOnlyList<CadSlabCell> others)
+    {
+        var edges = LoopEdges(cell.Loop).ToHashSet();
+        return others.Any(other => LoopEdges(other.Loop).Any(edges.Contains));
+    }
+
+    private static IEnumerable<(long, long, long, long)> LoopEdges(CadSlabLoop loop)
+    {
+        var vertices = loop.VerticesMm;
+        for (var index = 0; index < vertices.Count; index++)
+            yield return EdgeKey(vertices[index], vertices[(index + 1) % vertices.Count]);
+    }
+
+    private static IReadOnlyList<CadSlabLoop> MergeVoids(IReadOnlyList<CadSlabCell> voidCells)
+    {
+        if (voidCells.Count == 0) return Array.Empty<CadSlabLoop>();
+        var adjacency = BuildAdjacency(voidCells);
+        var group = new int[voidCells.Count];
+        for (var index = 0; index < group.Length; index++) group[index] = -1;
+        var next = 0;
+
+        for (var index = 0; index < voidCells.Count; index++)
+        {
+            if (group[index] >= 0) continue;
+            var current = next++;
+            var pending = new Queue<int>();
+            pending.Enqueue(index);
+            group[index] = current;
+            while (pending.Count > 0)
+            {
+                var at = pending.Dequeue();
+                foreach (var neighbour in adjacency[at])
+                {
+                    if (group[neighbour] >= 0) continue;
+                    group[neighbour] = current;
+                    pending.Enqueue(neighbour);
+                }
+            }
+        }
+
+        var loops = new List<CadSlabLoop>();
+        for (var current = 0; current < next; current++)
+        {
+            var members = voidCells.Where((_, index) => group[index] == current).ToArray();
+            if (members.Length == 1)
+            {
+                loops.Add(members[0].Loop);
+                continue;
+            }
+            var boundary = BuildGroupBoundary(members);
+            if (boundary is not null) loops.Add(boundary.Outer);
+        }
+        return loops;
     }
 
     private static CadSlabLoop Orient(CadSlabLoop loop, bool counterClockwise)
