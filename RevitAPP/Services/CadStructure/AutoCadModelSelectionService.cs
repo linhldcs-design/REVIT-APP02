@@ -52,13 +52,14 @@ internal static class AutoCadModelSelectionService
         SelectInternal(gridPackage, includeHatch: true);
 
     /// <summary>
-    /// Picks the strokes that mark a bay as left open. Only line work is read: the mark says where
-    /// no slab goes and never contributes a boundary.
+    /// Picks a point inside each bay that stays open, the way the HATCH command picks an area.
+    /// Nothing is selected and the drawing is not touched; the points only say which bays to leave
+    /// out of the pour.
     /// </summary>
-    public static AutoCadModelSelectionResult SelectOpeningMarks(
+    public static AutoCadModelSelectionResult SelectOpeningOutlines(
         CadStructureTransferPackage slabPackage) =>
         SelectInternal(slabPackage, promptOverride:
-            "\nQuét chọn các line chéo đánh dấu ô không đổ sàn rồi nhấn Enter...\n");
+            "\nQuét chọn đường bao của các ô KHÔNG đổ sàn rồi nhấn Enter...\n");
 
     private static AutoCadModelSelectionResult SelectInternal(
         CadStructureTransferPackage? gridPackage,

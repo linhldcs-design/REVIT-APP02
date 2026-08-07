@@ -193,9 +193,10 @@ public sealed record CadSlabAnalysisOptions(
         new Dictionary<string, double>();
 
     /// <summary>
-    /// Marks the user picked to say a bay is left open. Guessing a cross from geometry misses the
-    /// ones a drawing writes differently, so picking them is both surer and quicker to correct.
+    /// Outlines the user selected around the bays that stay open. Guessing a cross from geometry
+    /// misses the ones a drawing writes differently, and selecting the outline states the shape of
+    /// the hole exactly rather than leaving it to how the lines happen to divide the floor.
     /// </summary>
-    public IReadOnlyList<CadStructureSegment> OpeningMarksMm { get; init; } =
+    public IReadOnlyList<CadStructureSegment> OpeningOutlinesMm { get; init; } =
         Array.Empty<CadStructureSegment>();
 }

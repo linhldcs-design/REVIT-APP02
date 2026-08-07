@@ -106,18 +106,24 @@ public static class CadSlabAnalyzer
             .Where(hatch => hatch.BoundaryMm.Count >= 3)
             .ToArray();
 
-        var marks = options.OpeningMarksMm
-            .Where(mark => Finite(mark.Start) && Finite(mark.End))
-            .Select(mark => mark with
+        // The outlines the user selected are closed in their own right, so they are traced on
+        // their own: the shape of a hole comes from the outline drawn around it, not from how the
+        // slab lines happen to divide the floor.
+        var openingOutlines = options.OpeningOutlinesMm
+            .Where(segment => Finite(segment.Start) && Finite(segment.End))
+            .Select(segment => segment with
             {
-                Start = mark.Start * scale - origin,
-                End = mark.End * scale - origin
+                Start = segment.Start * scale - origin,
+                End = segment.End * scale - origin
             })
             .ToArray();
+        var marks = openingOutlines.Length == 0
+            ? Array.Empty<CadSlabLoop>()
+            : CadPlanarGraph.BuildFaces(openingOutlines, options.VertexSnapToleranceMm, out _);
 
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
         var cells = ClassifyCells(faces, usable, annotations, hatchRegions, marks, options);
-        var regions = MergeCells(cells, options);
+        var regions = MergeCells(cells, marks, options);
 
         var warnings = new List<string>();
         if (shortLines > 0)
@@ -156,7 +162,7 @@ public static class CadSlabAnalyzer
         IReadOnlyList<CadStructureSegment> segments,
         IReadOnlyList<CadStructureAnnotation> annotations,
         IReadOnlyList<CadHatchRegion> hatches,
-        IReadOnlyList<CadStructureSegment> marks,
+        IReadOnlyList<CadSlabLoop> marks,
         CadSlabAnalysisOptions options)
     {
         var cells = new List<CadSlabCell>();
@@ -199,23 +205,14 @@ public static class CadSlabAnalyzer
     /// poured. Reading the mark from the geometry keeps it working whatever layer it sits on.
     /// </summary>
     /// <summary>
-    /// Whether a mark the user picked falls in this bay. A stroke of a cross runs through the bay
-    /// it marks, so either an endpoint or the middle of the stroke lands inside it.
+    /// Whether this bay lies inside an outline the user selected around an open area.
     /// </summary>
     private static bool MarkedAsOpening(
         CadSlabLoop face,
-        IReadOnlyList<CadStructureSegment> marks)
+        IReadOnlyList<CadSlabLoop> outlines)
     {
-        // Judge the mark by its middle alone. A stroke ends at the corner of a bay, which is a
-        // corner of the neighbouring bays too, so testing its ends marks them open as well.
-        foreach (var mark in marks)
-        {
-            var mid = new CadStructurePoint2(
-                (mark.Start.X + mark.End.X) / 2.0,
-                (mark.Start.Y + mark.End.Y) / 2.0);
-            if (ContainsPoint(face.VerticesMm, mid)) return true;
-        }
-        return false;
+        var centre = Centroid(face);
+        return outlines.Any(outline => ContainsPoint(outline.VerticesMm, centre));
     }
 
     private static bool HasCrossMark(CadSlabLoop face, IReadOnlyList<CadStructureSegment> segments)
@@ -317,6 +314,7 @@ public static class CadSlabAnalyzer
     /// </summary>
     private static IReadOnlyList<CadSlabRegionCandidate> MergeCells(
         IReadOnlyList<CadSlabCell> cells,
+        IReadOnlyList<CadSlabLoop> marks,
         CadSlabAnalysisOptions options)
     {
         // Neither an opening nor a column takes concrete, so both stay out of the pour and become
@@ -345,20 +343,23 @@ public static class CadSlabAnalyzer
         // Spreading runs over the cells that take concrete, and openings and columns were already
         // excluded from that set, so nothing here can revive them as slabs.
 
-        // Level and thickness are what separate one pour from another. A hatch only says a bay
-        // drops when nothing states its level: hatched and plain bays at the same level are the
-        // same slab, and grouping by the pattern as well would split them in two.
+        // A hatched area is poured on its own, so the pattern separates slabs the way a level or a
+        // thickness does. Two bays at the same level are still two slabs when one is hatched and
+        // the other is not, and two patterns mean two slabs again.
         var groups = resolved
             .GroupBy(cell => (
                 Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
-                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
+                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm),
+                cell.HatchStyleKey))
             .ToArray();
 
         var regions = new List<CadSlabRegionCandidate>();
         var id = 1;
-        foreach (var group in groups)
+        // Cells sharing a level, a thickness and a hatch need not touch: a hatched area can sit
+        // between two parts of the same pour and leave them on either side of it. Each connected
+        // part is a slab of its own, so the group is split into the pieces that actually join.
+        foreach (var members in groups.SelectMany(group => ConnectedParts(group.ToArray())))
         {
-            var members = group.ToArray();
             // The outside edge comes from the pour together with the voids inside it: a stair core
             // does not push the edge of the floor inwards, it makes a hole in it. Leaving the
             // marked cells out of this step would shrink the slab to the shape around them.
@@ -376,9 +377,15 @@ public static class CadSlabAnalyzer
             // Adjacent marked cells form one void, so a stair core drawn as several bays is cut
             // as a single opening rather than as a grid of small ones.
             var voidCells = enclosed
-                .Where(cell => cell.IsOpening || cell.IsColumn)
+                .Where(cell => cell.IsColumn)
+                .ToArray();
+            // An outline the user selected is the hole, exactly as drawn. Rebuilding it from the
+            // bays it covers would follow the slab lines crossing it instead of its own shape.
+            var selectedHoles = marks
+                .Where(mark => ContainsPoint(outer.VerticesMm, Centroid(mark)))
                 .ToArray();
             var holes = boundary.Holes
+                .Concat(selectedHoles)
                 .Concat(MergeVoids(voidCells))
                 .Select(hole => Orient(hole, counterClockwise: false))
                 // A sliver left where beams cross is not a hole worth cutting, and Revit rejects a
@@ -448,8 +455,9 @@ public static class CadSlabAnalyzer
             {
                 var target = result[neighbour];
                 if (target.ThicknessMm is not null || target.ElevationMm is not null) continue;
-                // A label crosses a hatch boundary freely: the hatch shades part of a pour, it
-                // does not end it. Only a level of its own separates one slab from the next.
+                // A hatched area is a pour of its own, so a label does not carry across its edge.
+                if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
+                    continue;
                 result[neighbour] = target with
                 {
                     ThicknessMm = source.ThicknessMm,
@@ -556,6 +564,43 @@ public static class CadSlabAnalyzer
     /// Joins voids that touch into one outline. A stair core is drawn as several bays, and cutting
     /// each of them separately would leave lines of slab between them that no plan shows.
     /// </summary>
+    /// <summary>
+    /// Splits a set of cells into the parts that actually touch. Cells can share a level and a
+    /// thickness while lying on either side of something poured separately, and each part is then
+    /// a slab in its own right.
+    /// </summary>
+    private static IReadOnlyList<CadSlabCell[]> ConnectedParts(CadSlabCell[] cells)
+    {
+        if (cells.Length <= 1) return new[] { cells };
+        var adjacency = BuildAdjacency(cells);
+        var part = new int[cells.Length];
+        for (var index = 0; index < part.Length; index++) part[index] = -1;
+        var next = 0;
+
+        for (var index = 0; index < cells.Length; index++)
+        {
+            if (part[index] >= 0) continue;
+            var current = next++;
+            var pending = new Queue<int>();
+            pending.Enqueue(index);
+            part[index] = current;
+            while (pending.Count > 0)
+            {
+                var at = pending.Dequeue();
+                foreach (var neighbour in adjacency[at])
+                {
+                    if (part[neighbour] >= 0) continue;
+                    part[neighbour] = current;
+                    pending.Enqueue(neighbour);
+                }
+            }
+        }
+
+        return Enumerable.Range(0, next)
+            .Select(current => cells.Where((_, index) => part[index] == current).ToArray())
+            .ToArray();
+    }
+
     /// <summary>
     /// Whether a cell shares an edge with any of the given cells, which is what puts a void inside
     /// a pour rather than beside it.

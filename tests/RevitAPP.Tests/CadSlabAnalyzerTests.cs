@@ -240,10 +240,10 @@ public sealed class CadSlabAnalyzerTests
     }
 
     [Fact]
-    public void Analyze_HatchedAndPlainBaysAtOneLevel_AreASingleSlab()
+    public void Analyze_HatchedAndPlainBaysAtOneLevel_ArePouredSeparately()
     {
-        // A hatch shades part of a pour; it does not end it. Three bays all at -0.050 are one
-        // slab whether or not the middle one is hatched.
+        // A hatched area is poured on its own, so it stays a slab of its own even where the plan
+        // gives it the same level as the bays around it.
         var result = CadSlabAnalyzer.Analyze(
             Package(Grid(3, 1, 4000, 6000),
                 Annotation(90, 2000, 3000, "-0.050 Hs=120"),
@@ -252,10 +252,14 @@ public sealed class CadSlabAnalyzerTests
             new[] { Hatch(1, 4000, 0, 8000, 6000, "ANSI31", 1.0) },
             new CadSlabAnalysisOptions());
 
-        var slab = Assert.Single(result.Regions);
-        Assert.Equal(72.0, slab.AreaM2, 2);
-        Assert.Equal(-50, slab.EffectiveOffsetMm, 3);
-        Assert.Equal(3, slab.CellIds.Count);
+        // The hatched bay is poured on its own and leaves the plain bays on either side of it,
+        // which no longer touch, so they are poured separately too.
+        Assert.Equal(3, result.Regions.Count);
+        var hatched = Assert.Single(result.Regions, region => region.IsLowered);
+        Assert.Equal(24.0, hatched.AreaM2, 2);
+        Assert.Equal(2, result.Regions.Count(region => !region.IsLowered));
+        Assert.All(result.Regions, region => Assert.Equal(24.0, region.AreaM2, 2));
+        Assert.All(result.Regions, region => Assert.Equal(-50, region.EffectiveOffsetMm, 3));
     }
 
     [Fact]
@@ -458,26 +462,49 @@ public sealed class CadSlabAnalyzerTests
         // A core drawn across four bays is a single opening, and the floor still reaches past it
         // to the far side: the core makes a hole, it does not cut the slab in two.
         var segments = Grid(4, 3, 4000, 3000);
-        var marks = new List<CadStructureSegment>();
-        var id = 900;
-        foreach (var (x0, y0, x1, y1) in new[]
-                 {
-                     (4000.0, 3000.0, 8000.0, 6000.0), (8000.0, 3000.0, 4000.0, 6000.0),
-                     (8000.0, 3000.0, 12000.0, 6000.0), (12000.0, 3000.0, 8000.0, 6000.0),
-                     (4000.0, 6000.0, 8000.0, 9000.0), (8000.0, 6000.0, 4000.0, 9000.0),
-                     (8000.0, 6000.0, 12000.0, 9000.0), (12000.0, 6000.0, 8000.0, 9000.0)
-                 })
-            marks.Add(Segment(id++, x0, y0, x1, y1));
+        // The user draws a window round the core: the outline states the hole, whatever the slab
+        // lines inside it do.
+        var outline = Rectangle(900, 4000, 3000, 12000, 9000);
 
         var result = CadSlabAnalyzer.Analyze(
             Package(segments, Annotation(80, 2000, 1500, "+0.000 Hs=100")),
             Array.Empty<CadHatchRegion>(),
-            new CadSlabAnalysisOptions { OpeningMarksMm = marks });
+            new CadSlabAnalysisOptions { OpeningOutlinesMm = outline });
 
         var slab = Assert.Single(result.Regions);
         Assert.Equal(96.0, slab.AreaM2, 2);
         Assert.Single(slab.Holes);
         Assert.Equal(8, slab.CellIds.Count);
+    }
+
+    [Fact]
+    public void Analyze_MatchingHatchesApart_ArePouredAsSeparateSlabs()
+    {
+        // Three areas hatched alike and labelled alike, but lying apart on the plan. Concrete
+        // cannot bridge the gap between them, so each is a slab of its own.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(5, 1, 4000, 6000),
+                Annotation(90, 2000, 3000, "-0.100 Hs=120"),
+                Annotation(91, 6000, 3000, "+0.000 Hs=120"),
+                Annotation(92, 10000, 3000, "-0.100 Hs=120"),
+                Annotation(93, 14000, 3000, "+0.000 Hs=120"),
+                Annotation(94, 18000, 3000, "-0.100 Hs=120")),
+            new[]
+            {
+                Hatch(1, 0, 0, 4000, 6000, "ANSI31", 1.0),
+                Hatch(2, 8000, 0, 12000, 6000, "ANSI31", 1.0),
+                Hatch(3, 16000, 0, 20000, 6000, "ANSI31", 1.0)
+            },
+            new CadSlabAnalysisOptions());
+
+        var hatched = result.Regions.Where(region => region.IsLowered).ToArray();
+        Assert.Equal(3, hatched.Length);
+        Assert.All(hatched, region =>
+        {
+            Assert.Equal(24.0, region.AreaM2, 2);
+            Assert.Equal(-100, region.EffectiveOffsetMm, 3);
+            Assert.Equal(120, region.EffectiveThicknessMm, 3);
+        });
     }
 
     private static CadHatchRegion Hatch(

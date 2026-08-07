@@ -492,10 +492,10 @@
                         <Button Content="2. Select Slab Lines" Margin="8,0,0,0"
                                 Style="{DynamicResource Button.Secondary}"
                                 Command="{Binding SelectSlabLinesCommand}"/>
-                        <Button Content="3. Select Line X" Margin="8,0,0,0"
-                                ToolTip="Quét các line chéo đánh dấu ô không đổ sàn (ô thang, hộp kỹ thuật)."
+                        <Button Content="3. Select Ô Trống" Margin="8,0,0,0"
+                                ToolTip="Quét chọn đường bao của các ô không đổ sàn (ô thang, hộp kỹ thuật)."
                                 Style="{DynamicResource Button.Secondary}"
-                                Command="{Binding SelectOpeningMarksCommand}"/>
+                                Command="{Binding SelectOpeningOutlinesCommand}"/>
                     </StackPanel>
 
                     <Grid Grid.Row="1">

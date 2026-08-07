@@ -44,7 +44,7 @@ public sealed class ModelFromCadCommand : ExternalCommand
             var projectOptions = CadColumnProjectOptionsReader.Read(document);
             var viewModel = new ModelFromCadViewModel(
                 CadModelPreviewFactory.Empty(), projectOptions, SelectAndBuildPreview,
-                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview, SelectSlabOpeningMarks);
+                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview, SelectSlabOpeningOutlines);
             var window = new ModelFromCadWindow(viewModel);
             new WindowInteropHelper(window) { Owner = Application.MainWindowHandle };
             if (window.ShowDialog() != true) return;
@@ -214,10 +214,10 @@ public sealed class ModelFromCadCommand : ExternalCommand
         return preview;
     }
 
-    private static IReadOnlyList<CadStructureSegment>? SelectSlabOpeningMarks(
+    private static IReadOnlyList<CadStructureSegment>? SelectSlabOpeningOutlines(
         CadStructureTransferPackage slabPackage)
     {
-        var marks = CadSlabPreviewFactory.SelectOpeningMarks(slabPackage, out var error);
+        var marks = CadSlabPreviewFactory.SelectOpeningOutlines(slabPackage, out var error);
         if (marks is null && !string.IsNullOrWhiteSpace(error)) TaskDialog.Show(Title, error);
         return marks;
     }

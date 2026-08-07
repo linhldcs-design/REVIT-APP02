@@ -33,11 +33,11 @@ internal static class CadSlabPreviewFactory
     /// Picks the marks that say which bays stay open. Returns the geometry in drawing units so the
     /// analyzer converts it the same way it converts the rest of the scan.
     /// </summary>
-    public static IReadOnlyList<CadStructureSegment>? SelectOpeningMarks(
+    public static IReadOnlyList<CadStructureSegment>? SelectOpeningOutlines(
         CadStructureTransferPackage slabPackage,
         out string? error)
     {
-        var selection = AutoCadModelSelectionService.SelectOpeningMarks(slabPackage);
+        var selection = AutoCadModelSelectionService.SelectOpeningOutlines(slabPackage);
         if (!selection.IsValid)
         {
             error = selection.Error;
