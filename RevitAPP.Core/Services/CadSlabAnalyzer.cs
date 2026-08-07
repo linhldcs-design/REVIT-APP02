@@ -357,6 +357,7 @@ public static class CadSlabAnalyzer
                     .Select(hole => Orient(hole, counterClockwise: false))
                     .Where(hole => hole.AreaMm2 >= 10_000.0)
                     .ToArray();
+                wholeFloorHoles = SeparateHoles(wholeFloorHoles, outerEdge).ToArray();
 
                 var labelledCell = plain.FirstOrDefault(cell => cell.ThicknessMm is not null)
                                    ?? plain.FirstOrDefault(cell => cell.ElevationMm is not null)
@@ -440,14 +441,14 @@ public static class CadSlabAnalyzer
             var selectedHoles = marks
                 .Where(mark => ContainsPoint(outer.VerticesMm, Centroid(mark)))
                 .ToArray();
-            var holes = boundary.Holes
+            var holes = SeparateHoles(boundary.Holes
                 .Concat(selectedHoles)
                 .Concat(MergeVoids(voidCells))
                 .Select(hole => Orient(hole, counterClockwise: false))
                 // A sliver left where beams cross is not a hole worth cutting, and Revit rejects a
                 // profile carrying a loop that small.
                 .Where(hole => hole.AreaMm2 >= 10_000.0)
-                .ToArray();
+                .ToArray(), outer);
 
             // A plan labels a bay, not every cell the lines carve out of it, so the group takes
             // the values from whichever of its cells carries the label. Reading them from an
@@ -827,6 +828,35 @@ public static class CadSlabAnalyzer
             IsLowered = part.Any(cell => cell.IsLowered),
             AbsorbedStripCount = part.Count(cell => cell.IsBeamStrip)
         };
+    }
+
+    /// <summary>
+    /// Keeps only holes Revit will accept in one profile: each inside the outline, and no two
+    /// touching or overlapping. Revit refuses the whole slab when loops cross, so a hole that
+    /// clashes with one already kept is dropped rather than left to fail creation.
+    /// </summary>
+    private static IReadOnlyList<CadSlabLoop> SeparateHoles(
+        IReadOnlyList<CadSlabLoop> holes,
+        CadSlabLoop outer)
+    {
+        var kept = new List<CadSlabLoop>();
+        foreach (var hole in holes.OrderByDescending(hole => hole.AreaMm2))
+        {
+            if (!ContainsPoint(outer.VerticesMm, Centroid(hole))) continue;
+            if (kept.Any(existing => LoopsClash(existing, hole))) continue;
+            kept.Add(hole);
+        }
+        return kept;
+    }
+
+    private static bool LoopsClash(CadSlabLoop first, CadSlabLoop second)
+    {
+        // Sharing any vertex or containing one another's points is enough for Revit to call the
+        // profile self-intersecting.
+        if (second.VerticesMm.Any(vertex => ContainsPoint(first.VerticesMm, vertex))) return true;
+        if (first.VerticesMm.Any(vertex => ContainsPoint(second.VerticesMm, vertex))) return true;
+        return second.VerticesMm.Any(vertex =>
+            first.VerticesMm.Any(other => other.DistanceTo(vertex) <= 1.0));
     }
 
     /// <summary>
