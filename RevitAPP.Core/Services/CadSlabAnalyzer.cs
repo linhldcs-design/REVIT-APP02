@@ -362,7 +362,11 @@ public static class CadSlabAnalyzer
         // The scan is one floor: trace its outside edge once, over every cell together. What sits
         // inside that edge and takes no concrete -- a hatched area, a bay the user picked, a stair
         // core, a column -- is then cut out of it as a hole.
-        var totalBoundary = BuildGroupBoundary(cells);
+        // A column is cast with the floor around it, so it is neither a hole nor a break in the
+        // edge. Tracing over the columns would leave a saw-tooth outline with a sliver of slab
+        // beside every one of them.
+        var poursAndInteriorVoids = cells.Where(cell => !cell.IsColumn).ToArray();
+        var totalBoundary = BuildGroupBoundary(poursAndInteriorVoids);
         if (totalBoundary is not null)
         {
             var plainCells = resolved
@@ -379,7 +383,7 @@ public static class CadSlabAnalyzer
             if (plain.Length > 0)
             {
                 var outerEdge = totalBoundary.Outer;
-                var cutOut = cells
+                var cutOut = poursAndInteriorVoids
                     .Where(cell => !plain.Any(member => member.Id == cell.Id))
                     .Where(cell => ContainsPoint(outerEdge.VerticesMm, cell.CentroidMm))
                     .ToArray();
@@ -430,7 +434,7 @@ public static class CadSlabAnalyzer
                     .Where(cell => !string.IsNullOrEmpty(cell.HatchStyleKey))
                     .GroupBy(cell => cell.HatchStyleKey)
                     .SelectMany(group => JoinNearbyParts(
-                        ConnectedParts(group.ToArray()), options.MaximumBeamStripWidthMm))
+                        ConnectedParts(group.ToArray()), options.HatchJoinDistanceMm))
                     .Select((part, index) => BuildRegion(part, index + 2, cells, marks, options))
                     .Where(region => region is not null)
                     .Select(region => region!)
@@ -791,17 +795,32 @@ public static class CadSlabAnalyzer
         return merged.Select(part => part.ToArray()).ToArray();
     }
 
+    /// <summary>
+    /// The clear distance between two areas -- the width of the ground lying between them.
+    /// Measuring vertex to vertex reads zero wherever the two share a corner, which happens at
+    /// both ends of a corridor, so the whole corridor looked like no gap at all.
+    /// </summary>
     private static double GapBetween(
         IReadOnlyList<CadSlabCell> first,
         IReadOnlyList<CadSlabCell> second)
     {
-        var gap = double.MaxValue;
-        foreach (var a in first)
-        foreach (var b in second)
-        foreach (var pointA in a.Loop.VerticesMm)
-        foreach (var pointB in b.Loop.VerticesMm)
-            gap = Math.Min(gap, pointA.DistanceTo(pointB));
-        return gap;
+        var a = SpanOfCells(first);
+        var b = SpanOfCells(second);
+        var horizontal = Math.Max(0.0, Math.Max(a.MinX - b.MaxX, b.MinX - a.MaxX));
+        var vertical = Math.Max(0.0, Math.Max(a.MinY - b.MaxY, b.MinY - a.MaxY));
+        // Areas that overlap on one axis are separated only along the other, which is the width
+        // of the strip between them.
+        if (horizontal <= 0.0) return vertical;
+        if (vertical <= 0.0) return horizontal;
+        return Math.Sqrt(horizontal * horizontal + vertical * vertical);
+    }
+
+    private static (double MinX, double MinY, double MaxX, double MaxY) SpanOfCells(
+        IReadOnlyList<CadSlabCell> cells)
+    {
+        var points = cells.SelectMany(cell => cell.Loop.VerticesMm).ToArray();
+        return (points.Min(point => point.X), points.Min(point => point.Y),
+            points.Max(point => point.X), points.Max(point => point.Y));
     }
 
     /// <summary>
@@ -1125,6 +1144,8 @@ public static class CadSlabAnalyzer
         if (options.MinimumThicknessMm <= 0 || options.MaximumThicknessMm <= options.MinimumThicknessMm)
             return "Dải chiều dày không hợp lệ.";
         if (options.MaximumBeamStripWidthMm < 0) return "Bề rộng dầm tối đa không hợp lệ.";
+        if (!Finite(options.HatchJoinDistanceMm) || options.HatchJoinDistanceMm < 0)
+            return "Khoảng nối hatch không hợp lệ.";
         return null;
     }
 

@@ -644,6 +644,13 @@
                                                  Text="{Binding LoweredSlabOffsetText, UpdateSourceTrigger=PropertyChanged}"
                                                  Style="{DynamicResource TextBox.Standard}"/>
 
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Nối hatch:" Margin="0,8,0,0"
+                                                   ToolTip="Hai vùng hatch cách nhau dưới giá trị này được nối thành một tấm (do dầm/tường chắn giữa). Xa hơn thì tách riêng — ví dụ có hành lang ở giữa (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="5" Grid.Column="1" Margin="0,8,8,0"
+                                                 Text="{Binding HatchJoinDistanceText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+
                                         <WrapPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,8,0,0">
                                             <CheckBox Content="Ghi đè chiều dày" Margin="0,0,12,0"
                                                       ToolTip="Bỏ qua nhãn chiều dày trong bản vẽ, dùng giá trị mặc định cho mọi tấm."

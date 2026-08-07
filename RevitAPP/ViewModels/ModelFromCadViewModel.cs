@@ -211,6 +211,9 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private string _beamStripWidthText = "500";
 
     [ObservableProperty]
+    private string _hatchJoinDistanceText = "500";
+
+    [ObservableProperty]
     private string _defaultSlabThicknessText = "100";
 
     [ObservableProperty]
@@ -329,6 +332,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         && TryNumber(MinimumSlabLineText, out var minLine) && minLine >= 0
         && TryNumber(MinimumSlabAreaText, out var area) && area >= 0
         && TryNumber(BeamStripWidthText, out var strip) && strip >= 0
+        && TryNumber(HatchJoinDistanceText, out var hatchJoin) && hatchJoin >= 0
         && TryNumber(DefaultSlabThicknessText, out var thickness) && thickness is >= 30 and <= 2000
         && TryNumber(DefaultSlabOffsetText, out _)
         && TryNumber(LoweredSlabOffsetText, out _);
@@ -351,6 +355,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         MinimumLineLengthMm: ParseNumber(MinimumSlabLineText),
         MinimumRegionAreaM2: ParseNumber(MinimumSlabAreaText),
         MaximumBeamStripWidthMm: ParseNumber(BeamStripWidthText),
+        HatchJoinDistanceMm: ParseNumber(HatchJoinDistanceText),
         DefaultThicknessMm: ParseNumber(DefaultSlabThicknessText),
         DefaultOffsetMm: ParseNumber(DefaultSlabOffsetText),
         LoweredDefaultOffsetMm: ParseNumber(LoweredSlabOffsetText),
@@ -551,6 +556,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     partial void OnMinimumSlabLineTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnMinimumSlabAreaTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnBeamStripWidthTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnHatchJoinDistanceTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnDefaultSlabThicknessTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnDefaultSlabOffsetTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnLoweredSlabOffsetTextChanged(string value) => NotifySlabAnalysisSettings();

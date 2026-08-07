@@ -167,6 +167,9 @@ public sealed record CadSlabAnalysisOptions(
     // A strip narrower than this between two cells is a beam drawn by its two faces. Wider than
     // this and it is a corridor or a room, which stays a region of its own.
     double MaximumBeamStripWidthMm = 500.0,
+    // Two areas hatched alike within this distance are one drop the plan drew in pieces, because
+    // a beam or a wall runs between them. Further apart they are separate drops.
+    double HatchJoinDistanceMm = 500.0,
     // A cell no wider than this on either side, sitting where beams meet, is a column through the
     // floor rather than a bay, so the slab is cast around it. Columns are rarely wider than this,
     // and a bay never narrower, which is what keeps small rooms out of the holes.
