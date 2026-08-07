@@ -359,10 +359,87 @@ public static class CadSlabAnalyzer
         // Spreading runs over the cells that take concrete, and openings and columns were already
         // excluded from that set, so nothing here can revive them as slabs.
 
-        // Only three things divide a floor: its outside edge, a hatched area and an opening. The
-        // grid of bays inside them is not a division -- a beam does not end a pour. So the cells
-        // are grouped by hatch alone, and each connected part of a group takes one level and one
-        // thickness read from whichever of its bays the plan labelled.
+        // The scan is one floor: trace its outside edge once, over every cell together. What sits
+        // inside that edge and takes no concrete -- a hatched area, a bay the user picked, a stair
+        // core, a column -- is then cut out of it as a hole.
+        var totalBoundary = BuildGroupBoundary(cells);
+        if (totalBoundary is not null)
+        {
+            var plainCells = resolved
+                .Where(cell => string.IsNullOrEmpty(cell.HatchStyleKey))
+                .ToArray();
+            // The floor is one pour unless the plan states more than one section for it. Where it
+            // does, each stated section is a slab and the single edge no longer describes them.
+            var plainSections = plainCells
+                .GroupBy(cell => (
+                    Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
+                    Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
+                .ToArray();
+            var plain = plainSections.Length == 1 ? plainCells : Array.Empty<CadSlabCell>();
+            if (plain.Length > 0)
+            {
+                var outerEdge = totalBoundary.Outer;
+                var cutOut = cells
+                    .Where(cell => !plain.Any(member => member.Id == cell.Id))
+                    .Where(cell => ContainsPoint(outerEdge.VerticesMm, cell.CentroidMm))
+                    .ToArray();
+
+                // A picked outline states the hole exactly; the cells under it would repeat the
+                // same void in the shape the slab lines happen to give it.
+                var markedCells = cutOut
+                    .Where(cell => marks.Any(mark =>
+                        ContainsPoint(mark.VerticesMm, cell.CentroidMm)))
+                    .Select(cell => cell.Id)
+                    .ToHashSet();
+                var wholeFloorHoles = marks
+                    .Where(mark => ContainsPoint(outerEdge.VerticesMm, Centroid(mark)))
+                    .Concat(MergeVoids(cutOut
+                        .Where(cell => !markedCells.Contains(cell.Id))
+                        .ToArray()))
+                    .Select(hole => Orient(hole, counterClockwise: false))
+                    .Where(hole => hole.AreaMm2 >= 10_000.0)
+                    .ToArray();
+
+                var labelledCell = plain.FirstOrDefault(cell => cell.ThicknessMm is not null)
+                                   ?? plain.FirstOrDefault(cell => cell.ElevationMm is not null)
+                                   ?? plain[0];
+
+                var wholeFloor = new CadSlabRegionCandidate(
+                    1,
+                    Orient(outerEdge, counterClockwise: true),
+                    wholeFloorHoles,
+                    plain.Select(cell => cell.Id).ToArray(),
+                    plain.SelectMany(cell => cell.SourceSegmentIds).Distinct().ToArray(),
+                    labelledCell.ThicknessMm,
+                    labelledCell.ElevationMm,
+                    EffectiveThickness(labelledCell, options),
+                    EffectiveElevation(labelledCell, options),
+                    ResolveStatus(plain),
+                    plain.Select(cell => cell.MatchedText)
+                        .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text)) ?? string.Empty)
+                {
+                    AbsorbedStripCount = plain.Count(cell => cell.IsBeamStrip)
+                };
+
+                // Each hatched area is poured at its own level, so it becomes a slab beside the
+                // floor rather than part of it.
+                // Areas hatched alike join when only a beam runs between them and stay apart when
+                // the plan leaves real ground between them, so they are joined by proximity as
+                // well as by touching.
+                var hatchedRegions = resolved
+                    .Where(cell => !string.IsNullOrEmpty(cell.HatchStyleKey))
+                    .GroupBy(cell => cell.HatchStyleKey)
+                    .SelectMany(group => JoinNearbyParts(
+                        ConnectedParts(group.ToArray()), options.MaximumBeamStripWidthMm))
+                    .Select((part, index) => BuildRegion(part, index + 2, cells, marks, options))
+                    .Where(region => region is not null)
+                    .Select(region => region!)
+                    .ToArray();
+
+                return new[] { wholeFloor }.Concat(hatchedRegions).ToArray();
+            }
+        }
+
         var groups = resolved
             .GroupBy(cell => cell.HatchStyleKey)
             .ToArray();
@@ -684,6 +761,99 @@ public static class CadSlabAnalyzer
         return Enumerable.Range(0, next)
             .Select(current => cells.Where((_, index) => part[index] == current).ToArray())
             .ToArray();
+    }
+
+    /// <summary>
+    /// Joins parts that a beam separates. A beam drawn between two hatched bays leaves a strip of
+    /// plain floor between them, but the drop runs across it and the two are poured together.
+    /// Parts further apart than a beam is wide are left as they are.
+    /// </summary>
+    private static IReadOnlyList<CadSlabCell[]> JoinNearbyParts(
+        IReadOnlyList<CadSlabCell[]> parts,
+        double maximumGapMm)
+    {
+        if (parts.Count <= 1) return parts;
+        var merged = parts.Select(part => part.ToList()).ToList();
+
+        var joined = true;
+        while (joined)
+        {
+            joined = false;
+            for (var first = 0; first < merged.Count && !joined; first++)
+            for (var second = first + 1; second < merged.Count && !joined; second++)
+            {
+                if (GapBetween(merged[first], merged[second]) > maximumGapMm) continue;
+                merged[first].AddRange(merged[second]);
+                merged.RemoveAt(second);
+                joined = true;
+            }
+        }
+        return merged.Select(part => part.ToArray()).ToArray();
+    }
+
+    private static double GapBetween(
+        IReadOnlyList<CadSlabCell> first,
+        IReadOnlyList<CadSlabCell> second)
+    {
+        var gap = double.MaxValue;
+        foreach (var a in first)
+        foreach (var b in second)
+        foreach (var pointA in a.Loop.VerticesMm)
+        foreach (var pointB in b.Loop.VerticesMm)
+            gap = Math.Min(gap, pointA.DistanceTo(pointB));
+        return gap;
+    }
+
+    /// <summary>
+    /// One slab from a set of cells: the edge round them, and whatever they enclose cut out of it.
+    /// </summary>
+    private static CadSlabRegionCandidate? BuildRegion(
+        CadSlabCell[] part,
+        int id,
+        IReadOnlyList<CadSlabCell> allCells,
+        IReadOnlyList<CadSlabLoop> marks,
+        CadSlabAnalysisOptions options)
+    {
+        var boundary = BuildGroupBoundary(part);
+        if (boundary is null) return null;
+        var outer = boundary.Outer;
+        if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) return null;
+
+        var partIds = part.Select(cell => cell.Id).ToHashSet();
+        var inside = allCells
+            .Where(cell => !partIds.Contains(cell.Id)
+                           && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
+            .ToArray();
+
+        var holes = marks
+            .Where(mark => ContainsPoint(outer.VerticesMm, Centroid(mark)))
+            .Concat(MergeVoids(inside))
+            .Concat(boundary.Holes)
+            .Select(hole => Orient(hole, counterClockwise: false))
+            .Where(hole => hole.AreaMm2 >= 10_000.0)
+            .ToArray();
+
+        var labelled = part.FirstOrDefault(cell => cell.ThicknessMm is not null)
+                       ?? part.FirstOrDefault(cell => cell.ElevationMm is not null)
+                       ?? part[0];
+
+        return new CadSlabRegionCandidate(
+            id,
+            Orient(outer, counterClockwise: true),
+            holes,
+            part.Select(cell => cell.Id).ToArray(),
+            part.SelectMany(cell => cell.SourceSegmentIds).Distinct().ToArray(),
+            labelled.ThicknessMm,
+            labelled.ElevationMm,
+            EffectiveThickness(labelled, options),
+            EffectiveElevation(labelled, options),
+            ResolveStatus(part),
+            part.Select(cell => cell.MatchedText)
+                .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text)) ?? string.Empty)
+        {
+            IsLowered = part.Any(cell => cell.IsLowered),
+            AbsorbedStripCount = part.Count(cell => cell.IsBeamStrip)
+        };
     }
 
     /// <summary>

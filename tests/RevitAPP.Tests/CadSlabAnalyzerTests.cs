@@ -252,13 +252,14 @@ public sealed class CadSlabAnalyzerTests
             new[] { Hatch(1, 4000, 0, 8000, 6000, "ANSI31", 1.0) },
             new CadSlabAnalysisOptions());
 
-        // The hatched bay is poured on its own and leaves the plain bays on either side of it,
-        // which no longer touch, so they are poured separately too.
-        Assert.Equal(3, result.Regions.Count);
+        // The hatched bay is poured on its own. The floor is traced as one outline with that bay
+        // cut out of it, so the plain bays either side stay a single slab.
+        Assert.Equal(2, result.Regions.Count);
         var hatched = Assert.Single(result.Regions, region => region.IsLowered);
         Assert.Equal(24.0, hatched.AreaM2, 2);
-        Assert.Equal(2, result.Regions.Count(region => !region.IsLowered));
-        Assert.All(result.Regions, region => Assert.Equal(24.0, region.AreaM2, 2));
+        var plain = Assert.Single(result.Regions, region => !region.IsLowered);
+        Assert.Equal(48.0, plain.AreaM2, 2);
+        Assert.Single(plain.Holes);
         Assert.All(result.Regions, region => Assert.Equal(-50, region.EffectiveOffsetMm, 3));
     }
 
