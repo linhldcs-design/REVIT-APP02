@@ -298,6 +298,55 @@ public sealed class CadSlabAnalyzerTests
         Assert.Equal(2, slab.CellIds.Count);
     }
 
+    [Fact]
+    public void Analyze_LabelInOneBay_ReachesTheWholePour()
+    {
+        // A plan writes the section once and leaves the rest of the floor unlabelled. Every bay
+        // still belongs to that pour, and the slab covers the whole plan rather than one bay.
+        var segments = Grid(4, 2, 4000, 3000);
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments, Annotation(900, 2000, 1500, "+0.000 Hs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(96.0, slab.AreaM2, 2);
+        Assert.Equal(100, slab.DetectedThicknessMm);
+        Assert.Equal(CadSlabRegionStatus.Ready, slab.Status);
+    }
+
+    [Fact]
+    public void Analyze_BoundaryTrimmedAtColumns_KeepsThePiecesThatCloseIt()
+    {
+        // Trimming at a column face leaves stubs shorter than the minimum line length. They close
+        // the bay, so only a piece touching nothing else is noise.
+        var segments = new List<CadStructureSegment>();
+        var id = 1;
+        foreach (var y in new[] { 0.0, 6000.0 })
+        {
+            var x = 0.0;
+            while (x < 8000)
+            {
+                segments.Add(Segment(id++, x, y, x + 150, y));
+                segments.Add(Segment(id++, x + 150, y, Math.Min(x + 4000, 8000), y));
+                x += 4000;
+            }
+        }
+        segments.Add(Segment(id++, 0, 0, 0, 6000));
+        segments.Add(Segment(id++, 8000, 0, 8000, 6000));
+        segments.Add(Segment(id, 3000, 9000, 3120, 9000));
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments, Annotation(900, 4000, 3000, "+0.000 Hs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions(MinimumLineLengthMm: 200));
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(48.0, slab.AreaM2, 2);
+        Assert.Equal(1, result.ShortLinesIgnored);
+        Assert.Equal(0, result.UnclosedVertexCount);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

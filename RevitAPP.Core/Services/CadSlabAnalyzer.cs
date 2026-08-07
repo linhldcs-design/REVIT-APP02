@@ -76,11 +76,14 @@ public static class CadSlabAnalyzer
             })
             .ToArray();
 
-        var shortLines = segments.Count(segment =>
-            segment.Start.DistanceTo(segment.End) < options.MinimumLineLengthMm);
+        // A short piece that joins two longer ones closes a bay: trimming at every column face
+        // leaves plenty of them. Dropping a piece for its length alone loses the whole region, so
+        // only a piece touching nothing else is noise -- a tick, a witness line, a stray mark.
         var usable = segments
-            .Where(segment => segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm)
+            .Where(segment => segment.Start.DistanceTo(segment.End) >= options.MinimumLineLengthMm
+                              || TouchesAnother(segment, segments, options.VertexSnapToleranceMm))
             .ToArray();
+        var shortLines = segments.Length - usable.Length;
 
         var annotations = slabPackage.Annotations
             .Where(annotation => Finite(annotation.Position))
@@ -272,6 +275,11 @@ public static class CadSlabAnalyzer
                 : cell with { ThicknessMm = host.ThicknessMm, ElevationMm = host.ElevationMm };
         }).ToArray();
 
+        // A plan writes the section once in a bay and leaves the cells the lines carve out of it
+        // unlabelled, so the label has to reach them before grouping. Without this the labelled
+        // cell forms a slab on its own and everything around it falls back to the defaults.
+        resolved = SpreadLabelsAcrossNeighbours(resolved);
+
         // Hatch style joins elevation and thickness as a key. A plan draws each drop with its own
         // pattern, so bays hatched differently are different slabs even where neither carries a
         // level label; the drawing distinguishes them and the model should too.
@@ -287,19 +295,25 @@ public static class CadSlabAnalyzer
         foreach (var group in groups)
         {
             var members = group.ToArray();
-            var outer = members
-                .OrderByDescending(cell => cell.Loop.AreaMm2)
-                .First().Loop;
-            var area = members.Sum(cell => cell.Loop.AreaMm2);
-            if (area / 1_000_000.0 < options.MinimumRegionAreaM2) continue;
+            var boundary = BuildGroupBoundary(members);
+            if (boundary is null) continue;
+            var outer = boundary.Outer;
+            if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) continue;
 
-            var holes = cells
-                .Where(cell => cell.IsOpening && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
-                .Select(cell => cell.Loop)
+            var holes = boundary.Holes
+                .Concat(cells
+                    .Where(cell => cell.IsOpening && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
+                    .Select(cell => cell.Loop))
                 .ToArray();
 
-            var thickness = EffectiveThickness(members[0], options);
-            var elevation = EffectiveElevation(members[0], options);
+            // A plan labels a bay, not every cell the lines carve out of it, so the group takes
+            // the values from whichever of its cells carries the label. Reading them from an
+            // arbitrary member left a slab of a hundred cells with no section at all.
+            var labelled = members.FirstOrDefault(cell => cell.ThicknessMm is not null)
+                           ?? members.FirstOrDefault(cell => cell.ElevationMm is not null)
+                           ?? members[0];
+            var thickness = EffectiveThickness(labelled, options);
+            var elevation = EffectiveElevation(labelled, options);
             var status = ResolveStatus(members);
 
             regions.Add(new CadSlabRegionCandidate(
@@ -308,8 +322,8 @@ public static class CadSlabAnalyzer
                 holes,
                 members.Select(cell => cell.Id).ToArray(),
                 members.SelectMany(cell => cell.SourceSegmentIds).Distinct().ToArray(),
-                members[0].ThicknessMm,
-                members[0].ElevationMm,
+                labelled.ThicknessMm,
+                labelled.ElevationMm,
                 thickness,
                 elevation,
                 status,
@@ -322,6 +336,163 @@ public static class CadSlabAnalyzer
         }
 
         return regions;
+    }
+
+    /// <summary>
+    /// Carries a label from the cell that holds it to the cells around it, stopping at a cell that
+    /// carries a label of its own or that a hatch marks differently. A bay is drawn as many cells
+    /// once beams and openings cut through it, and the plan labels the bay once.
+    /// </summary>
+    private static CadSlabCell[] SpreadLabelsAcrossNeighbours(CadSlabCell[] cells)
+    {
+        var adjacency = BuildAdjacency(cells);
+        var result = cells.ToArray();
+        var pending = new Queue<int>();
+        for (var index = 0; index < result.Length; index++)
+            if (result[index].ThicknessMm is not null || result[index].ElevationMm is not null)
+                pending.Enqueue(index);
+
+        while (pending.Count > 0)
+        {
+            var index = pending.Dequeue();
+            var source = result[index];
+            foreach (var neighbour in adjacency[index])
+            {
+                var target = result[neighbour];
+                if (target.ThicknessMm is not null || target.ElevationMm is not null) continue;
+                // A hatch says this cell belongs to a different pour, so a neighbour's label is
+                // not its own.
+                if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
+                    continue;
+                result[neighbour] = target with
+                {
+                    ThicknessMm = source.ThicknessMm,
+                    ElevationMm = source.ElevationMm,
+                    MatchedText = source.MatchedText
+                };
+                pending.Enqueue(neighbour);
+            }
+        }
+        return result;
+    }
+
+    private static List<int>[] BuildAdjacency(IReadOnlyList<CadSlabCell> cells)
+    {
+        var owners = new Dictionary<(long, long, long, long), List<int>>();
+        for (var index = 0; index < cells.Count; index++)
+        {
+            var loop = cells[index].Loop.VerticesMm;
+            for (var vertex = 0; vertex < loop.Count; vertex++)
+            {
+                var key = EdgeKey(loop[vertex], loop[(vertex + 1) % loop.Count]);
+                if (!owners.TryGetValue(key, out var list)) owners[key] = list = new List<int>();
+                if (!list.Contains(index)) list.Add(index);
+            }
+        }
+
+        var adjacency = new List<int>[cells.Count];
+        for (var index = 0; index < adjacency.Length; index++) adjacency[index] = new List<int>();
+        foreach (var list in owners.Values.Where(list => list.Count == 2))
+        {
+            adjacency[list[0]].Add(list[1]);
+            adjacency[list[1]].Add(list[0]);
+        }
+        return adjacency;
+    }
+
+    private sealed record GroupBoundary(CadSlabLoop Outer, IReadOnlyList<CadSlabLoop> Holes);
+
+    /// <summary>
+    /// The outline of a merged group. An edge shared by two cells of the group is interior to the
+    /// pour and disappears; an edge belonging to one cell is on the outside. Stitching the
+    /// remaining edges gives the slab as it is poured, which may be L-shaped or enclose a
+    /// courtyard, rather than the largest single bay.
+    /// </summary>
+    private static GroupBoundary? BuildGroupBoundary(IReadOnlyList<CadSlabCell> members)
+    {
+        var counts = new Dictionary<(long, long, long, long), (CadStructurePoint2 A, CadStructurePoint2 B, int Count)>();
+        foreach (var cell in members)
+        {
+            var loop = cell.Loop.VerticesMm;
+            for (var index = 0; index < loop.Count; index++)
+            {
+                var a = loop[index];
+                var b = loop[(index + 1) % loop.Count];
+                var key = EdgeKey(a, b);
+                counts[key] = counts.TryGetValue(key, out var found)
+                    ? (found.A, found.B, found.Count + 1)
+                    : (a, b, 1);
+            }
+        }
+
+        var border = counts.Values.Where(edge => edge.Count == 1).ToList();
+        if (border.Count < 3) return null;
+
+        var loops = new List<CadSlabLoop>();
+        while (border.Count > 0)
+        {
+            var chain = new List<CadStructurePoint2> { border[0].A, border[0].B };
+            border.RemoveAt(0);
+            var closed = false;
+            while (!closed && border.Count > 0)
+            {
+                var tail = chain[^1];
+                var next = border.FindIndex(edge =>
+                    Near(edge.A, tail) || Near(edge.B, tail));
+                if (next < 0) break;
+                var edge = border[next];
+                border.RemoveAt(next);
+                chain.Add(Near(edge.A, tail) ? edge.B : edge.A);
+                if (Near(chain[^1], chain[0]))
+                {
+                    chain.RemoveAt(chain.Count - 1);
+                    closed = true;
+                }
+            }
+            if (chain.Count >= 3) loops.Add(new CadSlabLoop(chain));
+        }
+
+        if (loops.Count == 0) return null;
+        var ordered = loops.OrderByDescending(loop => loop.AreaMm2).ToArray();
+        return new GroupBoundary(ordered[0], ordered.Skip(1).ToArray());
+    }
+
+    private static (long, long, long, long) EdgeKey(CadStructurePoint2 a, CadStructurePoint2 b)
+    {
+        var first = (Quantise(a.X), Quantise(a.Y));
+        var second = (Quantise(b.X), Quantise(b.Y));
+        return first.CompareTo(second) <= 0
+            ? (first.Item1, first.Item2, second.Item1, second.Item2)
+            : (second.Item1, second.Item2, first.Item1, first.Item2);
+    }
+
+    private static long Quantise(double value) => (long)Math.Round(value);
+
+    private static bool Near(CadStructurePoint2 a, CadStructurePoint2 b) => a.DistanceTo(b) <= 1.0;
+
+    private static bool TouchesAnother(
+        CadStructureSegment segment,
+        IReadOnlyList<CadStructureSegment> segments,
+        double toleranceMm)
+    {
+        var touchedStart = false;
+        var touchedEnd = false;
+        foreach (var other in segments)
+        {
+            if (other.Id == segment.Id) continue;
+            if (!touchedStart
+                && (other.Start.DistanceTo(segment.Start) <= toleranceMm
+                    || other.End.DistanceTo(segment.Start) <= toleranceMm))
+                touchedStart = true;
+            if (!touchedEnd
+                && (other.Start.DistanceTo(segment.End) <= toleranceMm
+                    || other.End.DistanceTo(segment.End) <= toleranceMm))
+                touchedEnd = true;
+            // Both ends meeting other geometry is what makes a short piece part of a boundary
+            // rather than a mark standing on its own.
+            if (touchedStart && touchedEnd) return true;
+        }
+        return false;
     }
 
     /// <summary>
