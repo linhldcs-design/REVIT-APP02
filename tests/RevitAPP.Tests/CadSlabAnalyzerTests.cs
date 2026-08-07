@@ -526,6 +526,56 @@ public sealed class CadSlabAnalyzerTests
         Assert.Equal(-100, slab.EffectiveOffsetMm, 3);
     }
 
+    [Fact]
+    public void Analyze_BaysMeetingAlongUnevenEdges_AreStillOneSlab()
+    {
+        // Bays of one pour rarely meet along matching edges: a beam or an opening on one side
+        // splits the shared boundary, so the edges overlap without being equal.
+        var segments = new List<CadStructureSegment>
+        {
+            Segment(1, 0, 0, 8000, 0),
+            Segment(2, 0, 6000, 8000, 6000),
+            Segment(3, 0, 0, 0, 6000),
+            Segment(4, 8000, 0, 8000, 6000),
+            Segment(5, 4000, 0, 4000, 6000),
+            Segment(6, 4000, 3000, 8000, 3000)
+        };
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(segments, Annotation(90, 2000, 3000, "-0.100 Hs=120")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(48.0, slab.AreaM2, 2);
+        Assert.Equal(3, slab.CellIds.Count);
+    }
+
+    [Fact]
+    public void Analyze_UnhatchedArea_IsOneSlabHoweverManyBaysItHas()
+    {
+        // Only the outside edge, a hatched area and an opening divide a floor. The grid of bays
+        // does not, so a plain area is one pour however few of its bays the plan labelled.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(6, 3, 4000, 4000),
+                Annotation(90, 2000, 2000, "-0.100 Hs=120"),
+                Annotation(91, 14000, 6000, "-0.100 Hs=120"),
+                Annotation(92, 22000, 10000, "-0.100 Hs=120"),
+                Annotation(93, 10000, 6000, "-0.050 Hs=120")),
+            new[] { Hatch(1, 8000, 4000, 12000, 8000, "ANSI31", 1.0) },
+            new CadSlabAnalysisOptions());
+
+        Assert.Equal(2, result.Regions.Count);
+        var plain = Assert.Single(result.Regions, region => !region.IsLowered);
+        Assert.Equal(272.0, plain.AreaM2, 2);
+        Assert.Equal(17, plain.CellIds.Count);
+        Assert.Equal(-100, plain.EffectiveOffsetMm, 3);
+
+        var hatched = Assert.Single(result.Regions, region => region.IsLowered);
+        Assert.Equal(16.0, hatched.AreaM2, 2);
+        Assert.Equal(-50, hatched.EffectiveOffsetMm, 3);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

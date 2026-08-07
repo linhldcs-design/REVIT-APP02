@@ -347,25 +347,39 @@ public static class CadSlabAnalyzer
         // connected to each other: a stair core can separate one part of a floor from another. The
         // marked cells are passed in so a label can travel across them without pouring into them.
         resolved = SpreadLabelsAcrossNeighbours(resolved, cells);
+
+        // Whatever a label could not reach still belongs to the pour around it, so a connected run
+        // of bays with one stated level takes that level throughout. Leaving the rest on the
+        // default would break a floor apart at bays the plan never marked.
+        resolved = resolved
+            .GroupBy(cell => cell.HatchStyleKey)
+            .SelectMany(group => ConnectedParts(group.ToArray()))
+            .SelectMany(FillFromStatedValues)
+            .ToArray();
         // Spreading runs over the cells that take concrete, and openings and columns were already
         // excluded from that set, so nothing here can revive them as slabs.
 
-        // A hatched area is poured on its own, so the pattern separates slabs the way a level or a
-        // thickness does. Two bays at the same level are still two slabs when one is hatched and
-        // the other is not, and two patterns mean two slabs again.
+        // Only three things divide a floor: its outside edge, a hatched area and an opening. The
+        // grid of bays inside them is not a division -- a beam does not end a pour. So the cells
+        // are grouped by hatch alone, and each connected part of a group takes one level and one
+        // thickness read from whichever of its bays the plan labelled.
         var groups = resolved
-            .GroupBy(cell => (
-                Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
-                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm),
-                cell.HatchStyleKey))
+            .GroupBy(cell => cell.HatchStyleKey)
             .ToArray();
 
         var regions = new List<CadSlabRegionCandidate>();
         var id = 1;
-        // Cells sharing a level, a thickness and a hatch need not touch: a hatched area can sit
-        // between two parts of the same pour and leave them on either side of it. Each connected
-        // part is a slab of its own, so the group is split into the pieces that actually join.
-        foreach (var members in groups.SelectMany(group => ConnectedParts(group.ToArray())))
+        // Cells sharing a hatch need not touch: a hatched area can sit between two parts of the
+        // same pour and leave them on either side of it. Each connected part is a slab of its own.
+        // A part is then split again only where the plan states two levels or two thicknesses
+        // within it, which is a real division rather than an artefact of the grid.
+        foreach (var members in groups
+                     .SelectMany(group => ConnectedParts(group.ToArray()))
+                     .SelectMany(part => part
+                         .GroupBy(cell => (
+                             Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
+                             Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
+                         .SelectMany(section => ConnectedParts(section.ToArray()))))
         {
             // The outside edge comes from the pour together with the voids inside it: a stair core
             // does not push the edge of the floor inwards, it makes a hole in it. Leaving the
@@ -483,28 +497,64 @@ public static class CadSlabAnalyzer
         return result.Where(cell => pouredIds.Contains(cell.Id)).ToArray();
     }
 
+    /// <summary>
+    /// Which cells touch. Two bays of one pour rarely meet along matching edges: a beam or an
+    /// opening on one side splits the shared boundary into pieces, so the edges overlap without
+    /// being equal. Cells therefore count as neighbours when their edges run along each other,
+    /// not only when the two edges are identical.
+    /// </summary>
     private static List<int>[] BuildAdjacency(IReadOnlyList<CadSlabCell> cells)
     {
-        var owners = new Dictionary<(long, long, long, long), List<int>>();
-        for (var index = 0; index < cells.Count; index++)
-        {
-            var loop = cells[index].Loop.VerticesMm;
-            for (var vertex = 0; vertex < loop.Count; vertex++)
-            {
-                var key = EdgeKey(loop[vertex], loop[(vertex + 1) % loop.Count]);
-                if (!owners.TryGetValue(key, out var list)) owners[key] = list = new List<int>();
-                if (!list.Contains(index)) list.Add(index);
-            }
-        }
-
         var adjacency = new List<int>[cells.Count];
         for (var index = 0; index < adjacency.Length; index++) adjacency[index] = new List<int>();
-        foreach (var list in owners.Values.Where(list => list.Count == 2))
+
+        var edges = cells
+            .Select(cell => LoopSegments(cell.Loop).ToArray())
+            .ToArray();
+
+        for (var first = 0; first < cells.Count; first++)
+        for (var second = first + 1; second < cells.Count; second++)
         {
-            adjacency[list[0]].Add(list[1]);
-            adjacency[list[1]].Add(list[0]);
+            if (!edges[first].Any(a => edges[second].Any(b => EdgesRunTogether(a, b)))) continue;
+            adjacency[first].Add(second);
+            adjacency[second].Add(first);
         }
         return adjacency;
+    }
+
+    private static IEnumerable<(CadStructurePoint2 A, CadStructurePoint2 B)> LoopSegments(CadSlabLoop loop)
+    {
+        var vertices = loop.VerticesMm;
+        for (var index = 0; index < vertices.Count; index++)
+            yield return (vertices[index], vertices[(index + 1) % vertices.Count]);
+    }
+
+    /// <summary>
+    /// Whether two edges lie on the same line and share a stretch of it, which is what makes the
+    /// cells on either side of them neighbours.
+    /// </summary>
+    private static bool EdgesRunTogether(
+        (CadStructurePoint2 A, CadStructurePoint2 B) first,
+        (CadStructurePoint2 A, CadStructurePoint2 B) second)
+    {
+        var direction = first.B - first.A;
+        var length = Math.Sqrt(direction.X * direction.X + direction.Y * direction.Y);
+        if (length < 1.0) return false;
+        var unit = new CadStructurePoint2(direction.X / length, direction.Y / length);
+        var normal = new CadStructurePoint2(-unit.Y, unit.X);
+
+        var offset = Dot(first.A, normal);
+        if (Math.Abs(Dot(second.A, normal) - offset) > 1.0) return false;
+        if (Math.Abs(Dot(second.B, normal) - offset) > 1.0) return false;
+
+        var firstStart = Dot(first.A, unit);
+        var firstEnd = Dot(first.B, unit);
+        if (firstStart > firstEnd) (firstStart, firstEnd) = (firstEnd, firstStart);
+        var secondStart = Dot(second.A, unit);
+        var secondEnd = Dot(second.B, unit);
+        if (secondStart > secondEnd) (secondStart, secondEnd) = (secondEnd, secondStart);
+
+        return Math.Min(firstEnd, secondEnd) - Math.Max(firstStart, secondStart) > 1.0;
     }
 
     private sealed record GroupBoundary(CadSlabLoop Outer, IReadOnlyList<CadSlabLoop> Holes);
@@ -577,6 +627,28 @@ public static class CadSlabAnalyzer
     /// Joins voids that touch into one outline. A stair core is drawn as several bays, and cutting
     /// each of them separately would leave lines of slab between them that no plan shows.
     /// </summary>
+    /// <summary>
+    /// Gives every bay of a connected run the level and thickness the plan states for it. Where a
+    /// run states one value, the bays it never labelled take that value rather than a default;
+    /// where it states several, the bays keep what they were given and the run divides later.
+    /// </summary>
+    private static IReadOnlyList<CadSlabCell> FillFromStatedValues(CadSlabCell[] part)
+    {
+        var elevations = part.Where(cell => cell.ElevationMm is not null)
+            .Select(cell => cell.ElevationMm!.Value).Distinct().ToArray();
+        var thicknesses = part.Where(cell => cell.ThicknessMm is not null)
+            .Select(cell => cell.ThicknessMm!.Value).Distinct().ToArray();
+        var elevation = elevations.Length == 1 ? elevations[0] : (double?)null;
+        var thickness = thicknesses.Length == 1 ? thicknesses[0] : (double?)null;
+        if (elevation is null && thickness is null) return part;
+
+        return part.Select(cell => cell with
+        {
+            ElevationMm = cell.ElevationMm ?? elevation,
+            ThicknessMm = cell.ThicknessMm ?? thickness
+        }).ToArray();
+    }
+
     /// <summary>
     /// Splits a set of cells into the parts that actually touch. Cells can share a level and a
     /// thickness while lying on either side of something poured separately, and each part is then
@@ -893,6 +965,9 @@ public static class CadSlabAnalyzer
     private static bool TryInvariant(string value, out double result) =>
         double.TryParse(value.Replace(',', '.'), NumberStyles.Float,
             CultureInfo.InvariantCulture, out result);
+
+    private static double Dot(CadStructurePoint2 first, CadStructurePoint2 second) =>
+        first.X * second.X + first.Y * second.Y;
 
     private static bool Finite(CadStructurePoint2 point) => Finite(point.X) && Finite(point.Y);
     private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
