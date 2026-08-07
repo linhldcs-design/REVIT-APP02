@@ -20,8 +20,11 @@ public static class CadSlabAnalyzer
     // An elevation is written with a sign or three decimals: +0.000, -0.050, 0.000. A thickness is
     // a whole number of millimetres. Keeping the two patterns apart is what stops -0.100 being
     // read as a 100 mm slab.
+    // A level is written in metres with at most two whole digits: +0.000, -0.050, -1.500. Allowing
+    // more digits let a dimension standing next to the label bleed into the number, so 1818 beside
+    // -0.100 read as +81818.100.
     private static readonly Regex ElevationRegex = new(
-        @"(?<sign>[+\-±])?\s*(?<value>\d+[.,]\d{2,3})\b",
+        @"(?<![\d.,])(?<sign>[+\-±])?\s*(?<value>\d{1,2}[.,]\d{2,3})(?![\d.,])",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex LabelledThicknessRegex = new(
@@ -364,7 +367,10 @@ public static class CadSlabAnalyzer
                 .Concat(cells
                     .Where(cell => (cell.IsOpening || cell.IsColumn)
                                    && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
-                    .Select(cell => cell.Loop))
+                    .Select(cell => Orient(cell.Loop, counterClockwise: false)))
+                // A sliver left where beams cross is not a hole worth cutting, and Revit rejects a
+                // profile carrying a loop that small.
+                .Where(hole => hole.AreaMm2 >= 10_000.0)
                 .ToArray();
 
             // A plan labels a bay, not every cell the lines carve out of it, so the group takes
@@ -515,7 +521,20 @@ public static class CadSlabAnalyzer
 
         if (loops.Count == 0) return null;
         var ordered = loops.OrderByDescending(loop => loop.AreaMm2).ToArray();
-        return new GroupBoundary(ordered[0], ordered.Skip(1).ToArray());
+        // Stitching picks up an edge in whichever direction it was drawn, so a loop can come out
+        // either way round. Revit rejects a profile whose loops disagree, and a reversed outer
+        // loop also reports a negative area in the review.
+        var outer = Orient(ordered[0], counterClockwise: true);
+        var holes = ordered.Skip(1)
+            .Select(loop => Orient(loop, counterClockwise: false))
+            .ToArray();
+        return new GroupBoundary(outer, holes);
+    }
+
+    private static CadSlabLoop Orient(CadSlabLoop loop, bool counterClockwise)
+    {
+        var wanted = counterClockwise ? loop.SignedAreaMm2 > 0 : loop.SignedAreaMm2 < 0;
+        return wanted ? loop : new CadSlabLoop(loop.VerticesMm.Reverse().ToArray());
     }
 
     private static (long, long, long, long) EdgeKey(CadStructurePoint2 a, CadStructurePoint2 b)

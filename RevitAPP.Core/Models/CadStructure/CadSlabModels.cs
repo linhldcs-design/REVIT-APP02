@@ -168,8 +168,9 @@ public sealed record CadSlabAnalysisOptions(
     // this and it is a corridor or a room, which stays a region of its own.
     double MaximumBeamStripWidthMm = 500.0,
     // A cell no wider than this on either side, sitting where beams meet, is a column through the
-    // floor rather than a bay, so the slab is cast around it.
-    double MaximumColumnSizeMm = 1200.0,
+    // floor rather than a bay, so the slab is cast around it. Columns are rarely wider than this,
+    // and a bay never narrower, which is what keeps small rooms out of the holes.
+    double MaximumColumnSizeMm = 800.0,
     // A bare number is only a thickness inside this range: a plan is full of numbers that are not
     // thicknesses -- grid spacings, dimensions and grid names.
     double MinimumThicknessMm = 50.0,

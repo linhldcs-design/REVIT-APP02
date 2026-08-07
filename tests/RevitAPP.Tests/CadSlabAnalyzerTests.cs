@@ -383,6 +383,41 @@ public sealed class CadSlabAnalyzerTests
         Assert.Equal(-50, slab.DetectedElevationMm);
     }
 
+    [Theory]
+    [InlineData("1818 -0.100", -100)]
+    [InlineData("2050 200 -0.050", -50)]
+    [InlineData("-0.100 1300", -100)]
+    public void Analyze_DimensionsBesideTheLabel_DoNotBleedIntoTheLevel(string text, double expected)
+    {
+        // Dimensions sit right beside the level on a plan. Reading the whole number let 1818 join
+        // -0.100 and put the slab eighty metres up.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Rectangle(1, 0, 0, 8000, 6000), Annotation(90, 4000, 3000, $"{text} Hs=120")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(expected, slab.EffectiveOffsetMm, 3);
+        Assert.Equal(120, slab.EffectiveThicknessMm, 3);
+    }
+
+    [Fact]
+    public void Analyze_MergedRegion_ReportsAPositiveAreaAndAnOuterLoopThatWindsOneWay()
+    {
+        // Stitching picks up an edge in whichever direction it was drawn. A reversed outer loop
+        // shows as a negative area and Revit refuses the profile outright.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(3, 2, 4000, 3000), Annotation(90, 2000, 1500, "+0.000 Hs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.True(slab.AreaM2 > 0, "area must be positive");
+        Assert.True(slab.OuterLoop.SignedAreaMm2 > 0, "outer loop must wind counter-clockwise");
+        Assert.All(slab.Holes, hole =>
+            Assert.True(hole.SignedAreaMm2 < 0, "a hole must wind the other way"));
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

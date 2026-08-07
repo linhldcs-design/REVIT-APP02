@@ -81,6 +81,19 @@ internal static class CadSlabCreationService
                     try
                     {
                         var loops = BuildLoops(region);
+                        // Revit only says the profile is invalid, so check the conditions here
+                        // where the region is still known and the message can name what is wrong.
+                        foreach (var loop in loops)
+                        {
+                            if (loop.NumberOfCurves() < 3)
+                                throw new InvalidOperationException(
+                                    "Đường bao có ít hơn 3 cạnh sau khi bỏ cạnh dài bằng 0.");
+                            if (loop.IsOpen())
+                                throw new InvalidOperationException("Đường bao không khép kín.");
+                        }
+                        if (loops[0].IsCounterclockwise(XYZ.BasisZ) == false)
+                            loops[0] = Reversed(loops[0]);
+
                         var floorType = types[(int)Math.Round(region.EffectiveThicknessMm)];
                         var offsetFeet = region.EffectiveOffsetMm / MillimetresPerFoot;
 
@@ -117,6 +130,13 @@ internal static class CadSlabCreationService
             if (errors.Count == 0) errors.Add(exception.Message);
             return new CadSlabCreationResult(
                 Array.Empty<ElementId>(), existingCount, errors, TransactionStatus.RolledBack);
+        }
+
+        static CurveLoop Reversed(CurveLoop loop)
+        {
+            var reversed = new CurveLoop();
+            foreach (var curve in loop.Reverse()) reversed.Append(curve.CreateReversed());
+            return reversed;
         }
 
         IList<CurveLoop> BuildLoops(CadSlabRegionCandidate region)
