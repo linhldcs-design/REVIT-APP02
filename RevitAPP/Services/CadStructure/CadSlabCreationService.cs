@@ -90,6 +90,9 @@ internal static class CadSlabCreationService
                                     "Đường bao có ít hơn 3 cạnh sau khi bỏ cạnh dài bằng 0.");
                             if (loop.IsOpen())
                                 throw new InvalidOperationException("Đường bao không khép kín.");
+                            if (SelfIntersects(loop))
+                                throw new InvalidOperationException(
+                                    "Đường bao tự cắt — kiểm tra biên sàn trong preview.");
                         }
                         if (loops[0].IsCounterclockwise(XYZ.BasisZ) == false)
                             loops[0] = Reversed(loops[0]);
@@ -131,6 +134,36 @@ internal static class CadSlabCreationService
             return new CadSlabCreationResult(
                 Array.Empty<ElementId>(), existingCount, errors, TransactionStatus.RolledBack);
         }
+
+        /// <summary>
+        /// Whether a loop crosses or doubles back on itself. Revit only reports that the profile
+        /// is invalid, without saying which loop, so it is worth naming here.
+        /// </summary>
+        static bool SelfIntersects(CurveLoop loop)
+        {
+            var points = loop.Select(curve => curve.GetEndPoint(0)).ToArray();
+            for (var index = 0; index < points.Length; index++)
+            for (var other = index + 2; other < points.Length; other++)
+            {
+                if (index == 0 && other == points.Length - 1) continue;
+                if (Crosses(points[index], points[(index + 1) % points.Length],
+                        points[other], points[(other + 1) % points.Length]))
+                    return true;
+            }
+            return false;
+        }
+
+        static bool Crosses(XYZ a1, XYZ a2, XYZ b1, XYZ b2)
+        {
+            var d1 = Direction(b1, b2, a1);
+            var d2 = Direction(b1, b2, a2);
+            var d3 = Direction(a1, a2, b1);
+            var d4 = Direction(a1, a2, b2);
+            return d1 * d2 < 0 && d3 * d4 < 0;
+        }
+
+        static double Direction(XYZ from, XYZ to, XYZ point) =>
+            (to.X - from.X) * (point.Y - from.Y) - (to.Y - from.Y) * (point.X - from.X);
 
         static CurveLoop Reversed(CurveLoop loop)
         {

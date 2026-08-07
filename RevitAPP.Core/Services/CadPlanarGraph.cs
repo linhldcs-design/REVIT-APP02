@@ -87,10 +87,42 @@ public static class CadPlanarGraph
         if (loop[^1] == loop[0]) loop.RemoveAt(loop.Count - 1);
         if (loop.Count < 3) return null;
 
+        // Walking the outside goes up a spur and back down it again, which leaves the same vertex
+        // twice and a pair of edges lying on top of each other. Revit reads that as a profile
+        // crossing itself, so the excursion is removed and only the loop around it kept.
+        loop = RemoveExcursions(loop);
+        if (loop.Count < 3) return null;
+
         var outline = new CadSlabLoop(loop.Select(index => vertices[index]).ToArray());
         return outline.SignedAreaMm2 < 0
             ? new CadSlabLoop(outline.VerticesMm.Reverse().ToArray())
             : outline;
+    }
+
+    /// <summary>
+    /// Removes the stretches the walk retraced. Whenever a vertex appears twice, everything
+    /// between the two visits was entered and left again by the same edges, so it belongs to a
+    /// spur rather than to the outline.
+    /// </summary>
+    private static List<int> RemoveExcursions(List<int> loop)
+    {
+        var result = new List<int>();
+        var seen = new Dictionary<int, int>();
+        foreach (var vertex in loop)
+        {
+            if (seen.TryGetValue(vertex, out var first))
+            {
+                for (var index = result.Count - 1; index > first; index--)
+                {
+                    seen.Remove(result[index]);
+                    result.RemoveAt(index);
+                }
+                continue;
+            }
+            seen[vertex] = result.Count;
+            result.Add(vertex);
+        }
+        return result;
     }
 
     /// <summary>
