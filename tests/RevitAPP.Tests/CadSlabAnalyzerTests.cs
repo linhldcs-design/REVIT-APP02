@@ -507,6 +507,25 @@ public sealed class CadSlabAnalyzerTests
         });
     }
 
+    [Fact]
+    public void Analyze_ImplausibleLevelReading_DoesNotSplitAConnectedFloor()
+    {
+        // A floor drops by a step or a storey, never by ten millimetres. A reading that small came
+        // from a number that is not a level, and taking it would cut a connected pour into pieces
+        // at levels the plan never states.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(3, 1, 4000, 6000),
+                Annotation(90, 2000, 3000, "-0.100 Hs=120"),
+                Annotation(91, 6000, 3000, "-0.010 Hs=120"),
+                Annotation(92, 10000, 3000, "-0.100 Hs=120")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(72.0, slab.AreaM2, 2);
+        Assert.Equal(-100, slab.EffectiveOffsetMm, 3);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

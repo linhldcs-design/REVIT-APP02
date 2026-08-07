@@ -175,7 +175,7 @@ public static class CadSlabAnalyzer
                 .ToArray();
 
             var thickness = ReadThickness(inside, options);
-            var elevation = ReadElevation(inside);
+            var elevation = ReadElevation(inside, options);
             var hatch = hatches.FirstOrDefault(item => ContainsPoint(item.BoundaryMm, centroid));
             var lowered = hatch is not null;
             // A mark the user picked settles the matter; the geometric guess only stands in when
@@ -289,7 +289,8 @@ public static class CadSlabAnalyzer
     }
 
     private static (double? Value, bool Ambiguous) ReadElevation(
-        IReadOnlyList<CadStructureAnnotation> annotations)
+        IReadOnlyList<CadStructureAnnotation> annotations,
+        CadSlabAnalysisOptions options)
     {
         var values = new List<double>();
         foreach (var annotation in annotations)
@@ -298,7 +299,13 @@ public static class CadSlabAnalyzer
             if (!match.Success) continue;
             if (!TryInvariant(match.Groups["value"].Value, out var metres)) continue;
             var sign = match.Groups["sign"].Value == "-" ? -1.0 : 1.0;
-            values.Add(sign * metres * 1000.0);
+            var millimetres = sign * metres * 1000.0;
+            // A floor drops by a step, a screed or a storey. A reading of a millimetre or two came
+            // from a number that is not a level at all, and taking it splits a floor the plan
+            // shows as one into pieces at levels it never states.
+            if (millimetres != 0.0 && Math.Abs(millimetres) < options.MinimumElevationStepMm)
+                continue;
+            values.Add(millimetres);
         }
 
         var distinct = values.Distinct().ToArray();
@@ -454,15 +461,21 @@ public static class CadSlabAnalyzer
             foreach (var neighbour in adjacency[index])
             {
                 var target = result[neighbour];
-                if (target.ThicknessMm is not null || target.ElevationMm is not null) continue;
+                // Each value travels on its own: a bay can state a thickness while its level was
+                // rejected as implausible, and it still belongs to the pour around it.
+                var takesThickness = target.ThicknessMm is null && source.ThicknessMm is not null;
+                var takesElevation = target.ElevationMm is null && source.ElevationMm is not null;
+                if (!takesThickness && !takesElevation) continue;
                 // A hatched area is a pour of its own, so a label does not carry across its edge.
                 if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
                     continue;
                 result[neighbour] = target with
                 {
-                    ThicknessMm = source.ThicknessMm,
-                    ElevationMm = source.ElevationMm,
-                    MatchedText = source.MatchedText
+                    ThicknessMm = takesThickness ? source.ThicknessMm : target.ThicknessMm,
+                    ElevationMm = takesElevation ? source.ElevationMm : target.ElevationMm,
+                    MatchedText = string.IsNullOrEmpty(target.MatchedText)
+                        ? source.MatchedText
+                        : target.MatchedText
                 };
                 pending.Enqueue(neighbour);
             }

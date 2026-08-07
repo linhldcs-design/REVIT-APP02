@@ -175,6 +175,10 @@ public sealed record CadSlabAnalysisOptions(
     // thicknesses -- grid spacings, dimensions and grid names.
     double MinimumThicknessMm = 50.0,
     double MaximumThicknessMm = 500.0,
+    // A slab drops by a step, a screed or a storey, never by a millimetre or two. A smaller
+    // reading came from a number that is not a level at all, and taking it splits a floor into
+    // pieces that the plan shows as one.
+    double MinimumElevationStepMm = 20.0,
     double DefaultThicknessMm = 100.0,
     double DefaultOffsetMm = 0.0,
     // Fallback drop for a hatched bay whose label is missing. A plan may use several patterns for
