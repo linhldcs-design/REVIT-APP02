@@ -51,9 +51,19 @@ internal static class AutoCadModelSelectionService
     public static AutoCadModelSelectionResult SelectSlab(CadStructureTransferPackage gridPackage) =>
         SelectInternal(gridPackage, includeHatch: true);
 
+    /// <summary>
+    /// Picks the strokes that mark a bay as left open. Only line work is read: the mark says where
+    /// no slab goes and never contributes a boundary.
+    /// </summary>
+    public static AutoCadModelSelectionResult SelectOpeningMarks(
+        CadStructureTransferPackage slabPackage) =>
+        SelectInternal(slabPackage, promptOverride:
+            "\nQuét chọn các line chéo đánh dấu ô không đổ sàn rồi nhấn Enter...\n");
+
     private static AutoCadModelSelectionResult SelectInternal(
         CadStructureTransferPackage? gridPackage,
-        bool includeHatch = false)
+        bool includeHatch = false,
+        string? promptOverride = null)
     {
         object? application = null;
         object? document = null;
@@ -86,14 +96,17 @@ internal static class AutoCadModelSelectionService
                 return AutoCadModelSelectionResult.Failed("Không tạo được vùng chọn trong AutoCAD.");
 
             utility = Get(document, "Utility");
-            SafeCall(utility, "Prompt", "\nQuét chọn lưới và rectangle/block cột rồi nhấn Enter...\n");
+            SafeCall(utility, "Prompt", promptOverride
+                ?? "\nQuét chọn lưới và rectangle/block cột rồi nhấn Enter...\n");
             Call(selection, "SelectOnScreen",
                 new short[] { DxfEntityType },
-                new object[] { gridPackage is null
-                    ? "LINE,LWPOLYLINE,POLYLINE,INSERT"
-                    : includeHatch
-                        ? "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT,HATCH"
-                        : "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
+                new object[] { promptOverride is not null
+                    ? "LINE,LWPOLYLINE,POLYLINE"
+                    : gridPackage is null
+                        ? "LINE,LWPOLYLINE,POLYLINE,INSERT"
+                        : includeHatch
+                            ? "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT,HATCH"
+                            : "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
 
             var selectedCount = Convert.ToInt32(Get(selection, "Count"));
             if (selectedCount > MaximumSelectedEntityCount)
@@ -358,15 +371,24 @@ internal static class AutoCadModelSelectionService
         {
             ThrowIfReadBudgetExceeded();
             var bounds = CallWithOutputs(entity, "GetBoundingBox", 2);
-            if (bounds is null)
+            var lower = bounds is null ? null : ToPoint(bounds[0]);
+            var upper = bounds is null ? null : ToPoint(bounds[1]);
+
+            // GetBoundingBox travels through by-reference arguments, which not every AutoCAD build
+            // hands back through late binding. Falling back to the loop vertices keeps the hatch
+            // usable instead of dropping the drop it marks.
+            if (lower is null || upper is null)
             {
-                Log.Debug("Could not read AutoCAD hatch bounds on layer {Layer}", layer);
-                return;
+                var loop = ReadHatchLoopExtent(entity);
+                if (loop is null)
+                {
+                    Log.Debug("Could not read AutoCAD hatch bounds on layer {Layer}", layer);
+                    return;
+                }
+                lower = loop.Value.Lower;
+                upper = loop.Value.Upper;
             }
 
-            var lower = ToPoint(bounds[0]);
-            var upper = ToPoint(bounds[1]);
-            if (lower is null || upper is null) return;
             if (upper.Value.X - lower.Value.X < 1e-6 || upper.Value.Y - lower.Value.Y < 1e-6) return;
 
             var corners = new[]
@@ -384,6 +406,60 @@ internal static class AutoCadModelSelectionService
                 PatternAngleDegrees =
                     Safe(() => Convert.ToDouble(Get(entity, "PatternAngle"))) * 180.0 / Math.PI
             });
+        }
+
+        /// <summary>
+        /// Extent of a hatch taken from the objects its boundary loops are built on, for when the
+        /// bounding box cannot be read through late binding.
+        /// </summary>
+        private static (CadStructurePoint2 Lower, CadStructurePoint2 Upper)? ReadHatchLoopExtent(object entity)
+        {
+            var points = new List<CadStructurePoint2>();
+            try
+            {
+                var loops = Convert.ToInt32(Get(entity, "NumberOfLoops"));
+                for (var index = 0; index < loops; index++)
+                {
+                    var objects = Safe(() => Call(entity, "GetLoopAt", index)) as object[];
+                    if (objects is null) continue;
+                    foreach (var item in objects)
+                    {
+                        if (item is null) continue;
+                        try
+                        {
+                            var name = Safe(() => Get(item, "ObjectName")?.ToString()) ?? string.Empty;
+                            if (name is "AcDbPolyline" or "AcDb2dPolyline")
+                            {
+                                var values = ToDoubles(Safe(() => Get(item, "Coordinates")));
+                                var stride = name == "AcDbPolyline" ? 2 : 3;
+                                for (var vertex = 0; vertex + 1 < values.Length; vertex += stride)
+                                    points.Add(new CadStructurePoint2(values[vertex], values[vertex + 1]));
+                            }
+                            else if (name == "AcDbLine")
+                            {
+                                var start = ToPoint(Safe(() => Get(item, "StartPoint")));
+                                var end = ToPoint(Safe(() => Get(item, "EndPoint")));
+                                if (start is not null) points.Add(start.Value);
+                                if (end is not null) points.Add(end.Value);
+                            }
+                        }
+                        finally
+                        {
+                            Release(item);
+                        }
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                Log.Debug(exception, "Could not read AutoCAD hatch loops");
+                return null;
+            }
+
+            if (points.Count < 3) return null;
+            return (
+                new CadStructurePoint2(points.Min(point => point.X), points.Min(point => point.Y)),
+                new CadStructurePoint2(points.Max(point => point.X), points.Max(point => point.Y)));
         }
 
         private void AddAnnotation(

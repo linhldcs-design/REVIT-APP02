@@ -347,6 +347,42 @@ public sealed class CadSlabAnalyzerTests
         Assert.Equal(0, result.UnclosedVertexCount);
     }
 
+    [Fact]
+    public void Analyze_ElevationAndThicknessAsSeparateTexts_AreBothRead()
+    {
+        // A plan writes the level above the thickness with the level symbol between them, so the
+        // two values arrive as separate text entities rather than one label.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Rectangle(1, 0, 0, 8000, 6000),
+                Annotation(90, 4000, 3600, "-0.050"),
+                Annotation(91, 4000, 2400, "Hs=120")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(120, slab.DetectedThicknessMm);
+        Assert.Equal(-50, slab.DetectedElevationMm);
+        Assert.Equal(CadSlabRegionStatus.Ready, slab.Status);
+    }
+
+    [Theory]
+    [InlineData(@"-0.050\PHs=120")]
+    [InlineData(@"\W0.8;-0.050\PHs=120")]
+    [InlineData(@"{\W0.8;-0.050\PHs=120}")]
+    public void Analyze_MTextWrittenOnTwoLines_KeepsBothValues(string text)
+    {
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Rectangle(1, 0, 0, 8000, 6000),
+                new CadStructureAnnotation(
+                    90, new CadStructurePoint2(4000, 3000), text, 0, "MText", string.Empty, true)),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(120, slab.DetectedThicknessMm);
+        Assert.Equal(-50, slab.DetectedElevationMm);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

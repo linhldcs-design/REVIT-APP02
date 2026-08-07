@@ -29,7 +29,15 @@ internal sealed record CadBeamPreviewData(
 internal sealed record CadSlabPreviewData(
     CadStructureTransferPackage Package,
     IReadOnlyList<CadHatchRegion> Hatches,
-    CadSlabAnalysis Analysis);
+    CadSlabAnalysis Analysis)
+{
+    /// <summary>
+    /// Marks the user picked to say which bays stay open, kept in drawing units beside the scan so
+    /// re-analysing after a settings change does not need them picked again.
+    /// </summary>
+    public IReadOnlyList<CadStructureSegment> OpeningMarks { get; init; } =
+        Array.Empty<CadStructureSegment>();
+}
 
 internal sealed partial class ModelFromCadViewModel : ObservableObject
 {
@@ -40,6 +48,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private readonly Func<CadModelPreviewData?>? _reselect;
     private readonly Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? _selectBeam;
     private readonly Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? _selectSlab;
+    private readonly Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? _selectOpeningMarks;
     private bool _suppressItemNotifications;
 
     public ModelFromCadViewModel(
@@ -47,12 +56,14 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         CadColumnProjectOptions options,
         Func<CadModelPreviewData?>? reselect = null,
         Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? selectBeam = null,
-        Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? selectSlab = null)
+        Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? selectSlab = null,
+        Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? selectOpeningMarks = null)
     {
         Data = data;
         _reselect = reselect;
         _selectBeam = selectBeam;
         _selectSlab = selectSlab;
+        _selectOpeningMarks = selectOpeningMarks;
         GridAxes = new ObservableCollection<CadGridAxisViewModel>(
             data.GridPreview.Axes.Select(axis => new CadGridAxisViewModel(axis)));
         Columns = new ObservableCollection<CadColumnRowViewModel>(
@@ -329,7 +340,13 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         && SelectedSlabLevel is not null
         && RotationValid;
 
-    private CadSlabAnalysisOptions SlabOptions() => new(
+    private CadSlabAnalysisOptions SlabOptions() => SlabOptionsWith(
+        SlabData?.OpeningMarks ?? Array.Empty<CadStructureSegment>());
+
+    private CadSlabAnalysisOptions SlabOptionsWith(IReadOnlyList<CadStructureSegment> marks) =>
+        BaseSlabOptions() with { OpeningMarksMm = marks };
+
+    private CadSlabAnalysisOptions BaseSlabOptions() => new(
         VertexSnapToleranceMm: ParseNumber(VertexSnapText),
         MinimumLineLengthMm: ParseNumber(MinimumSlabLineText),
         MinimumRegionAreaM2: ParseNumber(MinimumSlabAreaText),
@@ -453,6 +470,19 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         if (replacement is null) return;
         SetSlabData(replacement);
     }
+
+    [RelayCommand(CanExecute = nameof(CanSelectOpeningMarks))]
+    private void SelectOpeningMarks()
+    {
+        if (SlabData is null || _selectOpeningMarks is null) return;
+        var marks = _selectOpeningMarks(SlabData.Package);
+        if (marks is null) return;
+        var analysis = CadSlabAnalyzer.Analyze(
+            SlabData.Package, SlabData.Hatches, SlabOptionsWith(marks));
+        SetSlabData(SlabData with { Analysis = analysis, OpeningMarks = marks });
+    }
+
+    private bool CanSelectOpeningMarks() => SlabData is not null && SlabAnalysisSettingsValid;
 
     [RelayCommand(CanExecute = nameof(CanApplySlabAnalysis))]
     private void ApplySlabAnalysis()
@@ -783,6 +813,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         ApplyBeamAnalysisCommand.NotifyCanExecuteChanged();
         SelectSlabLinesCommand.NotifyCanExecuteChanged();
         ApplySlabAnalysisCommand.NotifyCanExecuteChanged();
+        SelectOpeningMarksCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyBeamAnalysisSettings()

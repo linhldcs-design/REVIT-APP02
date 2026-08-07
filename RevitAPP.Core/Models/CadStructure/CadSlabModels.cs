@@ -64,6 +64,12 @@ public sealed record CadSlabCell(
     /// slab of its own, so it is absorbed into the slab rather than kept as a region.
     /// </summary>
     public bool IsBeamStrip { get; init; }
+
+    /// <summary>
+    /// A small cell at a beam intersection is a column passing through the floor. Concrete is not
+    /// poured there, so it becomes a hole in the slab around it.
+    /// </summary>
+    public bool IsColumn { get; init; }
     public string MatchedText { get; init; } = string.Empty;
 
     public CadStructurePoint2 CentroidMm
@@ -161,6 +167,9 @@ public sealed record CadSlabAnalysisOptions(
     // A strip narrower than this between two cells is a beam drawn by its two faces. Wider than
     // this and it is a corridor or a room, which stays a region of its own.
     double MaximumBeamStripWidthMm = 500.0,
+    // A cell no wider than this on either side, sitting where beams meet, is a column through the
+    // floor rather than a bay, so the slab is cast around it.
+    double MaximumColumnSizeMm = 1200.0,
     // A bare number is only a thickness inside this range: a plan is full of numbers that are not
     // thicknesses -- grid spacings, dimensions and grid names.
     double MinimumThicknessMm = 50.0,
@@ -181,4 +190,11 @@ public sealed record CadSlabAnalysisOptions(
     /// </summary>
     public IReadOnlyDictionary<string, double> HatchOffsetsMm { get; init; } =
         new Dictionary<string, double>();
+
+    /// <summary>
+    /// Marks the user picked to say a bay is left open. Guessing a cross from geometry misses the
+    /// ones a drawing writes differently, so picking them is both surer and quicker to correct.
+    /// </summary>
+    public IReadOnlyList<CadStructureSegment> OpeningMarksMm { get; init; } =
+        Array.Empty<CadStructureSegment>();
 }

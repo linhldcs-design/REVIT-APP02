@@ -103,8 +103,17 @@ public static class CadSlabAnalyzer
             .Where(hatch => hatch.BoundaryMm.Count >= 3)
             .ToArray();
 
+        var marks = options.OpeningMarksMm
+            .Where(mark => Finite(mark.Start) && Finite(mark.End))
+            .Select(mark => mark with
+            {
+                Start = mark.Start * scale - origin,
+                End = mark.End * scale - origin
+            })
+            .ToArray();
+
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
-        var cells = ClassifyCells(faces, usable, annotations, hatchRegions, options);
+        var cells = ClassifyCells(faces, usable, annotations, hatchRegions, marks, options);
         var regions = MergeCells(cells, options);
 
         var warnings = new List<string>();
@@ -115,8 +124,10 @@ public static class CadSlabAnalyzer
                 + $"Tăng Vertex Snap ({options.VertexSnapToleranceMm:0} mm) nếu biên bị hở.");
         var orphanHatches = hatchRegions.Count(hatch =>
             !cells.Any(cell => ContainsPoint(hatch.BoundaryMm, cell.CentroidMm)));
-        if (orphanHatches > 0)
-            warnings.Add($"{orphanHatches} vùng hatch không nằm trong ô sàn nào.");
+        if (hatchRegions.Length == 0 && slabPackage.Segments.Count > 0)
+            warnings.Add("Không đọc được vùng hatch nào — kiểm tra vùng quét có chứa hatch không.");
+        else if (orphanHatches > 0)
+            warnings.Add($"{orphanHatches}/{hatchRegions.Length} vùng hatch không khớp ô sàn nào.");
         if (regions.Count == 0)
             warnings.Add("Không dựng được vùng sàn kín nào từ line đã quét.");
 
@@ -142,6 +153,7 @@ public static class CadSlabAnalyzer
         IReadOnlyList<CadStructureSegment> segments,
         IReadOnlyList<CadStructureAnnotation> annotations,
         IReadOnlyList<CadHatchRegion> hatches,
+        IReadOnlyList<CadStructureSegment> marks,
         CadSlabAnalysisOptions options)
     {
         var cells = new List<CadSlabCell>();
@@ -157,7 +169,11 @@ public static class CadSlabAnalyzer
             var elevation = ReadElevation(inside);
             var hatch = hatches.FirstOrDefault(item => ContainsPoint(item.BoundaryMm, centroid));
             var lowered = hatch is not null;
-            var opening = HasCrossMark(face, segments);
+            // A mark the user picked settles the matter; the geometric guess only stands in when
+            // nothing was picked.
+            var opening = marks.Count > 0
+                ? MarkedAsOpening(face, marks)
+                : HasCrossMark(face, segments);
             var text = inside.Length > 0 ? string.Join(" ", inside.Select(item => item.Text)) : string.Empty;
 
             cells.Add(new CadSlabCell(index + 1, face, SourceIdsWithin(segments, face))
@@ -168,6 +184,7 @@ public static class CadSlabAnalyzer
                 IsLowered = lowered,
                 HatchStyleKey = hatch?.StyleKey ?? string.Empty,
                 IsBeamStrip = IsNarrowStrip(face, options.MaximumBeamStripWidthMm),
+                IsColumn = IsColumnFootprint(face, options.MaximumColumnSizeMm),
                 MatchedText = text
             });
         }
@@ -178,29 +195,68 @@ public static class CadSlabAnalyzer
     /// A cross drawn corner to corner marks a shaft or a stairwell, which is left open rather than
     /// poured. Reading the mark from the geometry keeps it working whatever layer it sits on.
     /// </summary>
+    /// <summary>
+    /// Whether a mark the user picked falls in this bay. A stroke of a cross runs through the bay
+    /// it marks, so either an endpoint or the middle of the stroke lands inside it.
+    /// </summary>
+    private static bool MarkedAsOpening(
+        CadSlabLoop face,
+        IReadOnlyList<CadStructureSegment> marks)
+    {
+        foreach (var mark in marks)
+        {
+            var mid = new CadStructurePoint2(
+                (mark.Start.X + mark.End.X) / 2.0,
+                (mark.Start.Y + mark.End.Y) / 2.0);
+            if (ContainsPoint(face.VerticesMm, mid)
+                || ContainsPoint(face.VerticesMm, mark.Start)
+                || ContainsPoint(face.VerticesMm, mark.End))
+                return true;
+        }
+        return false;
+    }
+
     private static bool HasCrossMark(CadSlabLoop face, IReadOnlyList<CadStructureSegment> segments)
     {
         var centre = Centroid(face);
-        var diagonals = segments.Where(segment =>
+        var minX = face.VerticesMm.Min(point => point.X);
+        var maxX = face.VerticesMm.Max(point => point.X);
+        var minY = face.VerticesMm.Min(point => point.Y);
+        var maxY = face.VerticesMm.Max(point => point.Y);
+        var diagonalLength = Math.Sqrt((maxX - minX) * (maxX - minX) + (maxY - minY) * (maxY - minY));
+        if (diagonalLength < 1.0) return false;
+
+        // A stroke of the cross runs corner to corner, so it is long relative to the bay and
+        // slanted against its sides. Edges of the bay and the beams inside it run along the sides
+        // and are excluded by the slant alone.
+        var strokes = segments.Where(segment =>
         {
-            if (!ContainsPoint(face.VerticesMm, segment.Start)
-                && !ContainsPoint(face.VerticesMm, segment.End)) return false;
             var mid = new CadStructurePoint2(
                 (segment.Start.X + segment.End.X) / 2.0,
                 (segment.Start.Y + segment.End.Y) / 2.0);
-            return ContainsPoint(face.VerticesMm, mid);
+            if (!ContainsPoint(face.VerticesMm, mid)) return false;
+            var length = segment.Start.DistanceTo(segment.End);
+            if (length < diagonalLength * 0.3) return false;
+            var dx = Math.Abs(segment.End.X - segment.Start.X);
+            var dy = Math.Abs(segment.End.Y - segment.Start.Y);
+            return dx > length * 0.2 && dy > length * 0.2;
         }).ToArray();
-        if (diagonals.Length < 2) return false;
+        if (strokes.Length < 2) return false;
 
-        for (var first = 0; first < diagonals.Length; first++)
-        for (var second = first + 1; second < diagonals.Length; second++)
+        for (var first = 0; first < strokes.Length; first++)
+        for (var second = first + 1; second < strokes.Length; second++)
         {
-            var crossing = Intersect(diagonals[first], diagonals[second]);
+            // The two strokes must lean opposite ways, which is what makes the mark a cross
+            // rather than two parallel slashes.
+            var firstSlope = (strokes[first].End.Y - strokes[first].Start.Y)
+                             * (strokes[first].End.X - strokes[first].Start.X);
+            var secondSlope = (strokes[second].End.Y - strokes[second].Start.Y)
+                              * (strokes[second].End.X - strokes[second].Start.X);
+            if (firstSlope * secondSlope >= 0) continue;
+
+            var crossing = Intersect(strokes[first], strokes[second]);
             if (crossing is null) continue;
-            // The two strokes of a cross meet near the middle of the bay; two edges that merely
-            // touch meet at a corner instead.
-            var reach = Math.Sqrt(face.AreaMm2) / 3.0;
-            if (crossing.Value.DistanceTo(centre) <= reach) return true;
+            if (crossing.Value.DistanceTo(centre) <= diagonalLength / 3.0) return true;
         }
         return false;
     }
@@ -261,7 +317,9 @@ public static class CadSlabAnalyzer
         IReadOnlyList<CadSlabCell> cells,
         CadSlabAnalysisOptions options)
     {
-        var poured = cells.Where(cell => !cell.IsOpening).ToArray();
+        // Neither an opening nor a column takes concrete, so both stay out of the pour and become
+        // holes in the slab that surrounds them.
+        var poured = cells.Where(cell => !cell.IsOpening && !cell.IsColumn).ToArray();
 
         // A beam drawn by both its faces leaves a narrow strip between two bays. The pour runs
         // across it, so the strip takes the elevation and thickness of the bays it separates
@@ -279,6 +337,8 @@ public static class CadSlabAnalyzer
         // unlabelled, so the label has to reach them before grouping. Without this the labelled
         // cell forms a slab on its own and everything around it falls back to the defaults.
         resolved = SpreadLabelsAcrossNeighbours(resolved);
+        // Spreading runs over the cells that take concrete, and openings and columns were already
+        // excluded from that set, so nothing here can revive them as slabs.
 
         // Hatch style joins elevation and thickness as a key. A plan draws each drop with its own
         // pattern, so bays hatched differently are different slabs even where neither carries a
@@ -302,7 +362,8 @@ public static class CadSlabAnalyzer
 
             var holes = boundary.Holes
                 .Concat(cells
-                    .Where(cell => cell.IsOpening && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
+                    .Where(cell => (cell.IsOpening || cell.IsColumn)
+                                   && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
                     .Select(cell => cell.Loop))
                 .ToArray();
 
@@ -536,6 +597,26 @@ public static class CadSlabAnalyzer
     /// A long, narrow cell between two bays is the footprint of a beam drawn by both faces rather
     /// than a slab of its own, so it merges with its neighbours instead of standing alone.
     /// </summary>
+    /// <summary>
+    /// A cell small on both sides is a column standing in the floor rather than a bay of it. It
+    /// appears wherever beams meet, and no concrete is poured through it.
+    /// </summary>
+    private static bool IsColumnFootprint(CadSlabLoop face, double maximumSizeMm)
+    {
+        var minX = face.VerticesMm.Min(point => point.X);
+        var maxX = face.VerticesMm.Max(point => point.X);
+        var minY = face.VerticesMm.Min(point => point.Y);
+        var maxY = face.VerticesMm.Max(point => point.Y);
+        var width = maxX - minX;
+        var height = maxY - minY;
+        if (width > maximumSizeMm || height > maximumSizeMm) return false;
+        // A column is roughly as deep as it is wide; a short length of beam between two bays is
+        // not, and belongs to the pour rather than to a hole in it.
+        var longer = Math.Max(width, height);
+        var shorter = Math.Min(width, height);
+        return shorter > 0 && longer <= shorter * 2.5;
+    }
+
     private static bool IsNarrowStrip(CadSlabLoop face, double maximumWidthMm)
     {
         var minX = face.VerticesMm.Min(point => point.X);
@@ -620,9 +701,12 @@ public static class CadSlabAnalyzer
 
     private static string NormalizeText(string value)
     {
-        var normalized = MTextControlRegex.Replace(value, string.Empty);
-        return normalized.Replace("\\P", " ")
-            .Replace("\\p", " ")
+        // \P is a line break and must become a separator before the formatting codes are stripped;
+        // otherwise the code pattern consumes it and the two lines run together, hiding the
+        // elevation written above the thickness.
+        var normalized = MTextControlRegex.Replace(
+            value.Replace("\\P", " ").Replace("\\p", " "), string.Empty);
+        return normalized
             .Replace("{", string.Empty)
             .Replace("}", string.Empty)
             .Trim();
