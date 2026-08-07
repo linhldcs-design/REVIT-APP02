@@ -178,9 +178,9 @@ public static class CadSlabAnalyzer
             var elevation = ReadElevation(inside, options);
             var hatch = hatches.FirstOrDefault(item => ContainsPoint(item.BoundaryMm, centroid));
             var lowered = hatch is not null;
-            // An opening is what the user selected an outline around, nothing else. Guessing one
-            // from a cross in the drawing read marks that were never openings and left real ones
-            // out, so the model no longer decides this on its own.
+            // An opening is what the user selected an outline around. Guessing one from a cross in
+            // the drawing read marks that were never openings and missed the ones drawn another
+            // way, and there is nothing to guess once the outlines are picked.
             var opening = MarkedAsOpening(face, marks);
             var text = inside.Length > 0 ? string.Join(" ", inside.Select(item => item.Text)) : string.Empty;
 
@@ -192,9 +192,7 @@ public static class CadSlabAnalyzer
                 IsLowered = lowered,
                 HatchStyleKey = hatch?.StyleKey ?? string.Empty,
                 IsBeamStrip = IsNarrowStrip(face, options.MaximumBeamStripWidthMm),
-                // A column is cast with the floor around it, so the slab runs over its footprint
-                // rather than stopping at it or cutting a hole for it.
-                IsColumn = false,
+                IsColumn = IsColumnFootprint(face, options.MaximumColumnSizeMm),
                 MatchedText = text
             });
         }
@@ -339,8 +337,6 @@ public static class CadSlabAnalyzer
             if (plain.Length > 0)
             {
                 var outerEdge = totalBoundary.Outer;
-                if (outerEdge.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2)
-                    return Array.Empty<CadSlabRegionCandidate>();
                 var cutOut = poursAndInteriorVoids
                     .Where(cell => !plain.Any(member => member.Id == cell.Id))
                     .Where(cell => ContainsPoint(outerEdge.VerticesMm, cell.CentroidMm))
@@ -977,6 +973,26 @@ public static class CadSlabAnalyzer
     /// A long, narrow cell between two bays is the footprint of a beam drawn by both faces rather
     /// than a slab of its own, so it merges with its neighbours instead of standing alone.
     /// </summary>
+    /// <summary>
+    /// A cell small on both sides is a column standing in the floor rather than a bay of it. It
+    /// appears wherever beams meet, and no concrete is poured through it.
+    /// </summary>
+    private static bool IsColumnFootprint(CadSlabLoop face, double maximumSizeMm)
+    {
+        var minX = face.VerticesMm.Min(point => point.X);
+        var maxX = face.VerticesMm.Max(point => point.X);
+        var minY = face.VerticesMm.Min(point => point.Y);
+        var maxY = face.VerticesMm.Max(point => point.Y);
+        var width = maxX - minX;
+        var height = maxY - minY;
+        if (width > maximumSizeMm || height > maximumSizeMm) return false;
+        // A column is roughly as deep as it is wide; a short length of beam between two bays is
+        // not, and belongs to the pour rather than to a hole in it.
+        var longer = Math.Max(width, height);
+        var shorter = Math.Min(width, height);
+        return shorter > 0 && longer <= shorter * 2.5;
+    }
+
     private static bool IsNarrowStrip(CadSlabLoop face, double maximumWidthMm)
     {
         var minX = face.VerticesMm.Min(point => point.X);
