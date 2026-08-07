@@ -44,7 +44,7 @@ public sealed class ModelFromCadCommand : ExternalCommand
             var projectOptions = CadColumnProjectOptionsReader.Read(document);
             var viewModel = new ModelFromCadViewModel(
                 CadModelPreviewFactory.Empty(), projectOptions, SelectAndBuildPreview,
-                SelectAndBuildBeamPreview);
+                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview);
             var window = new ModelFromCadWindow(viewModel);
             new WindowInteropHelper(window) { Owner = Application.MainWindowHandle };
             if (window.ShowDialog() != true) return;
@@ -89,6 +89,29 @@ public sealed class ModelFromCadCommand : ExternalCommand
                     viewModel.SelectedBeamLevel,
                     viewModel.BeamZOffsetMm);
                 ShowBeamResult(beamResult);
+                return;
+            }
+
+            if (viewModel.SelectedMode == ModelFromCadMode.Slab)
+            {
+                if (!viewModel.SlabSettingsValid
+                    || viewModel.SlabData is null
+                    || viewModel.SelectedSlabType is null
+                    || viewModel.SelectedSlabLevel is null)
+                {
+                    TaskDialog.Show(Title, "Thiết lập Floor Type, Level hoặc Slab scan chưa hợp lệ.");
+                    return;
+                }
+
+                var slabResult = CadSlabCreationService.Create(
+                    document,
+                    viewModel.SelectedSlabs,
+                    viewModel.SlabData.Analysis.SourceAnchorMm,
+                    targetAnchor,
+                    viewModel.RotationDegrees,
+                    viewModel.SelectedSlabType,
+                    viewModel.SelectedSlabLevel);
+                ShowSlabResult(slabResult);
                 return;
             }
 
@@ -177,6 +200,24 @@ public sealed class ModelFromCadCommand : ExternalCommand
     {
         var message = $"Đã tạo: {result.CreatedIds.Count} Beam"
                       + $"\nBeam đã tồn tại: {result.ExistingCount}"
+                      + $"\nLỗi: {result.Errors.Count}";
+        if (result.Errors.Count > 0) message += "\n\n" + string.Join("\n", result.Errors.Take(3));
+        TaskDialog.Show(Title, message);
+    }
+
+    private static CadSlabPreviewData? SelectAndBuildSlabPreview(
+        CadStructureTransferPackage gridPackage,
+        CadSlabAnalysisOptions options)
+    {
+        var preview = CadSlabPreviewFactory.SelectAndBuild(gridPackage, options, out var error);
+        if (preview is null && !string.IsNullOrWhiteSpace(error)) TaskDialog.Show(Title, error);
+        return preview;
+    }
+
+    private static void ShowSlabResult(CadSlabCreationResult result)
+    {
+        var message = $"Đã tạo: {result.CreatedIds.Count} Sàn"
+                      + $"\nSàn đã tồn tại: {result.ExistingCount}"
                       + $"\nLỗi: {result.Errors.Count}";
         if (result.Errors.Count > 0) message += "\n\n" + string.Join("\n", result.Errors.Take(3));
         TaskDialog.Show(Title, message);

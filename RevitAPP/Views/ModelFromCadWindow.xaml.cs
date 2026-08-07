@@ -58,6 +58,7 @@ public partial class ModelFromCadWindow : Window
         AttachInteraction(GridPreviewScroll, GridPreviewCanvas);
         AttachInteraction(ColumnPreviewScroll, ColumnPreviewCanvas);
         AttachInteraction(BeamPreviewScroll, BeamPreviewCanvas);
+        AttachInteraction(SlabPreviewScroll, SlabPreviewCanvas);
         ColumnPreview3DHost.PreviewMouseWheel += On3DMouseWheel;
         ColumnPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
         ColumnPreview3DHost.MouseMove += On3DOrbitMove;
@@ -66,6 +67,10 @@ public partial class ModelFromCadWindow : Window
         BeamPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
         BeamPreview3DHost.MouseMove += On3DOrbitMove;
         BeamPreview3DHost.MouseLeftButtonUp += On3DOrbitEnd;
+        SlabPreview3DHost.PreviewMouseWheel += On3DMouseWheel;
+        SlabPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
+        SlabPreview3DHost.MouseMove += On3DOrbitMove;
+        SlabPreview3DHost.MouseLeftButtonUp += On3DOrbitEnd;
     }
 
     private void AttachInteraction(ScrollViewer viewer, Canvas canvas)
@@ -91,9 +96,163 @@ public partial class ModelFromCadWindow : Window
             return;
         }
 
+        if (_viewModel.SelectedMode == ModelFromCadMode.Slab)
+        {
+            if (_viewModel.SlabPreviewModeIndex == 0) RenderSlabs();
+            else RenderSlabs3D();
+            return;
+        }
+
         if (_viewModel.BeamPreviewModeIndex == 0) RenderBeams();
         else RenderBeams3D();
     }
+
+    private void RenderSlabs()
+    {
+        SlabPreviewCanvas.Children.Clear();
+        if (_viewModel.SlabData is null) return;
+        var analysis = _viewModel.SlabData.Analysis;
+        var scale = CadGridUnitConverter.MillimetresPerDrawingUnit(_viewModel.SlabData.Package.InsUnits);
+        var gridSegments = _viewModel.Data.Package.Segments.Select(segment => segment with
+        {
+            Start = segment.Start * scale - analysis.OriginMm,
+            End = segment.End * scale - analysis.OriginMm
+        }).ToArray();
+
+        var points = _viewModel.Slabs
+            .SelectMany(row => row.Source.OuterLoop.VerticesMm)
+            .Select(SlabPoint)
+            .Concat(_viewModel.ShowSlabGridOverlay
+                ? gridSegments.SelectMany(segment => new[] { SlabPoint(segment.Start), SlabPoint(segment.End) })
+                : Array.Empty<CadStructurePoint2>())
+            .ToArray();
+        if (points.Length == 0) return;
+        var viewport = Prepare(SlabPreviewCanvas, BoundsOf(points));
+
+        if (_viewModel.ShowSlabGridOverlay)
+        {
+            foreach (var segment in gridSegments)
+            {
+                var start = viewport.ToCanvas(SlabPoint(segment.Start));
+                var end = viewport.ToCanvas(SlabPoint(segment.End));
+                SlabPreviewCanvas.Children.Add(new Line
+                {
+                    X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                    Stroke = Brush("Brush.Border"), StrokeThickness = 0.7,
+                    StrokeDashArray = new DoubleCollection { 6, 4 }, Opacity = 0.55
+                });
+            }
+        }
+
+        foreach (var row in _viewModel.Slabs)
+        {
+            var selected = ReferenceEquals(row, _viewModel.SelectedSlab);
+            // A slab the drawing lowered reads differently from one at level, and one the user has
+            // not ticked must not look like it is going into the model.
+            var fill = row.IsLowered ? ColorOf("Brush.Warning") : ColorOf("Brush.Accent");
+            var polygon = new Polygon
+            {
+                Points = new PointCollection(row.Source.OuterLoop.VerticesMm
+                    .Select(vertex => viewport.ToCanvas(SlabPoint(vertex)))),
+                Fill = new SolidColorBrush(fill) { Opacity = row.IsIncluded ? 0.28 : 0.07 },
+                Stroke = new SolidColorBrush(fill),
+                StrokeThickness = selected ? 2.4 : 1.2,
+                Tag = row
+            };
+            polygon.MouseLeftButtonUp += OnSlabPolygonClicked;
+            SlabPreviewCanvas.Children.Add(polygon);
+
+            foreach (var hole in row.Source.Holes)
+            {
+                SlabPreviewCanvas.Children.Add(new Polygon
+                {
+                    Points = new PointCollection(hole.VerticesMm
+                        .Select(vertex => viewport.ToCanvas(SlabPoint(vertex)))),
+                    Fill = Brush("Brush.Surface"),
+                    Stroke = Brush("Brush.Danger"),
+                    StrokeThickness = 1.2,
+                    StrokeDashArray = new DoubleCollection { 4, 3 }
+                });
+            }
+
+            if (!_viewModel.ShowSlabLabels) continue;
+            var centre = viewport.ToCanvas(SlabPoint(Centroid(row.Source.OuterLoop.VerticesMm)));
+            var label = new TextBlock
+            {
+                Text = $"{row.OffsetMm / 1000.0:+0.000;-0.000;+0.000}\nHs={row.ThicknessMm:0}",
+                Foreground = Brush("Brush.Text"), Background = Brush("Brush.Background"),
+                FontSize = 11, Padding = new Thickness(3, 1, 3, 1), Opacity = 0.92,
+                TextAlignment = TextAlignment.Center
+            };
+            Canvas.SetLeft(label, centre.X - 24);
+            Canvas.SetTop(label, centre.Y - 16);
+            SlabPreviewCanvas.Children.Add(label);
+        }
+    }
+
+    private void OnSlabPolygonClicked(object sender, MouseButtonEventArgs args)
+    {
+        if (sender is Polygon { Tag: CadSlabRowViewModel row })
+            _viewModel.SelectedSlab = row;
+    }
+
+    private void RenderSlabs3D()
+    {
+        SlabPreview3D.Children.Clear();
+        var rows = _viewModel.Slabs.Where(row => row.IsValid).ToArray();
+        var points = rows.SelectMany(row => row.Source.OuterLoop.VerticesMm)
+            .Select(SlabPoint)
+            .ToArray();
+        if (points.Length == 0) return;
+
+        var bounds = BoundsOf(points);
+        var planSpan = Math.Max(Math.Max(bounds.MaxX - bounds.MinX, bounds.MaxY - bounds.MinY), 1000.0);
+        var drop = rows.Length == 0 ? 0.0 : rows.Min(row => row.OffsetMm);
+        _cameraTarget = new Point3D((bounds.MinX + bounds.MaxX) / 2.0,
+            (bounds.MinY + bounds.MaxY) / 2.0, drop / 2.0);
+        _cameraMinimumDistance = Math.Max(planSpan * 0.08, 100.0);
+        if (!_cameraInitialized)
+        {
+            _cameraDistance = planSpan * 1.8;
+            _cameraYaw = -0.93;
+            _cameraPitch = 0.48;
+            _cameraInitialized = true;
+        }
+        Update3DCamera();
+
+        var lights = new Model3DGroup();
+        lights.Children.Add(new AmbientLight(Colors.DimGray));
+        lights.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-1, 1, -2)));
+        SlabPreview3D.Children.Add(new ModelVisual3D { Content = lights });
+
+        var models = new Model3DGroup();
+        foreach (var row in rows)
+        {
+            var footprint = row.Source.OuterLoop.VerticesMm.Select(SlabPoint).ToArray();
+            if (footprint.Length < 3) continue;
+            var colour = row.IsLowered ? ColorOf("Brush.Warning") : ColorOf("Brush.Accent");
+            // Slabs sit at their own level, so the box starts at the slab offset and drops by its
+            // thickness; that is what makes a lowered bay visible against the rest.
+            models.Children.Add(BoxModel(footprint, -row.ThicknessMm,
+                colour, row.IsIncluded ? 0.82 : 0.16, row.OffsetMm));
+        }
+        SlabPreview3D.Children.Add(new ModelVisual3D { Content = models });
+    }
+
+    private static CadStructurePoint2 Centroid(IReadOnlyList<CadStructurePoint2> loop)
+    {
+        var x = 0.0;
+        var y = 0.0;
+        foreach (var vertex in loop)
+        {
+            x += vertex.X;
+            y += vertex.Y;
+        }
+        var count = Math.Max(1, loop.Count);
+        return new CadStructurePoint2(x / count, y / count);
+    }
+
+    private static CadStructurePoint2 SlabPoint(CadStructurePoint2 point) => point;
 
     private void RenderGrid()
     {
@@ -509,6 +668,7 @@ public partial class ModelFromCadWindow : Window
             FieldOfView = 42
         };
         if (_viewModel.SelectedMode == ModelFromCadMode.Beam) BeamPreview3D.Camera = camera;
+        else if (_viewModel.SelectedMode == ModelFromCadMode.Slab) SlabPreview3D.Camera = camera;
         else ColumnPreview3D.Camera = camera;
     }
 
@@ -516,18 +676,40 @@ public partial class ModelFromCadWindow : Window
         IReadOnlyList<CadStructurePoint2> corners,
         double height,
         System.Windows.Media.Color color,
-        double opacity)
+        double opacity,
+        double baseZ = 0.0)
     {
         var mesh = new MeshGeometry3D();
-        foreach (var corner in corners) mesh.Positions.Add(new Point3D(corner.X, corner.Y, 0));
-        foreach (var corner in corners) mesh.Positions.Add(new Point3D(corner.X, corner.Y, height));
-        var triangles = new[]
+        foreach (var corner in corners) mesh.Positions.Add(new Point3D(corner.X, corner.Y, baseZ));
+        foreach (var corner in corners)
+            mesh.Positions.Add(new Point3D(corner.X, corner.Y, baseZ + height));
+
+        var count = corners.Count;
+        // A slab outline can have any number of vertices, not just the four a beam or a column
+        // has, so the caps are fanned from the first vertex rather than indexed by hand.
+        for (var index = 1; index < count - 1; index++)
         {
-            0,2,1, 0,3,2, 4,5,6, 4,6,7,
-            0,1,5, 0,5,4, 1,2,6, 1,6,5,
-            2,3,7, 2,7,6, 3,0,4, 3,4,7
-        };
-        foreach (var index in triangles) mesh.TriangleIndices.Add(index);
+            mesh.TriangleIndices.Add(0);
+            mesh.TriangleIndices.Add(index + 1);
+            mesh.TriangleIndices.Add(index);
+
+            mesh.TriangleIndices.Add(count);
+            mesh.TriangleIndices.Add(count + index);
+            mesh.TriangleIndices.Add(count + index + 1);
+        }
+
+        for (var index = 0; index < count; index++)
+        {
+            var next = (index + 1) % count;
+            mesh.TriangleIndices.Add(index);
+            mesh.TriangleIndices.Add(next);
+            mesh.TriangleIndices.Add(count + next);
+
+            mesh.TriangleIndices.Add(index);
+            mesh.TriangleIndices.Add(count + next);
+            mesh.TriangleIndices.Add(count + index);
+        }
+
         var brush = new SolidColorBrush(color) { Opacity = opacity };
         var material = new DiffuseMaterial(brush);
         return new GeometryModel3D(mesh, material) { BackMaterial = material };

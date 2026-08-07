@@ -479,6 +479,225 @@
                     </Grid>
                 </Grid>
             </TabItem>
+
+            <TabItem Header="▨  Create Slab">
+                <Grid Margin="12,0,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="1. Select Grid Axes" Style="{DynamicResource Button.Secondary}"
+                                Command="{Binding ReselectCommand}"/>
+                        <Button Content="2. Select Slab Lines" Margin="8,0,0,0"
+                                Style="{DynamicResource Button.Secondary}"
+                                Command="{Binding SelectSlabLinesCommand}"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*" MinWidth="400"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="2*" MinWidth="390"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TabControl Grid.Column="0" SelectedIndex="{Binding SlabPreviewModeIndex, Mode=TwoWay}"
+                                    Style="{DynamicResource TabControl.Standard}">
+                            <TabItem Header="2D" Style="{DynamicResource TabItem.Standard}">
+                                <Border Background="{DynamicResource Brush.Surface}"
+                                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" ClipToBounds="True">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <WrapPanel Grid.Row="0" HorizontalAlignment="Right" Margin="8,6">
+                                            <CheckBox Content="Lưới" Margin="0,0,8,0"
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding ShowSlabGridOverlay}"/>
+                                            <CheckBox Content="Nhãn" Margin="0,0,8,0"
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding ShowSlabLabels}"/>
+                                            <Button Content="+" Width="34" Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomInCommand}"/>
+                                            <Button Content="-" Width="34" Margin="4,0,0,0"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomOutCommand}"/>
+                                            <Button Content="Vừa màn hình" Margin="4,0,0,0"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomToFitCommand}"/>
+                                        </WrapPanel>
+                                        <ScrollViewer Grid.Row="1" x:Name="SlabPreviewScroll"
+                                                      HorizontalScrollBarVisibility="Auto"
+                                                      VerticalScrollBarVisibility="Auto" Cursor="SizeAll">
+                                            <Canvas x:Name="SlabPreviewCanvas"
+                                                    Background="{DynamicResource Brush.Surface}"/>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Border>
+                            </TabItem>
+                            <TabItem Header="3D" Style="{DynamicResource TabItem.Standard}">
+                                <Border Background="{DynamicResource Brush.Surface}"
+                                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                                    <Grid x:Name="SlabPreview3DHost" Background="Transparent" Cursor="SizeAll">
+                                        <Viewport3D x:Name="SlabPreview3D" ClipToBounds="True" IsHitTestVisible="False"/>
+                                        <Button Content="Vừa màn hình" HorizontalAlignment="Right"
+                                                VerticalAlignment="Top" Margin="8"
+                                                Style="{DynamicResource Button.Secondary}"
+                                                Command="{Binding ZoomToFitCommand}"/>
+                                        <TextBlock Text="3D preview — kéo chuột trái để xoay, lăn chuột để zoom"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                    </Grid>
+                                </Border>
+                            </TabItem>
+                        </TabControl>
+
+                        <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource Brush.Border}"/>
+
+                        <Grid Grid.Column="2" Margin="12,0,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                                    Padding="12" Margin="0,0,0,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="260">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="96"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Floor Type:"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3"
+                                                  ItemsSource="{Binding SlabTypes}"
+                                                  SelectedItem="{Binding SelectedSlabType}"
+                                                  Style="{DynamicResource ComboBox.Standard}"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Level:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,8,8,0"
+                                                  ItemsSource="{Binding Levels}"
+                                                  SelectedItem="{Binding SelectedSlabLevel}"
+                                                  Style="{DynamicResource ComboBox.Standard}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Dày mặc định:" Margin="0,8,0,0"
+                                                   ToolTip="Chiều dày dùng cho ô sàn mà bản vẽ không ghi nhãn (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="1" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding DefaultSlabThicknessText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Vertex Snap:" Margin="0,8,0,0"
+                                                   ToolTip="Gom các đầu line cách nhau dưới giá trị này về một điểm, để biên hở vẫn khép thành vùng (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Margin="0,8,8,0"
+                                                 Text="{Binding VertexSnapText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="Min Line:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="2" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding MinimumSlabLineText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Diện tích min:" Margin="0,8,0,0"
+                                                   ToolTip="Vùng nhỏ hơn giá trị này được xem là ô kỹ thuật, không phải sàn (m²)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1" Margin="0,8,8,0"
+                                                 Text="{Binding MinimumSlabAreaText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="2" Text="Bề rộng dầm:" Margin="0,8,0,0"
+                                                   ToolTip="Dải hẹp hơn giá trị này giữa hai ô cùng cao độ là vệt dầm và được nối vào tấm sàn (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="3" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding BeamStripWidthText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Offset mặc định:" Margin="0,8,0,0"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1" Margin="0,8,8,0"
+                                                 Text="{Binding DefaultSlabOffsetText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="2" Text="Offset sàn hạ:" Margin="0,8,0,0"
+                                                   ToolTip="Cao độ hạ dùng cho vùng có hatch mà bản vẽ không ghi cao độ (mm)."
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                        <TextBox Grid.Row="4" Grid.Column="3" Margin="0,8,0,0"
+                                                 Text="{Binding LoweredSlabOffsetText, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{DynamicResource TextBox.Standard}"/>
+
+                                        <WrapPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,8,0,0">
+                                            <CheckBox Content="Ghi đè chiều dày" Margin="0,0,12,0"
+                                                      ToolTip="Bỏ qua nhãn chiều dày trong bản vẽ, dùng giá trị mặc định cho mọi tấm."
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding OverrideSlabThickness}"/>
+                                            <CheckBox Content="Ghi đè cao độ"
+                                                      ToolTip="Bỏ qua nhãn cao độ trong bản vẽ, dùng Offset mặc định cho mọi tấm."
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding OverrideSlabElevation}"/>
+                                            <Button Content="Apply / Re-analyze" Margin="12,0,0,0"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ApplySlabAnalysisCommand}"/>
+                                        </WrapPanel>
+                                    </Grid>
+                                </ScrollViewer>
+                            </Border>
+
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Content="Chọn tất cả" Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding SelectAllSlabsCommand}"/>
+                                <Button Content="Bỏ chọn" Margin="8,0,0,0"
+                                        Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding ClearSlabSelectionCommand}"/>
+                                <Button Content="Reset CAD/Text" Margin="8,0,0,0"
+                                        Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding ResetSlabsToDetectedCommand}"/>
+                            </StackPanel>
+
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding Slabs}"
+                                      SelectedItem="{Binding SelectedSlab}"
+                                      Style="{DynamicResource DataGrid.Standard}">
+                                <DataGrid.Columns>
+                                    <DataGridCheckBoxColumn Header="Tạo" Width="44"
+                                                            Binding="{Binding IsIncluded, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="Ô" Width="40" IsReadOnly="True"
+                                                        Binding="{Binding CellCount}"/>
+                                    <DataGridTextColumn Header="Diện tích" Width="72" IsReadOnly="True"
+                                                        Binding="{Binding AreaLabel}"/>
+                                    <DataGridTextColumn Header="h CAD" Width="56" IsReadOnly="True"
+                                                        Binding="{Binding DetectedThicknessLabel}"/>
+                                    <DataGridTextColumn Header="h Tạo" Width="58"
+                                                        Binding="{Binding ThicknessMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="Cao độ CAD" Width="80" IsReadOnly="True"
+                                                        Binding="{Binding DetectedElevationLabel}"/>
+                                    <DataGridTextColumn Header="Offset" Width="62"
+                                                        Binding="{Binding OffsetMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="Lỗ" Width="36" IsReadOnly="True"
+                                                        Binding="{Binding HoleCount}"/>
+                                    <DataGridTextColumn Header="Trạng thái" Width="106" IsReadOnly="True"
+                                                        Binding="{Binding Status}"/>
+                                    <DataGridTextColumn Header="Text" Width="*" IsReadOnly="True"
+                                                        Binding="{Binding MatchedText}"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
         </TabControl>
 
         <Grid Grid.Row="2" Margin="0,12,0,0">

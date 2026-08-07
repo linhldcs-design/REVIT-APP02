@@ -14,6 +14,12 @@ internal sealed record AutoCadModelSelectionResult(
 {
     public bool IsValid => Package is not null && string.IsNullOrWhiteSpace(Error);
     public static AutoCadModelSelectionResult Failed(string error) => new(null, error);
+
+    /// <summary>
+    /// Hatched areas from the same scan. They mark which bays a slab drops in, so they travel
+    /// beside the geometry rather than inside the package the Grid and Column workflows share.
+    /// </summary>
+    public IReadOnlyList<CadHatchRegion> Hatches { get; init; } = Array.Empty<CadHatchRegion>();
 }
 
 /// <summary>
@@ -42,7 +48,12 @@ internal static class AutoCadModelSelectionService
     public static AutoCadModelSelectionResult SelectBeam(CadStructureTransferPackage gridPackage) =>
         SelectInternal(gridPackage);
 
-    private static AutoCadModelSelectionResult SelectInternal(CadStructureTransferPackage? gridPackage)
+    public static AutoCadModelSelectionResult SelectSlab(CadStructureTransferPackage gridPackage) =>
+        SelectInternal(gridPackage, includeHatch: true);
+
+    private static AutoCadModelSelectionResult SelectInternal(
+        CadStructureTransferPackage? gridPackage,
+        bool includeHatch = false)
     {
         object? application = null;
         object? document = null;
@@ -80,7 +91,9 @@ internal static class AutoCadModelSelectionService
                 new short[] { DxfEntityType },
                 new object[] { gridPackage is null
                     ? "LINE,LWPOLYLINE,POLYLINE,INSERT"
-                    : "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
+                    : includeHatch
+                        ? "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT,HATCH"
+                        : "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
 
             var selectedCount = Convert.ToInt32(Get(selection, "Count"));
             if (selectedCount > MaximumSelectedEntityCount)
@@ -127,7 +140,10 @@ internal static class AutoCadModelSelectionService
                 {
                     Annotations = reader.Annotations
                 },
-                null);
+                null)
+            {
+                Hatches = reader.Hatches
+            };
         }
         catch (Exception exception) when (IsUserCancel(exception))
         {
@@ -154,6 +170,7 @@ internal static class AutoCadModelSelectionService
         private readonly object _document;
         private readonly List<CadStructureSegment> _segments = new();
         private readonly List<CadStructureAnnotation> _annotations = new();
+        private readonly List<CadHatchRegion> _hatches = new();
         private readonly Stopwatch _readStopwatch = new();
         private object? _blocks;
         private int _nextId = 1;
@@ -161,6 +178,8 @@ internal static class AutoCadModelSelectionService
         public BlockAwareEntityReader(object document) => _document = document;
 
         public IReadOnlyList<CadStructureAnnotation> Annotations => _annotations;
+
+        public IReadOnlyList<CadHatchRegion> Hatches => _hatches;
 
         public IReadOnlyList<CadStructureSegment> ReadSelection(object selection)
         {
@@ -266,6 +285,12 @@ internal static class AutoCadModelSelectionService
                 return;
             }
 
+            if (objectName == "AcDbHatch")
+            {
+                ReadHatch(entity, transform, layer);
+                return;
+            }
+
             if (objectName == "AcDbBlockReference")
                 ReadBlock(entity, transform, sourcePath, inheritedText, layer, depth, blockStack);
         }
@@ -321,6 +346,44 @@ internal static class AutoCadModelSelectionService
             if (curvedSides > 0)
                 Log.Warning("Skipped {CurvedSides} curved side(s) of a polyline on layer {Layer}",
                     curvedSides, layer);
+        }
+
+        /// <summary>
+        /// Reads a hatched area as the rectangle it covers plus the style that fills it. A plan
+        /// marks each slab drop with its own pattern, so the pattern, its scale and its angle
+        /// carry the meaning; the outline only says which bays are covered, never where a slab
+        /// boundary runs.
+        /// </summary>
+        private void ReadHatch(object entity, Transform2 transform, string layer)
+        {
+            ThrowIfReadBudgetExceeded();
+            var bounds = CallWithOutputs(entity, "GetBoundingBox", 2);
+            if (bounds is null)
+            {
+                Log.Debug("Could not read AutoCAD hatch bounds on layer {Layer}", layer);
+                return;
+            }
+
+            var lower = ToPoint(bounds[0]);
+            var upper = ToPoint(bounds[1]);
+            if (lower is null || upper is null) return;
+            if (upper.Value.X - lower.Value.X < 1e-6 || upper.Value.Y - lower.Value.Y < 1e-6) return;
+
+            var corners = new[]
+            {
+                transform.Apply(lower.Value),
+                transform.Apply(new CadStructurePoint2(upper.Value.X, lower.Value.Y)),
+                transform.Apply(upper.Value),
+                transform.Apply(new CadStructurePoint2(lower.Value.X, upper.Value.Y))
+            };
+
+            _hatches.Add(new CadHatchRegion(_nextId++, corners)
+            {
+                PatternName = Safe(() => Get(entity, "PatternName")?.ToString()) ?? string.Empty,
+                PatternScale = Safe(() => Convert.ToDouble(Get(entity, "PatternScale"))),
+                PatternAngleDegrees =
+                    Safe(() => Convert.ToDouble(Get(entity, "PatternAngle"))) * 180.0 / Math.PI
+            });
         }
 
         private void AddAnnotation(
@@ -592,6 +655,29 @@ internal static class AutoCadModelSelectionService
 
     private static object? Call(object target, string name, params object[] arguments) =>
         target.GetType().InvokeMember(name, BindingFlags.InvokeMethod, null, target, arguments);
+
+    /// <summary>
+    /// Invokes a COM method whose results come back through by-reference arguments, such as
+    /// GetBoundingBox. InvokeMember only writes them back when told which arguments are by-ref,
+    /// so without the modifier the array stays null and the bounds look unreadable.
+    /// </summary>
+    private static object?[]? CallWithOutputs(object target, string name, int outputCount)
+    {
+        try
+        {
+            var arguments = new object?[outputCount];
+            var modifier = new ParameterModifier(outputCount);
+            for (var index = 0; index < outputCount; index++) modifier[index] = true;
+            target.GetType().InvokeMember(name, BindingFlags.InvokeMethod, null, target,
+                arguments, new[] { modifier }, null, null);
+            return arguments;
+        }
+        catch (Exception exception)
+        {
+            Log.Debug(exception, "AutoCAD COM call {Method} with outputs failed", name);
+            return null;
+        }
+    }
 
     private static void SafeCall(object? target, string name, params object[] arguments)
     {

@@ -35,6 +35,9 @@ internal sealed record CadColumnProjectOptions(
 {
     public IReadOnlyList<CadBeamFamilyOption> BeamFamilies { get; init; } =
         Array.Empty<CadBeamFamilyOption>();
+
+    public IReadOnlyList<CadSlabTypeOption> SlabTypes { get; init; } =
+        Array.Empty<CadSlabTypeOption>();
 }
 
 internal static class CadColumnProjectOptionsReader
@@ -115,9 +118,20 @@ internal static class CadColumnProjectOptionsReader
             .OrderBy(option => option.DisplayName)
             .ToArray();
 
+        // A slab type is only usable as a seed when its layers say which one carries the
+        // structure, since that is the layer a stated thickness applies to.
+        var slabTypes = new FilteredElementCollector(document)
+            .OfClass(typeof(FloorType))
+            .Cast<FloorType>()
+            .Where(type => type.GetCompoundStructure() is not null)
+            .Select(type => new CadSlabTypeOption(type))
+            .OrderBy(option => option.Name)
+            .ToArray();
+
         return new CadColumnProjectOptions(families, levels)
         {
-            BeamFamilies = beamFamilies
+            BeamFamilies = beamFamilies,
+            SlabTypes = slabTypes
         };
     }
 }

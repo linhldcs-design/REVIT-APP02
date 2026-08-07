@@ -11,7 +11,8 @@ internal enum ModelFromCadMode
 {
     Grid,
     Column,
-    Beam
+    Beam,
+    Slab
 }
 
 internal sealed record CadModelPreviewData(
@@ -25,6 +26,11 @@ internal sealed record CadBeamPreviewData(
     CadStructureTransferPackage Package,
     CadBeamAnalysis Analysis);
 
+internal sealed record CadSlabPreviewData(
+    CadStructureTransferPackage Package,
+    IReadOnlyList<CadHatchRegion> Hatches,
+    CadSlabAnalysis Analysis);
+
 internal sealed partial class ModelFromCadViewModel : ObservableObject
 {
     public const double MinimumZoom = 0.05;
@@ -33,24 +39,29 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
 
     private readonly Func<CadModelPreviewData?>? _reselect;
     private readonly Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? _selectBeam;
+    private readonly Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? _selectSlab;
     private bool _suppressItemNotifications;
 
     public ModelFromCadViewModel(
         CadModelPreviewData data,
         CadColumnProjectOptions options,
         Func<CadModelPreviewData?>? reselect = null,
-        Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? selectBeam = null)
+        Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? selectBeam = null,
+        Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? selectSlab = null)
     {
         Data = data;
         _reselect = reselect;
         _selectBeam = selectBeam;
+        _selectSlab = selectSlab;
         GridAxes = new ObservableCollection<CadGridAxisViewModel>(
             data.GridPreview.Axes.Select(axis => new CadGridAxisViewModel(axis)));
         Columns = new ObservableCollection<CadColumnRowViewModel>(
             data.ColumnsPreview.Select(column => new CadColumnRowViewModel(column)));
         Families = new ObservableCollection<CadColumnFamilyOption>(options.Families);
         BeamFamilies = new ObservableCollection<CadBeamFamilyOption>(options.BeamFamilies);
+        SlabTypes = new ObservableCollection<CadSlabTypeOption>(options.SlabTypes);
         Levels = new ObservableCollection<CadColumnLevelOption>(options.Levels);
+        Slabs = new ObservableCollection<CadSlabRowViewModel>();
 
         foreach (var axis in GridAxes) axis.PropertyChanged += OnItemChanged;
         foreach (var column in Columns) column.PropertyChanged += OnItemChanged;
@@ -64,6 +75,10 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
                                  option.DisplayName.Contains("Concrete", StringComparison.OrdinalIgnoreCase))
                              ?? BeamFamilies.FirstOrDefault();
         SelectedBeamLevel = Levels.FirstOrDefault();
+        SelectedSlabType = SlabTypes.FirstOrDefault(option =>
+                               option.Name.Contains("Concrete", StringComparison.OrdinalIgnoreCase))
+                           ?? SlabTypes.FirstOrDefault();
+        SelectedSlabLevel = Levels.FirstOrDefault();
     }
 
     public CadModelPreviewData Data { get; private set; }
@@ -73,6 +88,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     public ObservableCollection<CadColumnFamilyOption> Families { get; }
     public ObservableCollection<CadColumnLevelOption> Levels { get; }
     public ObservableCollection<CadBeamFamilyOption> BeamFamilies { get; }
+    public ObservableCollection<CadSlabTypeOption> SlabTypes { get; }
+    public ObservableCollection<CadSlabRowViewModel> Slabs { get; }
     public ObservableCollection<string> BeamWidthParameters { get; } = new();
     public ObservableCollection<string> BeamHeightParameters { get; } = new();
     public ObservableCollection<string> WidthParameters { get; } = new();
@@ -84,6 +101,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     public event EventHandler? FitRequested;
 
     public CadBeamPreviewData? BeamData { get; private set; }
+    public CadSlabPreviewData? SlabData { get; private set; }
 
     [ObservableProperty]
     private int _activeTabIndex;
@@ -164,6 +182,54 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private string _maximumRunGapText = string.Empty;
 
     [ObservableProperty]
+    private CadSlabTypeOption? _selectedSlabType;
+
+    [ObservableProperty]
+    private CadColumnLevelOption? _selectedSlabLevel;
+
+    [ObservableProperty]
+    private string _vertexSnapText = "20";
+
+    [ObservableProperty]
+    private string _minimumSlabLineText = "200";
+
+    [ObservableProperty]
+    private string _minimumSlabAreaText = "1";
+
+    [ObservableProperty]
+    private string _beamStripWidthText = "500";
+
+    [ObservableProperty]
+    private string _defaultSlabThicknessText = "100";
+
+    [ObservableProperty]
+    private string _defaultSlabOffsetText = "0";
+
+    [ObservableProperty]
+    private string _loweredSlabOffsetText = "-50";
+
+    [ObservableProperty]
+    private bool _overrideSlabThickness;
+
+    [ObservableProperty]
+    private bool _overrideSlabElevation;
+
+    [ObservableProperty]
+    private CadSlabRowViewModel? _selectedSlab;
+
+    [ObservableProperty]
+    private bool _slabAnalysisDirty;
+
+    [ObservableProperty]
+    private int _slabPreviewModeIndex;
+
+    [ObservableProperty]
+    private bool _showSlabGridOverlay = true;
+
+    [ObservableProperty]
+    private bool _showSlabLabels = true;
+
+    [ObservableProperty]
     private CadBeamRowViewModel? _selectedBeam;
 
     [ObservableProperty]
@@ -173,7 +239,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     {
         0 => ModelFromCadMode.Grid,
         1 => ModelFromCadMode.Column,
-        _ => ModelFromCadMode.Beam
+        2 => ModelFromCadMode.Beam,
+        _ => ModelFromCadMode.Slab
     };
 
     public IReadOnlyList<CadGridPreviewAxis> SelectedGridAxes =>
@@ -202,10 +269,18 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     {
         ModelFromCadMode.Grid => $"Chọn {SelectedGridAxes.Count}/{GridAxes.Count} Grid",
         ModelFromCadMode.Column => $"Chọn {SelectedColumns.Count}/{Columns.Count} cột",
+        ModelFromCadMode.Slab => $"Chọn {SelectedSlabs.Count}/{Slabs.Count} sàn"
+             + (SlabAnalysisDirty ? " — cần Apply/Re-analyze" : string.Empty)
+             + SlabWarningLabel,
         _ => $"Chọn {SelectedBeams.Count}/{Beams.Count} dầm"
              + (BeamAnalysisDirty ? " — cần Apply/Re-analyze" : string.Empty)
              + BeamWarningLabel
     };
+
+    private string SlabWarningLabel =>
+        SlabData is null || SlabData.Analysis.Warnings.Count == 0
+            ? string.Empty
+            : "  |  " + string.Join("  |  ", SlabData.Analysis.Warnings);
 
     // Boundaries the analyzer could not turn into beams stay grey in the preview and would be
     // missing from the model, so the reason belongs next to the count rather than in a log.
@@ -218,6 +293,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     {
         ModelFromCadMode.Grid => "Tạo Grid",
         ModelFromCadMode.Column => "Tạo Column",
+        ModelFromCadMode.Slab => "Tạo Sàn",
         _ => "Tạo Beam"
     };
 
@@ -225,8 +301,44 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     {
         ModelFromCadMode.Grid => SelectedGridAxes.Count > 0 && RotationValid,
         ModelFromCadMode.Column => SelectedColumns.Count > 0 && ColumnSettingsValid,
+        ModelFromCadMode.Slab => SelectedSlabs.Count > 0 && SlabSettingsValid,
         _ => SelectedBeams.Count > 0 && BeamSettingsValid
     };
+
+    public IReadOnlyList<CadSlabRegionCandidate> SelectedSlabs =>
+        Slabs.Where(slab => slab.IsIncluded && slab.IsValid)
+            .Select(slab => slab.Region)
+            .ToArray();
+
+    public bool CanSelectSlabLines =>
+        HasCadData && SelectedGridAxes.Count > 0 && SlabAnalysisSettingsValid;
+
+    public bool SlabAnalysisSettingsValid =>
+        TryNumber(VertexSnapText, out var snap) && snap is >= 0 and <= 500
+        && TryNumber(MinimumSlabLineText, out var minLine) && minLine >= 0
+        && TryNumber(MinimumSlabAreaText, out var area) && area >= 0
+        && TryNumber(BeamStripWidthText, out var strip) && strip >= 0
+        && TryNumber(DefaultSlabThicknessText, out var thickness) && thickness is >= 30 and <= 2000
+        && TryNumber(DefaultSlabOffsetText, out _)
+        && TryNumber(LoweredSlabOffsetText, out _);
+
+    public bool SlabSettingsValid =>
+        SlabAnalysisSettingsValid
+        && !SlabAnalysisDirty
+        && SelectedSlabType is not null
+        && SelectedSlabLevel is not null
+        && RotationValid;
+
+    private CadSlabAnalysisOptions SlabOptions() => new(
+        VertexSnapToleranceMm: ParseNumber(VertexSnapText),
+        MinimumLineLengthMm: ParseNumber(MinimumSlabLineText),
+        MinimumRegionAreaM2: ParseNumber(MinimumSlabAreaText),
+        MaximumBeamStripWidthMm: ParseNumber(BeamStripWidthText),
+        DefaultThicknessMm: ParseNumber(DefaultSlabThicknessText),
+        DefaultOffsetMm: ParseNumber(DefaultSlabOffsetText),
+        LoweredDefaultOffsetMm: ParseNumber(LoweredSlabOffsetText),
+        OverrideThickness: OverrideSlabThickness,
+        OverrideElevation: OverrideSlabElevation);
 
     public bool RotationValid => TryNumber(RotationText, out _);
 
@@ -333,6 +445,97 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private bool CanApplyBeamAnalysis() => BeamData is not null
                                            && BeamAnalysisSettingsValid
                                            && BeamAnalysisDirty;
+
+    [RelayCommand(CanExecute = nameof(CanSelectSlabLines))]
+    private void SelectSlabLines()
+    {
+        var replacement = _selectSlab?.Invoke(GridPackageForBeam(), SlabOptions());
+        if (replacement is null) return;
+        SetSlabData(replacement);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanApplySlabAnalysis))]
+    private void ApplySlabAnalysis()
+    {
+        if (SlabData is null) return;
+        var analysis = CadSlabAnalyzer.Analyze(SlabData.Package, SlabData.Hatches, SlabOptions());
+        SetSlabData(SlabData with { Analysis = analysis });
+    }
+
+    private bool CanApplySlabAnalysis() => SlabData is not null
+                                           && SlabAnalysisSettingsValid
+                                           && SlabAnalysisDirty;
+
+    [RelayCommand]
+    private void SelectAllSlabs() => SetSlabSelection(true);
+
+    [RelayCommand]
+    private void ClearSlabSelection() => SetSlabSelection(false);
+
+    [RelayCommand]
+    private void ResetSlabsToDetected()
+    {
+        _suppressItemNotifications = true;
+        foreach (var slab in Slabs) slab.ResetToDetected();
+        _suppressItemNotifications = false;
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SetSlabSelection(bool included)
+    {
+        _suppressItemNotifications = true;
+        foreach (var slab in Slabs)
+            slab.IsIncluded = included && slab.IsValid;
+        _suppressItemNotifications = false;
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SetSlabData(CadSlabPreviewData replacement)
+    {
+        foreach (var row in Slabs) row.PropertyChanged -= OnItemChanged;
+        Slabs.Clear();
+        SlabData = replacement;
+        SlabAnalysisDirty = false;
+        foreach (var region in replacement.Analysis.Regions)
+        {
+            var row = new CadSlabRowViewModel(region);
+            row.PropertyChanged += OnItemChanged;
+            Slabs.Add(row);
+        }
+        SelectedSlab = Slabs.FirstOrDefault();
+        Zoom = 1.0;
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+        ReselectCompleted?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void NotifySlabAnalysisSettings()
+    {
+        if (SlabData is not null) SlabAnalysisDirty = true;
+        NotifyState();
+    }
+
+    partial void OnVertexSnapTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnMinimumSlabLineTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnMinimumSlabAreaTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnBeamStripWidthTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnDefaultSlabThicknessTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnDefaultSlabOffsetTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnLoweredSlabOffsetTextChanged(string value) => NotifySlabAnalysisSettings();
+    partial void OnOverrideSlabThicknessChanged(bool value) => NotifySlabAnalysisSettings();
+    partial void OnOverrideSlabElevationChanged(bool value) => NotifySlabAnalysisSettings();
+    partial void OnSelectedSlabTypeChanged(CadSlabTypeOption? value) => NotifyState();
+    partial void OnSelectedSlabLevelChanged(CadColumnLevelOption? value) => NotifyState();
+    partial void OnSelectedSlabChanged(CadSlabRowViewModel? value) =>
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnSlabPreviewModeIndexChanged(int value) =>
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnShowSlabGridOverlayChanged(bool value) =>
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnShowSlabLabelsChanged(bool value) =>
+        RenderRequested?.Invoke(this, EventArgs.Empty);
 
     [RelayCommand]
     private void SelectAllGrids()
@@ -570,9 +773,16 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         OnPropertyChanged(nameof(CanSelectBeamLines));
         OnPropertyChanged(nameof(RotationValid));
         OnPropertyChanged(nameof(CanAccept));
+        OnPropertyChanged(nameof(SelectedSlabs));
+        OnPropertyChanged(nameof(SlabSettingsValid));
+        OnPropertyChanged(nameof(SlabAnalysisSettingsValid));
+        OnPropertyChanged(nameof(SlabAnalysisDirty));
+        OnPropertyChanged(nameof(CanSelectSlabLines));
         AcceptCommand.NotifyCanExecuteChanged();
         SelectBeamLinesCommand.NotifyCanExecuteChanged();
         ApplyBeamAnalysisCommand.NotifyCanExecuteChanged();
+        SelectSlabLinesCommand.NotifyCanExecuteChanged();
+        ApplySlabAnalysisCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyBeamAnalysisSettings()
