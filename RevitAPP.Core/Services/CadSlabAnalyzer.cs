@@ -343,14 +343,13 @@ public static class CadSlabAnalyzer
         // Spreading runs over the cells that take concrete, and openings and columns were already
         // excluded from that set, so nothing here can revive them as slabs.
 
-        // Hatch style joins elevation and thickness as a key. A plan draws each drop with its own
-        // pattern, so bays hatched differently are different slabs even where neither carries a
-        // level label; the drawing distinguishes them and the model should too.
+        // Level and thickness are what separate one pour from another. A hatch only says a bay
+        // drops when nothing states its level: hatched and plain bays at the same level are the
+        // same slab, and grouping by the pattern as well would split them in two.
         var groups = resolved
             .GroupBy(cell => (
                 Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
-                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm),
-                cell.HatchStyleKey))
+                Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
             .ToArray();
 
         var regions = new List<CadSlabRegionCandidate>();
@@ -427,10 +426,8 @@ public static class CadSlabAnalyzer
             {
                 var target = result[neighbour];
                 if (target.ThicknessMm is not null || target.ElevationMm is not null) continue;
-                // A hatch says this cell belongs to a different pour, so a neighbour's label is
-                // not its own.
-                if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
-                    continue;
+                // A label crosses a hatch boundary freely: the hatch shades part of a pour, it
+                // does not end it. Only a level of its own separates one slab from the next.
                 result[neighbour] = target with
                 {
                     ThicknessMm = source.ThicknessMm,

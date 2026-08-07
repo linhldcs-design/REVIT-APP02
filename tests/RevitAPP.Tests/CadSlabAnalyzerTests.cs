@@ -240,6 +240,40 @@ public sealed class CadSlabAnalyzerTests
     }
 
     [Fact]
+    public void Analyze_HatchedAndPlainBaysAtOneLevel_AreASingleSlab()
+    {
+        // A hatch shades part of a pour; it does not end it. Three bays all at -0.050 are one
+        // slab whether or not the middle one is hatched.
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(3, 1, 4000, 6000),
+                Annotation(90, 2000, 3000, "-0.050 Hs=120"),
+                Annotation(91, 6000, 3000, "-0.050 Hs=120"),
+                Annotation(92, 10000, 3000, "-0.050 Hs=120")),
+            new[] { Hatch(1, 4000, 0, 8000, 6000, "ANSI31", 1.0) },
+            new CadSlabAnalysisOptions());
+
+        var slab = Assert.Single(result.Regions);
+        Assert.Equal(72.0, slab.AreaM2, 2);
+        Assert.Equal(-50, slab.EffectiveOffsetMm, 3);
+        Assert.Equal(3, slab.CellIds.Count);
+    }
+
+    [Fact]
+    public void Analyze_HatchedBayAtItsOwnLevel_StaysASeparateSlab()
+    {
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(2, 1, 4000, 6000),
+                Annotation(90, 2000, 3000, "+0.000 Hs=120"),
+                Annotation(91, 6000, 3000, "-0.050 Hs=120")),
+            new[] { Hatch(1, 4000, 0, 8000, 6000, "ANSI31", 1.0) },
+            new CadSlabAnalysisOptions());
+
+        Assert.Equal(2, result.Regions.Count);
+        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm) < 1);
+        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm + 50) < 1);
+    }
+
+    [Fact]
     public void Analyze_ThreeHatchStyles_ProduceThreeSlabsAtTheirOwnDrops()
     {
         // A plan draws each drop with its own pattern. However many patterns it uses, each is a
