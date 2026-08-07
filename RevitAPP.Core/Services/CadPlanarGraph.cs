@@ -14,6 +14,123 @@ public static class CadPlanarGraph
 {
     private const double Epsilon = 1e-6;
 
+    /// <summary>
+    /// The outline round everything the scan covers, taken from the lines themselves rather than
+    /// assembled from the areas they enclose.
+    ///
+    /// Every line is split at its crossings and its ends merged, then the walk starts at the
+    /// leftmost vertex and keeps to the outside by turning as far clockwise as it can at each
+    /// junction. That traces the outer face of the drawing in one pass, whatever the bays inside
+    /// it look like.
+    /// </summary>
+    public static CadSlabLoop? BuildOuterBoundary(
+        IReadOnlyList<CadStructureSegment> segmentsMm,
+        double snapToleranceMm)
+    {
+        var split = SplitAtIntersections(segmentsMm);
+        var vertices = new List<CadStructurePoint2>();
+        var edges = new List<(int A, int B)>();
+
+        foreach (var segment in split)
+        {
+            var a = SnapVertex(vertices, segment.Start, snapToleranceMm);
+            var b = SnapVertex(vertices, segment.End, snapToleranceMm);
+            if (a == b) continue;
+            if (edges.Any(edge => (edge.A == a && edge.B == b) || (edge.A == b && edge.B == a)))
+                continue;
+            edges.Add((a, b));
+        }
+        if (vertices.Count < 3) return null;
+
+        var adjacency = new List<List<int>>();
+        for (var index = 0; index < vertices.Count; index++) adjacency.Add(new List<int>());
+        foreach (var (a, b) in edges)
+        {
+            adjacency[a].Add(b);
+            adjacency[b].Add(a);
+        }
+
+        // The leftmost vertex is on the outline by definition, and the edge leaving it that points
+        // most steeply downwards is the one running along the outside.
+        var start = 0;
+        for (var index = 1; index < vertices.Count; index++)
+        {
+            if (adjacency[index].Count == 0) continue;
+            if (vertices[index].X < vertices[start].X
+                || (Math.Abs(vertices[index].X - vertices[start].X) < Epsilon
+                    && vertices[index].Y < vertices[start].Y))
+                start = index;
+        }
+        if (adjacency[start].Count == 0) return null;
+
+        var first = adjacency[start]
+            .OrderBy(neighbour => Math.Atan2(
+                vertices[neighbour].Y - vertices[start].Y,
+                vertices[neighbour].X - vertices[start].X))
+            .First();
+
+        var loop = new List<int> { start };
+        var previous = start;
+        var current = first;
+        var guard = edges.Count * 4 + 8;
+        while (guard-- > 0)
+        {
+            loop.Add(current);
+            var next = NextAroundOutside(vertices, adjacency, current, previous);
+            if (next < 0) return null;
+            if (current == start && next == first) break;
+            previous = current;
+            current = next;
+            if (current == start && previous == first) break;
+        }
+        if (loop.Count < 4) return null;
+        if (loop[^1] == loop[0]) loop.RemoveAt(loop.Count - 1);
+        if (loop.Count < 3) return null;
+
+        var outline = new CadSlabLoop(loop.Select(index => vertices[index]).ToArray());
+        return outline.SignedAreaMm2 < 0
+            ? new CadSlabLoop(outline.VerticesMm.Reverse().ToArray())
+            : outline;
+    }
+
+    /// <summary>
+    /// The next edge when walking round the outside. Tracing a bay turns as tightly as it can at
+    /// each junction; staying on the outline means doing the opposite and taking the widest turn,
+    /// so the walk never steps into the drawing.
+    /// </summary>
+    private static int NextAroundOutside(
+        IReadOnlyList<CadStructurePoint2> vertices,
+        IReadOnlyList<List<int>> adjacency,
+        int at,
+        int cameFrom)
+    {
+        var neighbours = adjacency[at];
+        if (neighbours.Count == 0) return -1;
+        if (neighbours.Count == 1) return neighbours[0];
+
+        var incoming = Math.Atan2(
+            vertices[cameFrom].Y - vertices[at].Y,
+            vertices[cameFrom].X - vertices[at].X);
+
+        var best = -1;
+        var bestTurn = double.MinValue;
+        foreach (var neighbour in neighbours)
+        {
+            if (neighbour == cameFrom) continue;
+            var outgoing = Math.Atan2(
+                vertices[neighbour].Y - vertices[at].Y,
+                vertices[neighbour].X - vertices[at].X);
+            var turn = incoming - outgoing;
+            while (turn <= 0) turn += Math.PI * 2;
+            while (turn > Math.PI * 2) turn -= Math.PI * 2;
+            if (turn <= bestTurn) continue;
+            bestTurn = turn;
+            best = neighbour;
+        }
+        // A dead end is walked back out of, which is how a spur off the outline is skipped.
+        return best < 0 ? cameFrom : best;
+    }
+
     public static IReadOnlyList<CadSlabLoop> BuildFaces(
         IReadOnlyList<CadStructureSegment> segmentsMm,
         double snapToleranceMm,

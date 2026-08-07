@@ -123,7 +123,7 @@ public static class CadSlabAnalyzer
 
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
         var cells = ClassifyCells(faces, usable, annotations, hatchRegions, marks, options);
-        var regions = MergeCells(cells, marks, options);
+        var regions = MergeCells(cells, marks, usable, options);
 
         var warnings = new List<string>();
         if (shortLines > 0)
@@ -276,6 +276,7 @@ public static class CadSlabAnalyzer
     private static IReadOnlyList<CadSlabRegionCandidate> MergeCells(
         IReadOnlyList<CadSlabCell> cells,
         IReadOnlyList<CadSlabLoop> marks,
+        IReadOnlyList<CadStructureSegment> usableLines,
         CadSlabAnalysisOptions options)
     {
         // Neither an opening nor a column takes concrete, so both stay out of the pour and become
@@ -320,13 +321,23 @@ public static class CadSlabAnalyzer
         // edge. Tracing over the columns would leave a saw-tooth outline with a sliver of slab
         // beside every one of them.
         var poursAndInteriorVoids = cells.Where(cell => !cell.IsColumn).ToArray();
-        // The floor has one outside edge and nothing else. Whatever stitching left inside it --
-        // loops round bays the trace stepped over -- is discarded here, so the next steps start
-        // from a clean outline and cut into it only what the plan asks for.
-        var totalBoundary = BuildGroupBoundary(poursAndInteriorVoids);
+        // The outline comes from the lines themselves: every line the user scanned, joined and
+        // walked round the outside. Assembling it from the bays instead let a column notch the
+        // edge and a stair core cut the floor in two.
+        // A grid axis runs past the building to carry its bubble, so it would drag the outline out
+        // with it. Only lines bounding a bay describe the floor, and those are the ones the cells
+        // were built from.
+        var boundaryLineIds = cells
+            .SelectMany(cell => cell.SourceSegmentIds)
+            .ToHashSet();
+        var outline = CadPlanarGraph.BuildOuterBoundary(
+            usableLines.Where(line => boundaryLineIds.Contains(line.Id)).ToArray(),
+            options.VertexSnapToleranceMm);
+        var totalBoundary = outline is null
+            ? null
+            : new GroupBoundary(outline, Array.Empty<CadSlabLoop>());
         if (totalBoundary is not null)
         {
-            totalBoundary = totalBoundary with { Holes = Array.Empty<CadSlabLoop>() };
             var plainCells = resolved
                 .Where(cell => string.IsNullOrEmpty(cell.HatchStyleKey))
                 .ToArray();
