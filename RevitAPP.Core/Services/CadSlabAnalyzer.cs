@@ -598,9 +598,18 @@ public static class CadSlabAnalyzer
                 }
                 wholeFloorHoles = SeparateHoles(wholeFloorHoles, outerEdge).ToArray();
 
-                var labelledCell = plain.FirstOrDefault(cell => cell.ThicknessMm is not null)
-                                   ?? plain.FirstOrDefault(cell => cell.ElevationMm is not null)
-                                   ?? plain[0];
+                // The floor takes the level most of it is drawn at, not whichever labelled bay came
+                // first. One bay reading differently -- a stray label, a bay the shading marks --
+                // decided the whole pour when the first was taken, so a floor of eighty-eight bays
+                // at one level was built at the level of the odd one out.
+                var labelledCell = plain[0] with
+                {
+                    ElevationMm = MostOfTheFloor(plain, cell => cell.ElevationMm),
+                    ThicknessMm = MostOfTheFloor(plain, cell => cell.ThicknessMm),
+                    MatchedText = plain
+                        .Select(cell => cell.MatchedText)
+                        .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text)) ?? string.Empty
+                };
 
                 var wholeFloor = new CadSlabRegionCandidate(
                     1,
@@ -930,6 +939,20 @@ public static class CadSlabAnalyzer
     /// thickness while lying on either side of something poured separately, and each part is then
     /// a slab in its own right.
     /// </summary>
+    /// <summary>
+    /// The value most of the floor is drawn at, weighed by the ground each value covers. A bay or
+    /// two reading differently does not settle the level of the pour they sit in.
+    /// </summary>
+    private static double? MostOfTheFloor(
+        IReadOnlyList<CadSlabCell> cells,
+        Func<CadSlabCell, double?> value) =>
+        cells
+            .Where(cell => value(cell) is not null)
+            .GroupBy(cell => Math.Round(value(cell)!.Value, 3))
+            .OrderByDescending(group => group.Sum(cell => cell.Loop.AreaMm2))
+            .FirstOrDefault()
+            ?.Key;
+
     /// <summary>
     /// Whether a loop reaches the edge of another: a vertex of one lands on a side of the other.
     /// Revit refuses a profile whose loops touch, so this is as bad as crossing.
