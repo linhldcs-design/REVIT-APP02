@@ -48,6 +48,23 @@ internal static class CadSlabPreviewFactory
     }
 
     /// <summary>
+    /// The shaded areas the user picks, replacing the ones the slab window happened to cover.
+    /// </summary>
+    public static IReadOnlyList<CadHatchRegion>? SelectHatchRegions(
+        CadStructureTransferPackage slabPackage,
+        out string? error)
+    {
+        var selection = AutoCadModelSelectionService.SelectHatchRegions(slabPackage);
+        if (!selection.IsValid)
+        {
+            error = selection.Error;
+            return null;
+        }
+        error = null;
+        return selection.Hatches;
+    }
+
+    /// <summary>
     /// Re-runs the analysis on geometry already scanned, so changing a setting does not require
     /// picking the drawing again.
     /// </summary>

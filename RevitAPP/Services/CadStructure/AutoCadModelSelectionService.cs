@@ -61,6 +61,16 @@ internal static class AutoCadModelSelectionService
         SelectInternal(slabPackage, promptOverride:
             "\nQuét chọn đường bao của các ô KHÔNG đổ sàn rồi nhấn Enter...\n");
 
+    /// <summary>
+    /// Picks the shaded areas that are lowered. Reading them from the slab selection takes every
+    /// hatch the window happened to cover; picking says which ones the plan means, the same way the
+    /// openings are picked rather than guessed.
+    /// </summary>
+    public static AutoCadModelSelectionResult SelectHatchRegions(
+        CadStructureTransferPackage slabPackage) =>
+        SelectInternal(slabPackage, includeHatch: true, promptOverride:
+            "\nQuét chọn các vùng HATCH sàn hạ rồi nhấn Enter...\n");
+
     private static AutoCadModelSelectionResult SelectInternal(
         CadStructureTransferPackage? gridPackage,
         bool includeHatch = false,

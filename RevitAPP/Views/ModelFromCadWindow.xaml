@@ -496,6 +496,10 @@
                                 ToolTip="Quét chọn đường bao của các ô không đổ sàn (ô thang, hộp kỹ thuật)."
                                 Style="{DynamicResource Button.Secondary}"
                                 Command="{Binding SelectOpeningOutlinesCommand}"/>
+                        <Button Content="4. Select Vùng Hatch" Margin="8,0,0,0"
+                                ToolTip="Quét chọn các vùng hatch sàn hạ. Bỏ qua nếu muốn dùng hatch đã quét ở bước 2."
+                                Style="{DynamicResource Button.Secondary}"
+                                Command="{Binding SelectHatchRegionsCommand}"/>
                     </StackPanel>
 
                     <Grid Grid.Row="1">
@@ -651,7 +655,7 @@
                                                  Text="{Binding HatchJoinDistanceText, UpdateSourceTrigger=PropertyChanged}"
                                                  Style="{DynamicResource TextBox.Standard}"/>
 
-                                        <WrapPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,8,0,0">
+                                        <WrapPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,8,0,0">
                                             <CheckBox Content="Ghi đè chiều dày" Margin="0,0,12,0"
                                                       ToolTip="Bỏ qua nhãn chiều dày trong bản vẽ, dùng giá trị mặc định cho mọi tấm."
                                                       Style="{DynamicResource CheckBox.Standard}"

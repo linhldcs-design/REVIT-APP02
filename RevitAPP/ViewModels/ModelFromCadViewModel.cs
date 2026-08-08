@@ -49,6 +49,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private readonly Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? _selectBeam;
     private readonly Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? _selectSlab;
     private readonly Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? _selectOpeningOutlines;
+    private readonly Func<CadStructureTransferPackage, IReadOnlyList<CadHatchRegion>?>? _selectHatchRegions;
     private bool _suppressItemNotifications;
 
     public ModelFromCadViewModel(
@@ -57,13 +58,15 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         Func<CadModelPreviewData?>? reselect = null,
         Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? selectBeam = null,
         Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? selectSlab = null,
-        Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? selectOpeningOutlines = null)
+        Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? selectOpeningOutlines = null,
+        Func<CadStructureTransferPackage, IReadOnlyList<CadHatchRegion>?>? selectHatchRegions = null)
     {
         Data = data;
         _reselect = reselect;
         _selectBeam = selectBeam;
         _selectSlab = selectSlab;
         _selectOpeningOutlines = selectOpeningOutlines;
+        _selectHatchRegions = selectHatchRegions;
         GridAxes = new ObservableCollection<CadGridAxisViewModel>(
             data.GridPreview.Axes.Select(axis => new CadGridAxisViewModel(axis)));
         Columns = new ObservableCollection<CadColumnRowViewModel>(
@@ -489,6 +492,23 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
 
     private bool CanSelectOpeningOutlines() => SlabData is not null && SlabAnalysisSettingsValid;
 
+    /// <summary>
+    /// Replaces the shaded areas read from the slab selection with the ones the user picks. The
+    /// slab window takes in every hatch it covers, including ones belonging to another part of the
+    /// plan; picking says which ones are the lowered pours.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSelectHatchRegions))]
+    private void SelectHatchRegions()
+    {
+        if (SlabData is null || _selectHatchRegions is null) return;
+        var picked = _selectHatchRegions(SlabData.Package);
+        if (picked is null) return;
+        var analysis = CadSlabAnalyzer.Analyze(SlabData.Package, picked, SlabOptions());
+        SetSlabData(SlabData with { Analysis = analysis, Hatches = picked });
+    }
+
+    private bool CanSelectHatchRegions() => SlabData is not null && SlabAnalysisSettingsValid;
+
     [RelayCommand(CanExecute = nameof(CanApplySlabAnalysis))]
     private void ApplySlabAnalysis()
     {
@@ -820,6 +840,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         SelectSlabLinesCommand.NotifyCanExecuteChanged();
         ApplySlabAnalysisCommand.NotifyCanExecuteChanged();
         SelectOpeningOutlinesCommand.NotifyCanExecuteChanged();
+        SelectHatchRegionsCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyBeamAnalysisSettings()

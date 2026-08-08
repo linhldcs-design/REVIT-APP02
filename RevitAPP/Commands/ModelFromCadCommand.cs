@@ -44,7 +44,7 @@ public sealed class ModelFromCadCommand : ExternalCommand
             var projectOptions = CadColumnProjectOptionsReader.Read(document);
             var viewModel = new ModelFromCadViewModel(
                 CadModelPreviewFactory.Empty(), projectOptions, SelectAndBuildPreview,
-                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview, SelectSlabOpeningOutlines);
+                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview, SelectSlabOpeningOutlines, SelectSlabHatchRegions);
             var window = new ModelFromCadWindow(viewModel);
             new WindowInteropHelper(window) { Owner = Application.MainWindowHandle };
             if (window.ShowDialog() != true) return;
@@ -220,6 +220,14 @@ public sealed class ModelFromCadCommand : ExternalCommand
         var marks = CadSlabPreviewFactory.SelectOpeningOutlines(slabPackage, out var error);
         if (marks is null && !string.IsNullOrWhiteSpace(error)) TaskDialog.Show(Title, error);
         return marks;
+    }
+
+    private static IReadOnlyList<CadHatchRegion>? SelectSlabHatchRegions(
+        CadStructureTransferPackage slabPackage)
+    {
+        var hatches = CadSlabPreviewFactory.SelectHatchRegions(slabPackage, out var error);
+        if (hatches is null && !string.IsNullOrWhiteSpace(error)) TaskDialog.Show(Title, error);
+        return hatches;
     }
 
     private static void ShowSlabResult(CadSlabCreationResult result)
