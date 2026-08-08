@@ -715,7 +715,12 @@ public static class CadSlabAnalyzer
                 // it. The label still travels on through it, though: bays on either side belong to
                 // the same pour, and stopping at the shading left the far ones unlabelled, on the
                 // default level, and broken off as a floor of their own.
-                if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
+                // The label has to belong to the kind of pour it is landing on. Shading marks a slab
+                // of its own, so a level written inside it says nothing about the floor around it,
+                // and a level written on the floor says nothing about the shading. Reading either
+                // across that edge gave the floor the level of the drop laid into it.
+                if (!string.Equals(target.HatchStyleKey, result[index].HatchStyleKey, StringComparison.Ordinal)
+                    || !string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
                 {
                     // The label passes through without settling, so bays beyond the shading are
                     // still reached. It stops only where a bay of the same kind takes it.
