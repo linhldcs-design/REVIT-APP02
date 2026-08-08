@@ -174,8 +174,16 @@ internal static class CadSlabCreationService
             for (var index = 0; index < a.Length; index++)
             for (var other = 0; other < b.Length; other++)
             {
-                if (Crosses(a[index], a[(index + 1) % a.Length],
-                        b[other], b[(other + 1) % b.Length]))
+                var a1 = a[index];
+                var a2 = a[(index + 1) % a.Length];
+                var b1 = b[other];
+                var b2 = b[(other + 1) % b.Length];
+                if (Crosses(a1, a2, b1, b2)) return true;
+                // Loops need not cross to be refused: a hole whose side runs along the outline, or
+                // merely touches it, leaves the profile just as invalid. Edges lying on one another
+                // never cross, so they have to be caught by distance instead.
+                if (Touches(a1, a2, b1) || Touches(a1, a2, b2)
+                    || Touches(b1, b2, a1) || Touches(b1, b2, a2))
                     return true;
             }
             return false;
@@ -215,6 +223,25 @@ internal static class CadSlabCreationService
             var d3 = Direction(a1, a2, b1);
             var d4 = Direction(a1, a2, b2);
             return d1 * d2 < 0 && d3 * d4 < 0;
+        }
+
+        /// <summary>
+        /// Whether a point sits on a segment, within the tolerance a drawing is worked to.
+        /// </summary>
+        static bool Touches(XYZ from, XYZ to, XYZ point)
+        {
+            const double reachFeet = 0.5 / MillimetresPerFoot;
+            var dx = to.X - from.X;
+            var dy = to.Y - from.Y;
+            var lengthSquared = dx * dx + dy * dy;
+            if (lengthSquared < 1e-12) return false;
+            var along = ((point.X - from.X) * dx + (point.Y - from.Y) * dy) / lengthSquared;
+            if (along < 0.0 || along > 1.0) return false;
+            var closestX = from.X + dx * along;
+            var closestY = from.Y + dy * along;
+            var offsetX = point.X - closestX;
+            var offsetY = point.Y - closestY;
+            return offsetX * offsetX + offsetY * offsetY <= reachFeet * reachFeet;
         }
 
         static double Direction(XYZ from, XYZ to, XYZ point) =>

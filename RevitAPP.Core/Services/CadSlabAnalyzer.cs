@@ -517,6 +517,21 @@ public static class CadSlabAnalyzer
                     .Select(hole => Orient(hole, counterClockwise: false))
                     .Where(hole => hole.AreaMm2 >= 10_000.0)
                     .ToArray();
+                // A void reaching the floor's edge is not a hole in it but a bite out of it: Revit
+                // refuses a profile whose loops touch, so the edge is cut back round such a void
+                // instead of a hole being left against it.
+                var edgeVoids = wholeFloorHoles
+                    .Where(hole => TouchesLoop(hole, outerEdge))
+                    .ToArray();
+                if (edgeVoids.Length > 0)
+                {
+                    var bitten = CutBackFrom(outerEdge, edgeVoids, options);
+                    if (bitten is not null)
+                    {
+                        outerEdge = bitten;
+                        wholeFloorHoles = wholeFloorHoles.Except(edgeVoids).ToArray();
+                    }
+                }
                 wholeFloorHoles = SeparateHoles(wholeFloorHoles, outerEdge).ToArray();
 
                 var labelledCell = plain.FirstOrDefault(cell => cell.ThicknessMm is not null)
@@ -846,6 +861,39 @@ public static class CadSlabAnalyzer
     /// thickness while lying on either side of something poured separately, and each part is then
     /// a slab in its own right.
     /// </summary>
+    /// <summary>
+    /// Whether a loop reaches the edge of another: a vertex of one lands on a side of the other.
+    /// Revit refuses a profile whose loops touch, so this is as bad as crossing.
+    /// </summary>
+    private static bool TouchesLoop(CadSlabLoop inner, CadSlabLoop outer) =>
+        inner.VerticesMm.Any(point => DistanceToLoop(outer, point) <= 1.0)
+        || outer.VerticesMm.Any(point => DistanceToLoop(inner, point) <= 1.0);
+
+    /// <summary>
+    /// The floor with the given voids taken out of its edge rather than left as holes against it.
+    /// Null when the cut does not leave one piece the floor can be built from.
+    /// </summary>
+    private static CadSlabLoop? CutBackFrom(
+        CadSlabLoop outline,
+        IReadOnlyList<CadSlabLoop> voids,
+        CadSlabAnalysisOptions options)
+    {
+        var pieces = CadPlanarGraph.Subdivide(
+            outline.VerticesMm,
+            voids.Select(area => (IReadOnlyList<CadStructurePoint2>)area.VerticesMm).ToArray(),
+            options.VertexSnapToleranceMm);
+
+        // What is left of the floor is the piece none of the voids covers, and there has to be
+        // exactly one of it -- a cut leaving the floor in two says the voids were read wrongly.
+        var remaining = pieces
+            .Where(piece => piece.Holes.Count == 0)
+            .Where(piece => !voids.Any(area =>
+                ContainsPoint(area.VerticesMm, Centroid(piece.Outer))))
+            .Where(piece => piece.Outer.AreaMm2 >= options.MinimumRegionAreaM2 * 1_000_000.0)
+            .ToArray();
+        return remaining.Length == 1 ? remaining[0].Outer : null;
+    }
+
     /// <summary>
     /// The part of a pour that lies on the floor. A pour falling wholly inside is returned as it
     /// is; one reaching past the edge is cut back to it; one lying wholly outside gives nothing.

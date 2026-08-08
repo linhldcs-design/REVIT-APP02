@@ -686,12 +686,13 @@ public sealed class CadSlabAnalyzerTests
         var result = CadSlabAnalyzer.Analyze(package,
             new[] { Hatch(1, 5000, 9000, 8000, 12000, "ANSI31", 1.0) });
 
-        // The floor keeps its own edge and gives up the stretch the lowered slab covers, so the
-        // two sit beside one another rather than one on top of the other.
+        // The floor gives up the stretch the lowered slab covers, so the two sit beside one another
+        // rather than one on top of the other. The pour reaches the floor's edge, so the edge is
+        // cut back round it -- a hole left against the edge would make the profile invalid.
         var floor = Assert.Single(result.Regions, region => !region.IsLowered);
         Assert.Equal(10000, floor.OuterLoop.VerticesMm.Max(point => point.Y), 0);
         Assert.Equal(177.0, floor.AreaM2, 2);
-        Assert.Equal(3.0, Assert.Single(floor.Holes).AreaMm2 / 1_000_000.0, 2);
+        Assert.Empty(floor.Holes);
     }
 
     private static CadHatchRegion Hatch(
