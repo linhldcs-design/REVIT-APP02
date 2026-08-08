@@ -577,6 +577,61 @@ public sealed class CadSlabAnalyzerTests
         Assert.Equal(-50, hatched.EffectiveOffsetMm, 3);
     }
 
+    [Fact]
+    public void Analyze_ShadedAreaSmallerThanItsBay_IsStillFound()
+    {
+        // A plan shades to the inside face of the beams, so the shading rarely fills the bay the
+        // lines carve out. Reading the bay's centre alone lost the shaded area altogether.
+        var package = Package(Grid(3, 2, 6000, 5000),
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"),
+            Annotation(91, 2450, 2500, "-0.050 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package,
+            new[] { Hatch(1, 1000, 1000, 3900, 4000, "ANSI31", 1.0) });
+
+        var hatched = Assert.Single(result.Regions, region => region.IsLowered);
+        Assert.Equal(8.7, hatched.AreaM2, 2);
+    }
+
+    [Fact]
+    public void Analyze_TwoShadedAreasSplitByABeam_BecomeOneSlab()
+    {
+        var package = Package(Grid(3, 2, 6000, 5000),
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"),
+            Annotation(91, 2450, 2500, "-0.050 Hs=100"),
+            Annotation(92, 4800, 2500, "-0.050 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package, new[]
+        {
+            Hatch(1, 1000, 1000, 3900, 4000, "ANSI31", 1.0),
+            Hatch(2, 4100, 1000, 5500, 4000, "ANSI31", 1.0)
+        });
+
+        // The beam's strip is poured with them, so the slab spans both and the gap between.
+        var hatched = Assert.Single(result.Regions, region => region.IsLowered);
+        Assert.Equal(13.5, hatched.AreaM2, 2);
+    }
+
+    [Fact]
+    public void Analyze_TwoShadedAreasAcrossACorridor_StayApart()
+    {
+        var package = Package(Grid(3, 2, 6000, 5000),
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"),
+            Annotation(91, 1500, 2500, "-0.050 Hs=100"),
+            Annotation(92, 4900, 2500, "-0.050 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package, new[]
+        {
+            Hatch(1, 500, 1000, 2500, 4000, "ANSI31", 1.0),
+            Hatch(2, 4300, 1000, 5500, 4000, "ANSI31", 1.0)
+        });
+
+        var hatched = result.Regions.Where(region => region.IsLowered).ToArray();
+        Assert.Equal(2, hatched.Length);
+        Assert.Contains(hatched, region => Math.Abs(region.AreaM2 - 6.0) < 0.01);
+        Assert.Contains(hatched, region => Math.Abs(region.AreaM2 - 3.6) < 0.01);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]
