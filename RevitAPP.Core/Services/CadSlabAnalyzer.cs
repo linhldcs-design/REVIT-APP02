@@ -442,24 +442,28 @@ public static class CadSlabAnalyzer
             // the level in a bay or two and leaves the rest to follow, so a bay a label never
             // reached is not a section of its own -- reading it as one broke the floor into a slab
             // per label. The level comes from the largest run of bays that agree on it.
-            var plain = plainCells;
-            var statedLevel = plainCells
-                .GroupBy(cell => (
-                    Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
-                    Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
-                .OrderByDescending(section => section.Sum(cell => cell.Loop.AreaMm2))
-                .FirstOrDefault();
-            if (statedLevel is not null)
-            {
-                var leader = statedLevel.First();
-                plain = plainCells
-                    .Select(cell => cell with
-                    {
-                        ThicknessMm = cell.ThicknessMm ?? leader.ThicknessMm,
-                        ElevationMm = cell.ElevationMm ?? leader.ElevationMm
-                    })
-                    .ToArray();
-            }
+            // The level comes from the bays the plan actually labels, weighed by how much floor
+            // they cover. Reading it from the largest group of bays instead let the unlabelled ones
+            // -- which are always the many -- outvote the label and hold the floor at the default.
+            var statedElevation = plainCells
+                .Where(cell => cell.ElevationMm is not null)
+                .GroupBy(cell => Math.Round(cell.ElevationMm!.Value / ElevationToleranceMm))
+                .OrderByDescending(group => group.Sum(cell => cell.Loop.AreaMm2))
+                .FirstOrDefault()
+                ?.First().ElevationMm;
+            var statedThickness = plainCells
+                .Where(cell => cell.ThicknessMm is not null)
+                .GroupBy(cell => Math.Round(cell.ThicknessMm!.Value / ThicknessToleranceMm))
+                .OrderByDescending(group => group.Sum(cell => cell.Loop.AreaMm2))
+                .FirstOrDefault()
+                ?.First().ThicknessMm;
+            var plain = plainCells
+                .Select(cell => cell with
+                {
+                    ThicknessMm = cell.ThicknessMm ?? statedThickness,
+                    ElevationMm = cell.ElevationMm ?? statedElevation
+                })
+                .ToArray();
             // Unshaded floor at one level is still more than one slab when the plan leaves real
             // ground between its parts -- two wings of a building, a floor either side of a well.
             // The largest run keeps the floor's edge and the rest are slabs standing beside it.
