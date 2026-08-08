@@ -864,6 +864,29 @@ public static class CadSlabAnalyzer
     /// touching or overlapping. Revit refuses the whole slab when loops cross, so a hole that
     /// clashes with one already kept is dropped rather than left to fail creation.
     /// </summary>
+    /// <summary>
+    /// Distance from a point to the nearest edge of a loop, zero when the point lies on it.
+    /// </summary>
+    private static double DistanceToLoop(CadSlabLoop loop, CadStructurePoint2 point)
+    {
+        var nearest = double.MaxValue;
+        var vertices = loop.VerticesMm;
+        for (var index = 0; index < vertices.Count; index++)
+        {
+            var a = vertices[index];
+            var b = vertices[(index + 1) % vertices.Count];
+            var direction = b - a;
+            var length = Math.Sqrt(direction.X * direction.X + direction.Y * direction.Y);
+            if (length < 1e-9) continue;
+            var along = Math.Max(0.0, Math.Min(1.0,
+                ((point.X - a.X) * direction.X + (point.Y - a.Y) * direction.Y) / (length * length)));
+            var closest = new CadStructurePoint2(
+                a.X + direction.X * along, a.Y + direction.Y * along);
+            nearest = Math.Min(nearest, closest.DistanceTo(point));
+        }
+        return nearest;
+    }
+
     private static IReadOnlyList<CadSlabLoop> SeparateHoles(
         IReadOnlyList<CadSlabLoop> holes,
         CadSlabLoop outer)
@@ -871,7 +894,13 @@ public static class CadSlabAnalyzer
         var kept = new List<CadSlabLoop>();
         foreach (var hole in holes.OrderByDescending(hole => hole.AreaMm2))
         {
+            // A hole has to lie wholly inside the slab. An area sitting outside it, or straddling
+            // its edge, is a slab of its own -- and a loop that leaves the outline makes the whole
+            // profile invalid, so nothing is created at all.
             if (!ContainsPoint(outer.VerticesMm, Centroid(hole))) continue;
+            if (!hole.VerticesMm.All(vertex =>
+                    ContainsPoint(outer.VerticesMm, vertex)
+                    || DistanceToLoop(outer, vertex) <= 1.0)) continue;
             if (kept.Any(existing => LoopsClash(existing, hole))) continue;
             kept.Add(hole);
         }
