@@ -1068,6 +1068,66 @@ public static class CadSlabAnalyzer
     }
 
     /// <summary>
+    /// A rectangle covering the strip between two shapes, square to the plan. Null when the shapes
+    /// already meet, or when they stand so that no strip lies between them.
+    /// </summary>
+    private static IReadOnlyList<CadStructurePoint2>? GapFiller(
+        CadSlabLoop first,
+        CadSlabLoop second)
+    {
+        var a = Extent(first);
+        var b = Extent(second);
+
+        // Where the two overlap along one axis, the strip runs across the other, and the filler
+        // spans the overlap so it meets both shapes squarely.
+        var sharedY = Math.Min(a.MaxY, b.MaxY) - Math.Max(a.MinY, b.MinY);
+        var sharedX = Math.Min(a.MaxX, b.MaxX) - Math.Max(a.MinX, b.MinX);
+
+        if (sharedY > 0.0)
+        {
+            var left = Math.Min(a.MaxX, b.MaxX);
+            var right = Math.Max(a.MinX, b.MinX);
+            if (right <= left) return null;
+            var bottom = Math.Max(a.MinY, b.MinY);
+            var top = Math.Min(a.MaxY, b.MaxY);
+            return Corners(left, bottom, right, top);
+        }
+
+        if (sharedX > 0.0)
+        {
+            var bottom = Math.Min(a.MaxY, b.MaxY);
+            var top = Math.Max(a.MinY, b.MinY);
+            if (top <= bottom) return null;
+            var left = Math.Max(a.MinX, b.MinX);
+            var right = Math.Min(a.MaxX, b.MaxX);
+            return Corners(left, bottom, right, top);
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<CadStructurePoint2> Corners(
+        double left, double bottom, double right, double top) =>
+        new[]
+        {
+            new CadStructurePoint2(left, bottom),
+            new CadStructurePoint2(right, bottom),
+            new CadStructurePoint2(right, top),
+            new CadStructurePoint2(left, top)
+        };
+
+    private static (double MinX, double MinY, double MaxX, double MaxY) Extent(CadSlabLoop loop) =>
+        (loop.VerticesMm.Min(point => point.X), loop.VerticesMm.Min(point => point.Y),
+            loop.VerticesMm.Max(point => point.X), loop.VerticesMm.Max(point => point.Y));
+
+    /// <summary>
+    /// Whether two points lie square to one another -- the line between them runs along one of the
+    /// plan's own directions rather than cutting across at an angle.
+    /// </summary>
+    private static bool Square(CadStructurePoint2 first, CadStructurePoint2 second) =>
+        Math.Abs(first.X - second.X) <= 1.0 || Math.Abs(first.Y - second.Y) <= 1.0;
+
+    /// <summary>
     /// One edge round several separate shapes. Shapes standing apart cannot be walked round as one,
     /// so the strip between each pair is bridged at their nearest corners first, closing them into
     /// a single figure the walk can follow.
@@ -1088,31 +1148,18 @@ public static class CadSlabAnalyzer
                     "EDGE", string.Empty));
         }
 
-        // Two bridges, not one. A single link is a spur: the walk goes out along it and back, and
-        // the stretch it retraced is dropped again as an excursion, losing the shape it led to. A
-        // second link at the far end of the same gap closes the two shapes into one ring instead,
-        // and the strip between them -- the beam -- falls inside it.
+        // The gap is filled rather than spanned. A link drawn corner to corner runs at whatever
+        // angle the corners happen to lie at, and left the joined slab with a slanted step across
+        // the gap; a rectangle covering the strip between the two shapes has only the plan's own
+        // directions in it, and the walk round the outside then follows those.
         for (var index = 1; index < loops.Count; index++)
         {
-            var previous = loops[index - 1].VerticesMm;
-            var current = loops[index].VerticesMm;
-
-            var pairs = previous
-                .SelectMany(a => current.Select(b => (A: a, B: b, Distance: a.DistanceTo(b))))
-                .OrderBy(pair => pair.Distance)
-                .ToArray();
-            if (pairs.Length == 0) continue;
-
-            var first = pairs[0];
-            segments.Add(new CadStructureSegment(--id, first.A, first.B, "BRIDGE", string.Empty));
-
-            // The second link has to span the same gap elsewhere along it, so it is the nearest
-            // pair sharing neither end with the first.
-            var second = pairs.FirstOrDefault(pair =>
-                pair.A.DistanceTo(first.A) > 1.0 && pair.B.DistanceTo(first.B) > 1.0);
-            if (second.Distance > 0.0)
+            var filler = GapFiller(loops[index - 1], loops[index]);
+            if (filler is null) continue;
+            for (var corner = 0; corner < filler.Count; corner++)
                 segments.Add(new CadStructureSegment(
-                    --id, second.A, second.B, "BRIDGE", string.Empty));
+                    --id, filler[corner], filler[(corner + 1) % filler.Count],
+                    "BRIDGE", string.Empty));
         }
 
         return CadPlanarGraph.BuildOuterBoundary(segments, 20.0);
