@@ -30,7 +30,7 @@ public sealed class CadSlabAnalyzerTests
     }
 
     [Fact]
-    public void Analyze_TwoElevations_ProduceTwoSlabs()
+    public void Analyze_TwoElevationsWithoutShading_StillPourOneFloor()
     {
         var segments = Grid(2, 1, 4000, 3000);
         var result = CadSlabAnalyzer.Analyze(
@@ -40,13 +40,14 @@ public sealed class CadSlabAnalyzerTests
             Array.Empty<CadHatchRegion>(),
             new CadSlabAnalysisOptions());
 
-        Assert.Equal(2, result.Regions.Count);
-        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm) < 1);
-        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveOffsetMm + 50) < 1);
+        // A drop is drawn as shading, not written in a label, so unshaded floor is one pour however
+        // many levels the plan writes across it. Splitting on the labels broke a floor whose bays
+        // all read alike into a slab per label.
+        Assert.Single(result.Regions);
     }
 
     [Fact]
-    public void Analyze_DifferentThickness_ProducesTwoSlabs()
+    public void Analyze_DifferentThicknessWithoutShading_StillPoursOneFloor()
     {
         var segments = Grid(2, 1, 4000, 3000);
         var result = CadSlabAnalyzer.Analyze(
@@ -56,9 +57,7 @@ public sealed class CadSlabAnalyzerTests
             Array.Empty<CadHatchRegion>(),
             new CadSlabAnalysisOptions());
 
-        Assert.Equal(2, result.Regions.Count);
-        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveThicknessMm - 100) < 1);
-        Assert.Contains(result.Regions, region => Math.Abs(region.EffectiveThicknessMm - 150) < 1);
+        Assert.Single(result.Regions);
     }
 
     [Theory]

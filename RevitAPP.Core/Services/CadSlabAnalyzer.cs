@@ -438,19 +438,29 @@ public static class CadSlabAnalyzer
             var plainCells = resolved
                 .Where(cell => string.IsNullOrEmpty(cell.HatchStyleKey))
                 .ToArray();
-            // The floor has one outside edge. Where the plan states more than one section for it,
-            // the largest section keeps that edge and the rest are cut out of it, the same way a
-            // hatched area is: the edge is traced once and never per section.
-            var plainSections = plainCells
+            // Unshaded floor is one pour at one level, whatever the plan writes where. It states
+            // the level in a bay or two and leaves the rest to follow, so a bay a label never
+            // reached is not a section of its own -- reading it as one broke the floor into a slab
+            // per label. The level comes from the largest run of bays that agree on it.
+            var plain = plainCells;
+            var statedLevel = plainCells
                 .GroupBy(cell => (
                     Elevation: Math.Round(EffectiveElevation(cell, options) / ElevationToleranceMm),
                     Thickness: Math.Round(EffectiveThickness(cell, options) / ThicknessToleranceMm)))
                 .OrderByDescending(section => section.Sum(cell => cell.Loop.AreaMm2))
-                .ToArray();
-            var plain = plainSections.Length > 0
-                ? plainSections[0].ToArray()
-                : Array.Empty<CadSlabCell>();
-            var otherSections = plainSections.Skip(1).ToArray();
+                .FirstOrDefault();
+            if (statedLevel is not null)
+            {
+                var leader = statedLevel.First();
+                plain = plainCells
+                    .Select(cell => cell with
+                    {
+                        ThicknessMm = cell.ThicknessMm ?? leader.ThicknessMm,
+                        ElevationMm = cell.ElevationMm ?? leader.ElevationMm
+                    })
+                    .ToArray();
+            }
+            var otherSections = Array.Empty<IGrouping<(double, double), CadSlabCell>>();
             if (plain.Length > 0)
             {
                 // Each hatched area is poured at its own level, so it becomes a slab beside the
