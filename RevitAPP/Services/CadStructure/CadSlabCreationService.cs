@@ -53,6 +53,7 @@ internal static class CadSlabCreationService
         var created = new List<ElementId>();
         var errors = new List<string>();
         var existingCount = 0;
+        var skippedHoles = 0;
         var rotation = placementRotationDegrees * Math.PI / 180.0;
         var cosine = Math.Cos(rotation);
         var sine = Math.Sin(rotation);
@@ -94,6 +95,23 @@ internal static class CadSlabCreationService
                                 throw new InvalidOperationException(
                                     "Đường bao tự cắt — kiểm tra biên sàn trong preview.");
                         }
+                        // Revit refuses the whole floor when any two loops of the profile meet, so a
+                        // hole crossing the outline or another hole is dropped rather than allowed
+                        // to cost the slab. Everything it would have cut is poured instead, which
+                        // the user can see and correct; nothing at all is the worse outcome.
+                        var outerPoints = loops[0].Select(curve => curve.GetEndPoint(0)).ToArray();
+                        for (var index = loops.Count - 1; index >= 1; index--)
+                        {
+                            var hole = loops[index].Select(curve => curve.GetEndPoint(0)).ToArray();
+                            var clashes = LoopsMeet(loops[index], loops[0])
+                                          || !hole.All(point => Inside(outerPoints, point));
+                            for (var other = 1; other < index && !clashes; other++)
+                                clashes = LoopsMeet(loops[index], loops[other]);
+                            if (!clashes) continue;
+                            loops.RemoveAt(index);
+                            skippedHoles++;
+                        }
+
                         if (loops[0].IsCounterclockwise(XYZ.BasisZ) == false)
                             loops[0] = Reversed(loops[0]);
 
@@ -123,6 +141,12 @@ internal static class CadSlabCreationService
                 transaction.Commit();
             }
 
+            // A dropped hole is not a failure -- the slab was still created -- but the user has to
+            // know a void the plan shows was poured over.
+            if (skippedHoles > 0)
+                errors.Add($"Đã bỏ {skippedHoles} lỗ nằm ngoài biên sàn hoặc cắt biên — "
+                    + "vùng đó được đổ liền, kiểm tra lại trong Revit.");
+
             var status = group.Assimilate();
             return new CadSlabCreationResult(created, existingCount, errors, status);
         }
@@ -139,6 +163,37 @@ internal static class CadSlabCreationService
         /// Whether a loop crosses or doubles back on itself. Revit only reports that the profile
         /// is invalid, without saying which loop, so it is worth naming here.
         /// </summary>
+        /// <summary>
+        /// Whether two loops of a profile meet: either their edges cross, or one lies inside the
+        /// other's ring while reaching outside it. Revit accepts only loops that nest cleanly.
+        /// </summary>
+        static bool LoopsMeet(CurveLoop first, CurveLoop second)
+        {
+            var a = first.Select(curve => curve.GetEndPoint(0)).ToArray();
+            var b = second.Select(curve => curve.GetEndPoint(0)).ToArray();
+            for (var index = 0; index < a.Length; index++)
+            for (var other = 0; other < b.Length; other++)
+            {
+                if (Crosses(a[index], a[(index + 1) % a.Length],
+                        b[other], b[(other + 1) % b.Length]))
+                    return true;
+            }
+            return false;
+        }
+
+        static bool Inside(XYZ[] loop, XYZ point)
+        {
+            var inside = false;
+            for (int index = 0, previous = loop.Length - 1; index < loop.Length; previous = index++)
+            {
+                if (loop[index].Y > point.Y != loop[previous].Y > point.Y
+                    && point.X < (loop[previous].X - loop[index].X) * (point.Y - loop[index].Y)
+                        / (loop[previous].Y - loop[index].Y) + loop[index].X)
+                    inside = !inside;
+            }
+            return inside;
+        }
+
         static bool SelfIntersects(CurveLoop loop)
         {
             var points = loop.Select(curve => curve.GetEndPoint(0)).ToArray();
