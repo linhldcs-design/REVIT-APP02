@@ -818,19 +818,34 @@ public static class CadSlabAnalyzer
     {
         if (hatches is null || hatches.Count == 0) return null;
 
+        // Only cells the plan actually shades name a hatch. A neighbouring bay pulled in because a
+        // beam runs between the two is part of the pour, but it must not drag in the hatch that
+        // covers it -- that is how a shaded bay grew over the unshaded one beside it.
         var covering = hatches
-            .Where(hatch => part.Any(cell => ContainsPoint(hatch.BoundaryMm, cell.CentroidMm)))
+            .Where(hatch => part.Any(cell =>
+                cell.IsLowered && ContainsPoint(hatch.BoundaryMm, cell.CentroidMm)))
             .ToArray();
         if (covering.Length == 0) return null;
+
+        // The hatch edge only stands in for the grid when it holds the whole pour. When the pour
+        // reaches past the shading -- a bay joined across a beam -- the grid edge is the true one.
+        if (part.Any(cell => !covering.Any(hatch =>
+                ContainsPoint(hatch.BoundaryMm, cell.CentroidMm))))
+            return null;
 
         if (covering.Length == 1)
             return new CadSlabLoop(covering[0].BoundaryMm.ToArray());
 
-        // Several hatches make one pour once they are joined, which is what tracing the edge round
-        // all their sides gives.
+        // Only hatches that meet make one edge. Tracing round hatches standing apart would sweep
+        // the ground between them into the pour, which is how two shaded bays became one solid
+        // rectangle swallowing the unshaded strip beside them.
+        var touching = LargestTouchingSet(covering);
+        if (touching.Length == 1)
+            return new CadSlabLoop(touching[0].BoundaryMm.ToArray());
+
         var segments = new List<CadStructureSegment>();
         var id = 0;
-        foreach (var hatch in covering)
+        foreach (var hatch in touching)
         {
             var boundary = hatch.BoundaryMm;
             for (var index = 0; index < boundary.Count; index++)
@@ -840,6 +855,49 @@ public static class CadSlabAnalyzer
         }
 
         return CadPlanarGraph.BuildOuterBoundary(segments, 20.0);
+    }
+
+    /// <summary>
+    /// The biggest run of hatches that touch one another, directly or through their neighbours.
+    /// </summary>
+    private static CadHatchRegion[] LargestTouchingSet(CadHatchRegion[] hatches)
+    {
+        var groupOf = new int[hatches.Length];
+        for (var index = 0; index < groupOf.Length; index++) groupOf[index] = index;
+
+        int Root(int index)
+        {
+            while (groupOf[index] != index) index = groupOf[index] = groupOf[groupOf[index]];
+            return index;
+        }
+
+        for (var first = 0; first < hatches.Length; first++)
+        for (var second = first + 1; second < hatches.Length; second++)
+        {
+            if (!Touch(hatches[first], hatches[second])) continue;
+            groupOf[Root(first)] = Root(second);
+        }
+
+        return hatches
+            .Select((hatch, index) => (hatch, group: Root(index)))
+            .GroupBy(entry => entry.group)
+            .OrderByDescending(group => group.Sum(entry => new CadSlabLoop(entry.hatch.BoundaryMm.ToArray()).AreaMm2))
+            .First()
+            .Select(entry => entry.hatch)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Whether two hatches share ground: one holds a corner of the other, or their edges meet.
+    /// </summary>
+    private static bool Touch(CadHatchRegion first, CadHatchRegion second)
+    {
+        const double reach = 20.0;
+        if (first.BoundaryMm.Any(point => ContainsPoint(second.BoundaryMm, point))) return true;
+        if (second.BoundaryMm.Any(point => ContainsPoint(first.BoundaryMm, point))) return true;
+
+        var loop = new CadSlabLoop(second.BoundaryMm.ToArray());
+        return first.BoundaryMm.Any(point => DistanceToLoop(loop, point) <= reach);
     }
 
     /// <summary>
