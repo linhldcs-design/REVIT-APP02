@@ -154,6 +154,30 @@ public static class CadSlabAnalyzer
         if (styles.Length > 1)
             warnings.Add($"Bản vẽ dùng {styles.Length} kiểu hatch — mỗi kiểu là một mức sàn riêng.");
 
+        // Which levels were read, and from how many bays. When a slab comes out at a level the plan
+        // does not state, this says whether the label was never read, or read and then outvoted.
+        var readLevels = cells
+            .Where(cell => cell.ElevationMm is not null)
+            .GroupBy(cell => (Elevation: cell.ElevationMm!.Value,
+                Shaded: !string.IsNullOrEmpty(cell.HatchStyleKey)))
+            .OrderBy(group => group.Key.Shaded)
+            .ThenBy(group => group.Key.Elevation)
+            .Select(group => $"{group.Key.Elevation / 1000.0:+0.000;-0.000}"
+                + $" ({(group.Key.Shaded ? "hatch" : "thường")}, {group.Count()} ô)")
+            .ToArray();
+        warnings.Add(readLevels.Length == 0
+            ? "Không đọc được cao độ nào từ text — kiểm tra text có nằm trong vùng quét không."
+            : "Cao độ đọc được: " + string.Join(", ", readLevels) + ".");
+
+        var readThicknesses = cells
+            .Where(cell => cell.ThicknessMm is not null)
+            .GroupBy(cell => cell.ThicknessMm!.Value)
+            .OrderBy(group => group.Key)
+            .Select(group => $"{group.Key:0} ({group.Count()} ô)")
+            .ToArray();
+        if (readThicknesses.Length > 0)
+            warnings.Add("Chiều dày đọc được: " + string.Join(", ", readThicknesses) + " mm.");
+
         var anchor = slabPackage.SourceAnchor * scale - origin;
         return new CadSlabAnalysis(origin, anchor, regions, cells,
             shortLines, unclosed, orphanHatches, warnings, null)
