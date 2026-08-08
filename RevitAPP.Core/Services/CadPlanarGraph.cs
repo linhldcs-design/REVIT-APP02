@@ -128,8 +128,13 @@ public static class CadPlanarGraph
                 var first = points[index];
                 var second = points[(index + 1) % points.Count];
 
-                // Both corners of the step have to sit close to the line the edge would take, and
-                // the step itself has to be short, or it is a real feature of the plan.
+                // The edge has to arrive and leave along the same line, or the step is a corner of
+                // the building and closing it would cut that corner off. Only a detour that comes
+                // straight back to the line it left is the column standing on it.
+                if (!SameDirection(before, first, second, after)) continue;
+
+                // Both corners of the step sit close to that line, and the step itself is short --
+                // a column's width -- or it is a feature of the plan rather than a column.
                 if (PointToSegment(before, after, first) > maximumDepthMm) continue;
                 if (PointToSegment(before, after, second) > maximumDepthMm) continue;
                 if (first.DistanceTo(second) > maximumDepthMm * 4.0) continue;
@@ -142,6 +147,29 @@ public static class CadPlanarGraph
             }
         }
         return points;
+    }
+
+    /// <summary>
+    /// Whether the edge arrives at a step and leaves it running the same way, which is what makes
+    /// the step a detour off a straight run rather than a corner of the plan.
+    /// </summary>
+    private static bool SameDirection(
+        CadStructurePoint2 arriveFrom,
+        CadStructurePoint2 arriveAt,
+        CadStructurePoint2 leaveFrom,
+        CadStructurePoint2 leaveAt)
+    {
+        var inX = arriveAt.X - arriveFrom.X;
+        var inY = arriveAt.Y - arriveFrom.Y;
+        var outX = leaveAt.X - leaveFrom.X;
+        var outY = leaveAt.Y - leaveFrom.Y;
+        var inLength = Math.Sqrt(inX * inX + inY * inY);
+        var outLength = Math.Sqrt(outX * outX + outY * outY);
+        if (inLength < 1e-9 || outLength < 1e-9) return false;
+
+        // Within about five degrees of one another counts as the same run.
+        var alignment = (inX * outX + inY * outY) / (inLength * outLength);
+        return alignment >= 0.996;
     }
 
     private static double PointToSegment(
