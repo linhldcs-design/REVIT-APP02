@@ -632,6 +632,68 @@ public sealed class CadSlabAnalyzerTests
         Assert.Contains(hatched, region => Math.Abs(region.AreaM2 - 3.6) < 0.01);
     }
 
+    [Fact]
+    public void Analyze_ShadedBayDrawnClearOfTheFloor_DoesNotStretchTheOutline()
+    {
+        var segments = Grid(3, 2, 6000, 5000);
+        segments.AddRange(Rectangle(500, 5000, 11500, 8000, 13500));
+
+        var package = Package(segments,
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"),
+            Annotation(91, 6500, 12500, "-0.050 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package,
+            new[] { Hatch(1, 5000, 11500, 8000, 13500, "ANSI31", 1.0) });
+
+        // The floor keeps its own edge; the bay standing off it is a pour of its own.
+        var floor = Assert.Single(result.Regions, region => !region.IsLowered);
+        Assert.Equal(10000, floor.OuterLoop.VerticesMm.Max(point => point.Y), 0);
+        Assert.Equal(180.0, floor.AreaM2, 2);
+        Assert.Equal(6.0, Assert.Single(result.Regions, region => region.IsLowered).AreaM2, 2);
+    }
+
+    [Fact]
+    public void Analyze_LoweredPour_CutsTheFloorAlongItsOwnEdge()
+    {
+        var package = Package(Grid(3, 2, 6000, 5000),
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"),
+            Annotation(91, 2000, 2500, "-0.050 Hs=100"),
+            Annotation(92, 4500, 3000, "-0.050 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package, new[]
+        {
+            Hatch(1, 1000, 1000, 3000, 4000, "ANSI31", 1.0),
+            Hatch(2, 3200, 1500, 5500, 4500, "ANSI31", 1.0)
+        });
+
+        // The hole and the slab laid into it are one and the same shape, so nothing is left open.
+        var floor = Assert.Single(result.Regions, region => !region.IsLowered);
+        var lowered = Assert.Single(result.Regions, region => region.IsLowered);
+        Assert.Equal(lowered.AreaM2, Assert.Single(floor.Holes).AreaMm2 / 1_000_000.0, 2);
+        Assert.Equal(180.0 - lowered.AreaM2, floor.AreaM2, 2);
+    }
+
+    [Fact]
+    public void Analyze_LoweredPourReachingPastTheFloor_IsNotPouredOver()
+    {
+        var segments = Grid(3, 2, 6000, 5000);
+        segments.AddRange(Rectangle(500, 5000, 9000, 8000, 12000));
+
+        var package = Package(segments,
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"),
+            Annotation(91, 6500, 10500, "-0.050 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package,
+            new[] { Hatch(1, 5000, 9000, 8000, 12000, "ANSI31", 1.0) });
+
+        // The floor keeps its own edge and gives up the stretch the lowered slab covers, so the
+        // two sit beside one another rather than one on top of the other.
+        var floor = Assert.Single(result.Regions, region => !region.IsLowered);
+        Assert.Equal(10000, floor.OuterLoop.VerticesMm.Max(point => point.Y), 0);
+        Assert.Equal(177.0, floor.AreaM2, 2);
+        Assert.Equal(3.0, Assert.Single(floor.Holes).AreaMm2 / 1_000_000.0, 2);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]

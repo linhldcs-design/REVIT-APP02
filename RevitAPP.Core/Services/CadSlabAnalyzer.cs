@@ -393,7 +393,31 @@ public static class CadSlabAnalyzer
         // A grid axis runs past the building to carry its bubble, so it would drag the outline out
         // with it. Only lines bounding a bay describe the floor, and those are the ones the cells
         // were built from.
-        var boundaryLineIds = cells
+        // A shaded area drawn clear of the floor -- a lowered bay off to one side -- is a pour of
+        // its own, not part of this one. Taking its lines into the outline pulled the edge out to
+        // reach it and left a spur of slab where the plan shows none.
+        // A lowered bay is a slab of its own laid beside the floor, so the floor's edge stops where
+        // the shading starts. Tracing over the shaded bays as well pushed the edge out to cover
+        // them, and the floor was then poured on top of the very slabs it should sit beside.
+        var plainBlock = LargestConnectedRun(cells.Where(cell => !cell.IsLowered).ToArray());
+        var plainEdge = plainBlock.Length == 0
+            ? null
+            : CadPlanarGraph.BuildOuterBoundary(
+                usableLines
+                    .Where(line => plainBlock.SelectMany(cell => cell.SourceSegmentIds)
+                        .ToHashSet().Contains(line.Id))
+                    .ToArray(),
+                options.VertexSnapToleranceMm);
+        // A shaded bay the floor surrounds is a hole in it, so the edge still runs round the
+        // outside of it. One hanging off the floor is a slab laid beside it, and taking that into
+        // the edge poured the floor over the very slab it should sit next to.
+        var mainBlock = plainEdge is null
+            ? LargestConnectedRun(cells)
+            : LargestConnectedRun(cells
+                .Where(cell => !cell.IsLowered
+                               || ContainsPoint(plainEdge.VerticesMm, cell.CentroidMm))
+                .ToArray());
+        var boundaryLineIds = mainBlock
             .SelectMany(cell => cell.SourceSegmentIds)
             .ToHashSet();
         var outline = CadPlanarGraph.BuildOuterBoundary(
@@ -422,6 +446,33 @@ public static class CadSlabAnalyzer
             var otherSections = plainSections.Skip(1).ToArray();
             if (plain.Length > 0)
             {
+                // Each hatched area is poured at its own level, so it becomes a slab beside the
+                // floor rather than part of it.
+                // Areas hatched alike join when only a beam runs between them and stay apart when
+                // the plan leaves real ground between them, so they are joined by proximity as
+                // well as by touching.
+                var hatchedRegions = resolved
+                    .Where(cell => !string.IsNullOrEmpty(cell.HatchStyleKey))
+                    .GroupBy(cell => cell.HatchStyleKey)
+                    .SelectMany(group => JoinNearbyParts(
+                        ConnectedParts(group.ToArray()), options.HatchJoinDistanceMm))
+                    .Select((part, index) => BuildRegion(part, index + 2, cells, marks, options, hatches))
+                    .Where(region => region is not null)
+                    .Select(region => region!)
+                    .ToArray();
+
+                // A plain area the plan gives another level is a slab inside the floor, exactly
+                // like a hatched one, so it is built the same way rather than by tracing a second
+                // outside edge.
+                var otherRegions = otherSections
+                    .SelectMany(section => ConnectedParts(section.ToArray()))
+                    .Select((part, index) =>
+                        BuildRegion(part, index + 2 + hatchedRegions.Length, cells, marks, options))
+                    .Where(region => region is not null)
+                    .Select(region => region!)
+                    .ToArray();
+
+
                 var outerEdge = totalBoundary.Outer;
                 var cutOut = poursAndInteriorVoids
                     .Where(cell => !plain.Any(member => member.Id == cell.Id))
@@ -435,10 +486,33 @@ public static class CadSlabAnalyzer
                         ContainsPoint(mark.VerticesMm, cell.CentroidMm)))
                     .Select(cell => cell.Id)
                     .ToHashSet();
+                // A lowered pour is cut out of the floor along its own edge, which is the edge it
+                // was built with. Rebuilding the hole from the cells underneath gave a shape that
+                // did not match the slab laid into it, so the floor was left open where the lowered
+                // slab did not reach.
+                var pouredElsewhere = hatchedRegions
+                    .Concat(otherRegions)
+                    .Select(region => region.OuterLoop)
+                    .ToArray();
+                var coveredCells = cutOut
+                    .Where(cell => pouredElsewhere.Any(pour =>
+                        ContainsPoint(pour.VerticesMm, cell.CentroidMm)))
+                    .Select(cell => cell.Id)
+                    .ToHashSet();
+                // A pour reaching past the floor is cut back to it first: only the stretch lying on
+                // the floor is a hole in it. Passing the whole pour left the hole reaching outside
+                // the edge, where it was dropped as invalid, and the floor stayed poured underneath.
+                var poursOnTheFloor = pouredElsewhere
+                    .Select(pour => ClipToOutline(pour, outerEdge, options))
+                    .Where(pour => pour is not null)
+                    .Select(pour => pour!)
+                    .ToArray();
                 var wholeFloorHoles = marks
                     .Where(mark => ContainsPoint(outerEdge.VerticesMm, Centroid(mark)))
+                    .Concat(poursOnTheFloor)
                     .Concat(MergeVoids(cutOut
-                        .Where(cell => !markedCells.Contains(cell.Id))
+                        .Where(cell => !markedCells.Contains(cell.Id)
+                                       && !coveredCells.Contains(cell.Id))
                         .ToArray()))
                     .Select(hole => Orient(hole, counterClockwise: false))
                     .Where(hole => hole.AreaMm2 >= 10_000.0)
@@ -465,32 +539,6 @@ public static class CadSlabAnalyzer
                 {
                     AbsorbedStripCount = plain.Count(cell => cell.IsBeamStrip)
                 };
-
-                // Each hatched area is poured at its own level, so it becomes a slab beside the
-                // floor rather than part of it.
-                // Areas hatched alike join when only a beam runs between them and stay apart when
-                // the plan leaves real ground between them, so they are joined by proximity as
-                // well as by touching.
-                var hatchedRegions = resolved
-                    .Where(cell => !string.IsNullOrEmpty(cell.HatchStyleKey))
-                    .GroupBy(cell => cell.HatchStyleKey)
-                    .SelectMany(group => JoinNearbyParts(
-                        ConnectedParts(group.ToArray()), options.HatchJoinDistanceMm))
-                    .Select((part, index) => BuildRegion(part, index + 2, cells, marks, options, hatches))
-                    .Where(region => region is not null)
-                    .Select(region => region!)
-                    .ToArray();
-
-                // A plain area the plan gives another level is a slab inside the floor, exactly
-                // like a hatched one, so it is built the same way rather than by tracing a second
-                // outside edge.
-                var otherRegions = otherSections
-                    .SelectMany(section => ConnectedParts(section.ToArray()))
-                    .Select((part, index) =>
-                        BuildRegion(part, index + 2 + hatchedRegions.Length, cells, marks, options))
-                    .Where(region => region is not null)
-                    .Select(region => region!)
-                    .ToArray();
 
                 return new[] { wholeFloor }
                     .Concat(hatchedRegions)
@@ -798,6 +846,48 @@ public static class CadSlabAnalyzer
     /// thickness while lying on either side of something poured separately, and each part is then
     /// a slab in its own right.
     /// </summary>
+    /// <summary>
+    /// The part of a pour that lies on the floor. A pour falling wholly inside is returned as it
+    /// is; one reaching past the edge is cut back to it; one lying wholly outside gives nothing.
+    /// </summary>
+    private static CadSlabLoop? ClipToOutline(
+        CadSlabLoop pour,
+        CadSlabLoop outline,
+        CadSlabAnalysisOptions options)
+    {
+        if (pour.VerticesMm.All(point => ContainsPoint(outline.VerticesMm, point))) return pour;
+        // A pour mostly off the floor still overlaps it, and its middle can sit outside -- so the
+        // overlap is what decides, not where the middle falls.
+        if (!pour.VerticesMm.Any(point => ContainsPoint(outline.VerticesMm, point))
+            && !outline.VerticesMm.Any(point => ContainsPoint(pour.VerticesMm, point)))
+            return null;
+
+        // Cutting the floor along the pour's sides gives the piece they share, which is the one
+        // holding the pour's middle.
+        var pieces = CadPlanarGraph.Subdivide(
+            outline.VerticesMm, new[] { pour.VerticesMm }, options.VertexSnapToleranceMm);
+        var shared = pieces
+            .Where(piece => piece.Holes.Count == 0)
+            .Where(piece => ContainsPoint(pour.VerticesMm, Centroid(piece.Outer))
+                            && ContainsPoint(outline.VerticesMm, Centroid(piece.Outer)))
+            .OrderByDescending(piece => piece.Outer.AreaMm2)
+            .FirstOrDefault();
+        return shared?.Outer;
+    }
+
+    /// <summary>
+    /// The largest run of cells that touch one another. That is the floor; anything standing clear
+    /// of it is a pour drawn beside it and describes its own edge.
+    /// </summary>
+    private static CadSlabCell[] LargestConnectedRun(IReadOnlyList<CadSlabCell> cells)
+    {
+        if (cells.Count == 0) return Array.Empty<CadSlabCell>();
+        var parts = ConnectedParts(cells.ToArray());
+        return parts
+            .OrderByDescending(part => part.Sum(cell => cell.Loop.AreaMm2))
+            .First();
+    }
+
     private static IReadOnlyList<CadSlabCell[]> ConnectedParts(CadSlabCell[] cells)
     {
         if (cells.Length <= 1) return new[] { cells };
