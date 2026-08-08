@@ -129,6 +129,10 @@ public static class CadSlabAnalyzer
         faces = SplitAlongHatches(faces, hatchRegions, options);
         var cells = ClassifyCells(faces, usable, annotations, hatchRegions, marks, options);
         var regions = MergeCells(cells, marks, usable, options, hatchRegions);
+        // The cells as the regions saw them, after labels were carried between neighbours -- which
+        // is what the levels below have to be read from, not the cells before that step.
+        var regionCells = SpreadLabelsAcrossNeighbours(
+            cells.Where(cell => !cell.IsOpening && !cell.IsColumn).ToArray(), cells);
 
         var warnings = new List<string>();
         if (shortLines > 0)
@@ -156,7 +160,7 @@ public static class CadSlabAnalyzer
 
         // Which levels were read, and from how many bays. When a slab comes out at a level the plan
         // does not state, this says whether the label was never read, or read and then outvoted.
-        var readLevels = cells
+        var readLevels = regionCells
             .Where(cell => cell.ElevationMm is not null)
             .GroupBy(cell => (Elevation: cell.ElevationMm!.Value,
                 Shaded: !string.IsNullOrEmpty(cell.HatchStyleKey)))
@@ -169,7 +173,7 @@ public static class CadSlabAnalyzer
             ? "Không đọc được cao độ nào từ text — kiểm tra text có nằm trong vùng quét không."
             : "Cao độ đọc được: " + string.Join(", ", readLevels) + ".");
 
-        var readThicknesses = cells
+        var readThicknesses = regionCells
             .Where(cell => cell.ThicknessMm is not null)
             .GroupBy(cell => cell.ThicknessMm!.Value)
             .OrderBy(group => group.Key)
