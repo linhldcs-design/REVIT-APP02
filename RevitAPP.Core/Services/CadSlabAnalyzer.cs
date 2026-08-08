@@ -182,6 +182,15 @@ public static class CadSlabAnalyzer
         if (readThicknesses.Length > 0)
             warnings.Add("Chiều dày đọc được: " + string.Join(", ", readThicknesses) + " mm.");
 
+        // What each slab was actually built at, beside what its bays read. When the two disagree
+        // the fault is in choosing the level, not in reading it.
+        var builtLevels = regions
+            .Select(region => $"S{region.Id}={region.EffectiveOffsetMm / 1000.0:+0.000;-0.000}"
+                + $"/{region.CellIds.Count}ô{(region.IsLowered ? " hatch" : string.Empty)}")
+            .ToArray();
+        if (builtLevels.Length > 0)
+            warnings.Add("Sàn dựng tại: " + string.Join(", ", builtLevels) + ".");
+
         var anchor = slabPackage.SourceAnchor * scale - origin;
         return new CadSlabAnalysis(origin, anchor, regions, cells,
             shortLines, unclosed, orphanHatches, warnings, null)
