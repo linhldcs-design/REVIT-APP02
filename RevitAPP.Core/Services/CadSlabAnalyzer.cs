@@ -689,11 +689,6 @@ public static class CadSlabAnalyzer
             .ToArray();
         var adjacency = BuildAdjacency(walk);
         var result = walk.ToArray();
-        // Where a label crossed a pour it does not belong to, this records which cell it came from,
-        // so the same label is carried on once and never round in circles.
-        var carried = walk.Select(_ => new HashSet<int>()).ToArray();
-        // Each entry is the cell to walk out from, together with the cell whose label is travelling
-        // -- they differ once the label has crossed a pour it does not belong to.
         var pending = new Queue<(int At, int From)>();
         for (var index = 0; index < result.Length; index++)
             if (result[index].ThicknessMm is not null || result[index].ElevationMm is not null)
@@ -711,22 +706,14 @@ public static class CadSlabAnalyzer
                 var takesThickness = target.ThicknessMm is null && source.ThicknessMm is not null;
                 var takesElevation = target.ElevationMm is null && source.ElevationMm is not null;
                 if (!takesThickness && !takesElevation) continue;
-                // A hatched area is a pour of its own, so it takes no label from the floor around
-                // it. The label still travels on through it, though: bays on either side belong to
-                // the same pour, and stopping at the shading left the far ones unlabelled, on the
-                // default level, and broken off as a floor of their own.
-                // The label has to belong to the kind of pour it is landing on. Shading marks a slab
-                // of its own, so a level written inside it says nothing about the floor around it,
-                // and a level written on the floor says nothing about the shading. Reading either
-                // across that edge gave the floor the level of the drop laid into it.
-                if (!string.Equals(target.HatchStyleKey, result[index].HatchStyleKey, StringComparison.Ordinal)
-                    || !string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
-                {
-                    // The label passes through without settling, so bays beyond the shading are
-                    // still reached. It stops only where a bay of the same kind takes it.
-                    if (carried[neighbour].Add(from)) pending.Enqueue((neighbour, from));
+                // A level written on one kind of pour says nothing about the other. Shading marks a
+                // slab in its own right, so its label stays inside it and the floor's label stays
+                // outside it. A bay the label cannot reach without crossing that edge takes the
+                // level of the floor it belongs to instead, which is settled once the bays are
+                // grouped -- carrying the label through the shading gave bays beyond it the level
+                // of the drop laid into the floor.
+                if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
                     continue;
-                }
                 result[neighbour] = target with
                 {
                     ThicknessMm = takesThickness ? source.ThicknessMm : target.ThicknessMm,
