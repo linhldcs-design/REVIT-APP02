@@ -123,7 +123,7 @@ public static class CadSlabAnalyzer
 
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
         var cells = ClassifyCells(faces, usable, annotations, hatchRegions, marks, options);
-        var regions = MergeCells(cells, marks, usable, options);
+        var regions = MergeCells(cells, marks, usable, options, hatchRegions);
 
         var warnings = new List<string>();
         if (shortLines > 0)
@@ -277,7 +277,8 @@ public static class CadSlabAnalyzer
         IReadOnlyList<CadSlabCell> cells,
         IReadOnlyList<CadSlabLoop> marks,
         IReadOnlyList<CadStructureSegment> usableLines,
-        CadSlabAnalysisOptions options)
+        CadSlabAnalysisOptions options,
+        IReadOnlyList<CadHatchRegion>? hatches = null)
     {
         // Neither an opening nor a column takes concrete, so both stay out of the pour and become
         // holes in the slab that surrounds them.
@@ -410,7 +411,7 @@ public static class CadSlabAnalyzer
                     .GroupBy(cell => cell.HatchStyleKey)
                     .SelectMany(group => JoinNearbyParts(
                         ConnectedParts(group.ToArray()), options.HatchJoinDistanceMm))
-                    .Select((part, index) => BuildRegion(part, index + 2, cells, marks, options))
+                    .Select((part, index) => BuildRegion(part, index + 2, cells, marks, options, hatches))
                     .Where(region => region is not null)
                     .Select(region => region!)
                     .ToArray();
@@ -808,6 +809,40 @@ public static class CadSlabAnalyzer
     }
 
     /// <summary>
+    /// The edge the plan shades for a set of cells, taken from the hatches themselves. Null when
+    /// no hatch covers the cells, or when several hatches do and they cannot be traced as one edge.
+    /// </summary>
+    private static CadSlabLoop? HatchOutline(
+        CadSlabCell[] part,
+        IReadOnlyList<CadHatchRegion>? hatches)
+    {
+        if (hatches is null || hatches.Count == 0) return null;
+
+        var covering = hatches
+            .Where(hatch => part.Any(cell => ContainsPoint(hatch.BoundaryMm, cell.CentroidMm)))
+            .ToArray();
+        if (covering.Length == 0) return null;
+
+        if (covering.Length == 1)
+            return new CadSlabLoop(covering[0].BoundaryMm.ToArray());
+
+        // Several hatches make one pour once they are joined, which is what tracing the edge round
+        // all their sides gives.
+        var segments = new List<CadStructureSegment>();
+        var id = 0;
+        foreach (var hatch in covering)
+        {
+            var boundary = hatch.BoundaryMm;
+            for (var index = 0; index < boundary.Count; index++)
+                segments.Add(new CadStructureSegment(
+                    --id, boundary[index], boundary[(index + 1) % boundary.Count],
+                    "HATCH", string.Empty));
+        }
+
+        return CadPlanarGraph.BuildOuterBoundary(segments, 20.0);
+    }
+
+    /// <summary>
     /// One slab from a set of cells: the edge round them, and whatever they enclose cut out of it.
     /// </summary>
     private static CadSlabRegionCandidate? BuildRegion(
@@ -815,11 +850,15 @@ public static class CadSlabAnalyzer
         int id,
         IReadOnlyList<CadSlabCell> allCells,
         IReadOnlyList<CadSlabLoop> marks,
-        CadSlabAnalysisOptions options)
+        CadSlabAnalysisOptions options,
+        IReadOnlyList<CadHatchRegion>? hatches = null)
     {
         var boundary = BuildGroupBoundary(part);
         if (boundary is null) return null;
-        var outer = boundary.Outer;
+        // A hatched pour is drawn by its hatch, not by the grid of lines that happens to cross it.
+        // Following the hatch edge keeps the slab exactly where the plan shades it, including the
+        // stretches the lines never enclose.
+        var outer = HatchOutline(part, hatches) ?? boundary.Outer;
         if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) return null;
 
         var partIds = part.Select(cell => cell.Id).ToHashSet();
