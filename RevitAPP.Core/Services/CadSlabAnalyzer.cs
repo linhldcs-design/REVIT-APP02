@@ -1509,9 +1509,14 @@ public static class CadSlabAnalyzer
         CadSlabCell strip,
         IReadOnlyList<CadSlabCell> cells)
     {
+        // The strip belongs to the pour it lies in, so it reads only bays of that pour. Taking the
+        // nearest labelled bay of any kind let a strip beside a shaded area carry the drop's level
+        // out into the floor, where spreading then carried it on across dozens of bays.
         var centre = strip.CentroidMm;
         return cells
             .Where(cell => cell.Id != strip.Id && !cell.IsBeamStrip && cell.ThicknessMm is not null)
+            .Where(cell => string.Equals(
+                cell.HatchStyleKey, strip.HatchStyleKey, StringComparison.Ordinal))
             .OrderBy(cell => cell.CentroidMm.DistanceTo(centre))
             .FirstOrDefault();
     }
