@@ -20,9 +20,24 @@ public static class AutoCadDwgPostProcessor
     public const string OwnedProcessLeaseFileName = "autocad-worker.lease";
     public const string ProgressFileName = "worker-progress.txt";
 
-    private const string AutoCad2024ProgId = "AutoCAD.Application.24.3";
+    private static readonly string[] ProgIds =
+    {
+        "AutoCAD.Application.26",   // AutoCAD 2027
+        "AutoCAD.Application.25.1", // AutoCAD 2026
+        "AutoCAD.Application.25",   // AutoCAD 2025
+        "AutoCAD.Application.24.3", // AutoCAD 2024
+        "AutoCAD.Application"
+    };
 
-    public static bool IsAvailable() => Type.GetTypeFromProgID(AutoCad2024ProgId, false) is not null;
+    public static bool IsAvailable() => ResolveInstalledProgId() is not null;
+
+    /// <summary>
+    /// Returns the newest AutoCAD release registered for Automation, or null when the
+    /// machine has none. The version-less ProgId is the last resort because it points at
+    /// whichever release registered itself most recently.
+    /// </summary>
+    private static string? ResolveInstalledProgId() =>
+        ProgIds.FirstOrDefault(progId => Type.GetTypeFromProgID(progId, false) is not null);
 
     public static string Compose(DwgExportJob job, TimeSpan? commandTimeout = null)
     {
@@ -179,15 +194,17 @@ public static class AutoCadDwgPostProcessor
             foreach (var process in existingProcesses) process.Dispose();
         }
         Exception? last = null;
-        var type = Type.GetTypeFromProgID(AutoCad2024ProgId, false)
-                   ?? throw new InvalidOperationException("Máy chưa cài AutoCAD 2024 Automation.");
+        var progId = ResolveInstalledProgId()
+                     ?? throw new InvalidOperationException("Máy chưa cài AutoCAD hỗ trợ Automation.");
+        var type = Type.GetTypeFromProgID(progId, false)
+                   ?? throw new InvalidOperationException($"Không tải được {progId}.");
         for (var attempt = 0; attempt < 5; attempt++)
         {
             object? application = null;
             try
             {
                 application = Activator.CreateInstance(type)
-                    ?? throw new InvalidOperationException($"Không khởi động được {AutoCad2024ProgId}.");
+                    ?? throw new InvalidOperationException($"Không khởi động được {progId}.");
                 var processId = GetApplicationProcessId(application);
                 if (processId <= 0)
                 {
@@ -206,7 +223,7 @@ public static class AutoCadDwgPostProcessor
                 if (processId <= 0 || existingProcessIds.Contains(processId))
                 {
                     throw new InvalidOperationException(
-                        $"Không xác nhận được phiên {AutoCad2024ProgId} là AutoCAD riêng do RevitAPP tạo. " +
+                        $"Không xác nhận được phiên {progId} là AutoCAD riêng do RevitAPP tạo. " +
                         "Đã dừng để không ảnh hưởng bản vẽ AutoCAD đang mở.");
                 }
                 using var process = Process.GetProcessById(processId);
