@@ -664,15 +664,20 @@ public static class CadSlabAnalyzer
             .ToArray();
         var adjacency = BuildAdjacency(walk);
         var result = walk.ToArray();
-        var pending = new Queue<int>();
+        // Where a label crossed a pour it does not belong to, this records which cell it came from,
+        // so the same label is carried on once and never round in circles.
+        var carried = walk.Select(_ => new HashSet<int>()).ToArray();
+        // Each entry is the cell to walk out from, together with the cell whose label is travelling
+        // -- they differ once the label has crossed a pour it does not belong to.
+        var pending = new Queue<(int At, int From)>();
         for (var index = 0; index < result.Length; index++)
             if (result[index].ThicknessMm is not null || result[index].ElevationMm is not null)
-                pending.Enqueue(index);
+                pending.Enqueue((index, index));
 
         while (pending.Count > 0)
         {
-            var index = pending.Dequeue();
-            var source = result[index];
+            var (index, from) = pending.Dequeue();
+            var source = result[from];
             foreach (var neighbour in adjacency[index])
             {
                 var target = result[neighbour];
@@ -681,9 +686,17 @@ public static class CadSlabAnalyzer
                 var takesThickness = target.ThicknessMm is null && source.ThicknessMm is not null;
                 var takesElevation = target.ElevationMm is null && source.ElevationMm is not null;
                 if (!takesThickness && !takesElevation) continue;
-                // A hatched area is a pour of its own, so a label does not carry across its edge.
+                // A hatched area is a pour of its own, so it takes no label from the floor around
+                // it. The label still travels on through it, though: bays on either side belong to
+                // the same pour, and stopping at the shading left the far ones unlabelled, on the
+                // default level, and broken off as a floor of their own.
                 if (!string.Equals(target.HatchStyleKey, source.HatchStyleKey, StringComparison.Ordinal))
+                {
+                    // The label passes through without settling, so bays beyond the shading are
+                    // still reached. It stops only where a bay of the same kind takes it.
+                    if (carried[neighbour].Add(from)) pending.Enqueue((neighbour, from));
                     continue;
+                }
                 result[neighbour] = target with
                 {
                     ThicknessMm = takesThickness ? source.ThicknessMm : target.ThicknessMm,
@@ -692,7 +705,7 @@ public static class CadSlabAnalyzer
                         ? source.MatchedText
                         : target.MatchedText
                 };
-                pending.Enqueue(neighbour);
+                pending.Enqueue((neighbour, neighbour));
             }
         }
         return result.Where(cell => pouredIds.Contains(cell.Id)).ToArray();
