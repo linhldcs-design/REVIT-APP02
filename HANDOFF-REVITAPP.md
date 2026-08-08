@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.8.0`
+- Release mới nhất đã phát hành: `v1.10.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,7 +35,7 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 370/370 đạt.
+- Test gần nhất: `RevitAPP.Tests` 449/449 đạt.
 - Chat AI có registry **57 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
@@ -62,6 +62,9 @@
 - `v1.9.0`: thêm tab `Create Beam` vào `Model From CAD`. Workflow quét hai bước `Grid Axes` rồi `Beam Lines`; đọc tiết diện `b×h` từ TEXT/MTEXT; ghép các boundary rail bị đứt thành một cây dầm theo tùy chọn `Gap Join`; giữ các đoạn liên tục trên cùng trục và chỉ tách khi `b×h` đổi hoặc khi khe vượt `Gap Max`; cho chỉnh tiết diện trong Review 2D/3D có zoom/orbit; và tạo `Structural Framing` trong Revit. Kiểm thử tự động đạt 390/390; build R22–R27 thành công.
 - Các lỗi đã sửa trong `v1.9.0` sau khi người dùng thử trên bản vẽ thật: đọc selection AutoCAD không còn giải phóng COM giữa vòng lặp nên không bỏ sót entity; biên lệch góc hoặc lệch offset vài mm vẫn ghép thành một dầm; biên bị trim vụn tại mặt cột vẫn dựng đủ chiều dài; polyline có một cạnh cong vẫn giữ các cạnh thẳng; nhãn tách làm hai đối tượng TEXT vẫn đọc được Mark; dầm bị nhánh cắt ngang không còn mất nhãn; và dầm mà bản vẽ chỉ ghi nhãn một lần vẫn được giữ.
 - **Runtime smoke của tab `Create Beam` chưa chạy khi phát hành `v1.9.0`.** Người dùng yêu cầu phát hành trước khi kiểm chứng lại trên Revit. Lần mở phiên sau cần quét thử `Grid Axes` + `Beam Lines` trên bản vẽ thật và kiểm tra dòng cảnh báo `N đường biên không ghép được thành dầm` dưới bảng review.
+- `v1.10.0`: thêm tab `Create Slab` vào `Model From CAD`. Workflow bốn bước `Grid Axes` → `Slab Lines` → `Ô Trống` → `Vùng Hatch`; biên sàn tính một lần từ toàn bộ line đã quét rồi làm phẳng qua cột; vùng hatch là sàn hạ riêng, cắt khỏi sàn chính theo đúng đường bao của nó; hai mảng hatch chỉ cách nhau một dầm thì nối, cách xa thì tách; ô trống chỉ nhận từ outline người dùng pick; chiều dày và cao độ đọc từ TEXT/MTEXT. Kiểm thử tự động đạt 449/449; build R22–R27 thành công.
+- Các lỗi đã sửa trong `v1.10.0` sau khi người dùng thử trên bản vẽ thật: hatch nhỏ hơn ô lưới không còn biến mất; hatch không nuốt bay không tô bên cạnh; sàn chính dừng ở mép sàn hạ thay vì đổ đè lên; lỗ nằm ngoài hoặc chạm biên bị bỏ riêng thay vì làm hỏng cả profile; biên chạy thẳng qua cột thay vì răng cưa; khe giữa hai vùng hatch được lấp vuông góc thay vì nối chéo; vùng không hatch là một tấm một cao độ và chỉ tách khi thật sự không liên thông; nhãn chỉ lan trong cùng loại vùng; dải dầm chỉ đọc nhãn từ bay cùng loại vùng — trước đó dải cạnh vùng hatch kéo cao độ sàn hạ ra khắp sàn.
+- **Runtime smoke của tab `Create Slab` chưa được người dùng xác nhận đầy đủ khi phát hành `v1.10.0`.** Bản R25 đã deploy và người dùng thử nhiều vòng; lần sửa cuối (`8008c28`) chưa có phản hồi. Lần mở phiên sau cần kiểm tra bảng review có ra đúng cao độ CAD không, và thanh trạng thái có dòng `Cao độ đọc được` / `Chiều dày đọc được` để chẩn đoán.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

@@ -182,16 +182,6 @@ public static class CadSlabAnalyzer
         if (readThicknesses.Length > 0)
             warnings.Add("Chiều dày đọc được: " + string.Join(", ", readThicknesses) + " mm.");
 
-        // What each slab was actually built at, beside what its bays read. When the two disagree
-        // the fault is in choosing the level, not in reading it.
-        var builtLevels = regions
-            .Select(region => $"S{region.Id}={region.EffectiveOffsetMm / 1000.0:+0.000;-0.000}"
-                + $"/{region.CellIds.Count}ô{(region.IsLowered ? " hatch" : string.Empty)}")
-            .ToArray();
-        if (builtLevels.Length > 0)
-            warnings.Add("Sàn dựng tại: " + string.Join(", ", builtLevels) + ".");
-        if (plainLevelTally.Count > 0)
-            warnings.Add("Ô thường bỏ phiếu: " + string.Join(", ", plainLevelTally) + ".");
 
         var anchor = slabPackage.SourceAnchor * scale - origin;
         return new CadSlabAnalysis(origin, anchor, regions, cells,
@@ -377,12 +367,6 @@ public static class CadSlabAnalyzer
     /// group. A slab is poured across the beams inside it, so the shared edges disappear and the
     /// group becomes one floor which may be L-shaped or carry holes.
     /// </summary>
-    /// <summary>
-    /// What the unshaded bays read, and how much floor each reading covers. Reported so a slab
-    /// built at a level the plan does not state can be traced to the tally that chose it.
-    /// </summary>
-    internal static IReadOnlyList<string> plainLevelTally = Array.Empty<string>();
-
     private static IReadOnlyList<CadSlabRegionCandidate> MergeCells(
         IReadOnlyList<CadSlabCell> cells,
         IReadOnlyList<CadSlabLoop> marks,
@@ -619,13 +603,6 @@ public static class CadSlabAnalyzer
                 // first. One bay reading differently -- a stray label, a bay the shading marks --
                 // decided the whole pour when the first was taken, so a floor of eighty-eight bays
                 // at one level was built at the level of the odd one out.
-                plainLevelTally = plain
-                    .Where(cell => cell.ElevationMm is not null)
-                    .GroupBy(cell => Math.Round(cell.ElevationMm!.Value, 3))
-                    .OrderByDescending(group => group.Sum(cell => cell.Loop.AreaMm2))
-                    .Select(group => $"{group.Key / 1000.0:+0.000;-0.000}×{group.Count()}"
-                        + $"({group.Sum(cell => cell.Loop.AreaMm2) / 1_000_000.0:0}m²)")
-                    .ToArray();
                 var labelledCell = plain[0] with
                 {
                     ElevationMm = MostOfTheFloor(plain, cell => cell.ElevationMm),
