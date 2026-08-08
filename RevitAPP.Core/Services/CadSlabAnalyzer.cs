@@ -460,6 +460,22 @@ public static class CadSlabAnalyzer
                     })
                     .ToArray();
             }
+            // Unshaded floor at one level is still more than one slab when the plan leaves real
+            // ground between its parts -- two wings of a building, a floor either side of a well.
+            // The largest run keeps the floor's edge and the rest are slabs standing beside it.
+            // Bays on either side of a shaded area are still one floor: the shading is a slab laid
+            // into it, not ground between two of them. So the runs are found over the floor with
+            // its shaded bays included, and only the unshaded cells of each run are kept.
+            var plainIds = plain.Select(cell => cell.Id).ToHashSet();
+            var plainRuns = ConnectedParts(plain.Concat(resolved
+                    .Where(cell => !plainIds.Contains(cell.Id)))
+                    .ToArray())
+                .Select(run => run.Where(cell => plainIds.Contains(cell.Id)).ToArray())
+                .Where(run => run.Length > 0)
+                .OrderByDescending(run => run.Sum(cell => cell.Loop.AreaMm2))
+                .ToArray();
+            var detachedRuns = plainRuns.Skip(1).ToArray();
+            if (plainRuns.Length > 0) plain = plainRuns[0];
             var otherSections = Array.Empty<IGrouping<(double, double), CadSlabCell>>();
             if (plain.Length > 0)
             {
@@ -481,8 +497,7 @@ public static class CadSlabAnalyzer
                 // A plain area the plan gives another level is a slab inside the floor, exactly
                 // like a hatched one, so it is built the same way rather than by tracing a second
                 // outside edge.
-                var otherRegions = otherSections
-                    .SelectMany(section => ConnectedParts(section.ToArray()))
+                var otherRegions = detachedRuns
                     .Select((part, index) =>
                         BuildRegion(part, index + 2 + hatchedRegions.Length, cells, marks, options))
                     .Where(region => region is not null)
