@@ -273,6 +273,81 @@ public static class CadPlanarGraph
     /// all yields every face once. The unbounded outer face comes out with the opposite winding
     /// and is dropped.
     /// </summary>
+    /// <summary>
+    /// Cuts an area along the outlines drawn inside it, giving the pieces that make it up.
+    ///
+    /// Where an outline stands clear of the area's own sides, the two are traced separately and one
+    /// lies over the other -- the area whole, and the outline within it. The area itself is then not
+    /// a piece of the cut: it is the outline, plus what the outline leaves, and the latter is the
+    /// area carrying the outline as a hole.
+    /// </summary>
+    public static IReadOnlyList<CadPlanarPiece> Subdivide(
+        IReadOnlyList<CadStructurePoint2> outlineMm,
+        IReadOnlyList<IReadOnlyList<CadStructurePoint2>> cutsMm,
+        double snapToleranceMm)
+    {
+        var whole = new CadSlabLoop(outlineMm.ToArray());
+        if (cutsMm.Count == 0) return new[] { new CadPlanarPiece(whole, new List<CadSlabLoop>()) };
+
+        var segments = new List<CadStructureSegment>();
+        var id = 0;
+        void Trace(IReadOnlyList<CadStructurePoint2> loop)
+        {
+            for (var index = 0; index < loop.Count; index++)
+                segments.Add(new CadStructureSegment(
+                    --id, loop[index], loop[(index + 1) % loop.Count], "CUT", string.Empty));
+        }
+
+        Trace(outlineMm);
+        foreach (var cut in cutsMm) Trace(cut);
+
+        var faces = BuildFaces(segments, snapToleranceMm, out _)
+            .Where(face => face.AreaMm2 >= 10_000.0)
+            .OrderByDescending(face => face.AreaMm2)
+            .ToArray();
+        if (faces.Length == 0) return new[] { new CadPlanarPiece(whole, new List<CadSlabLoop>()) };
+
+        // A face standing inside another is not a piece beside it but a piece taken out of it.
+        var pieces = new List<CadPlanarPiece>();
+        foreach (var face in faces)
+        {
+            var container = pieces.FirstOrDefault(piece =>
+                piece.Outer.AreaMm2 > face.AreaMm2
+                && Encloses(piece.Outer, face)
+                && !piece.Holes.Any(hole => Encloses(hole, face)));
+            if (container is null)
+            {
+                pieces.Add(new CadPlanarPiece(face, new List<CadSlabLoop>()));
+                continue;
+            }
+
+            container.Holes.Add(face);
+            pieces.Add(new CadPlanarPiece(face, new List<CadSlabLoop>()));
+        }
+
+        return pieces;
+    }
+
+    /// <summary>
+    /// Whether one loop lies wholly within another.
+    /// </summary>
+    private static bool Encloses(CadSlabLoop outer, CadSlabLoop inner) =>
+        inner.VerticesMm.All(point => PointInLoop(outer.VerticesMm, point));
+
+    private static bool PointInLoop(IReadOnlyList<CadStructurePoint2> loop, CadStructurePoint2 point)
+    {
+        var inside = false;
+        for (int index = 0, previous = loop.Count - 1; index < loop.Count; previous = index++)
+        {
+            var a = loop[index];
+            var b = loop[previous];
+            if (a.Y > point.Y != b.Y > point.Y
+                && point.X < (b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y) + a.X)
+                inside = !inside;
+        }
+        return inside;
+    }
+
     private static IReadOnlyList<CadSlabLoop> TraceFaces(
         IReadOnlyList<CadStructurePoint2> vertices,
         IReadOnlyList<List<int>> adjacency)
@@ -345,4 +420,12 @@ public static class CadPlanarGraph
         }
         return best;
     }
+}
+
+/// <summary>
+/// A piece of a subdivided area: its edge, and whatever is cut out of it.
+/// </summary>
+public sealed record CadPlanarPiece(CadSlabLoop Outer, List<CadSlabLoop> Holes)
+{
+    public double AreaMm2 => Outer.AreaMm2 - Holes.Sum(hole => hole.AreaMm2);
 }

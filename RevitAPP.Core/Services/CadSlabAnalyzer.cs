@@ -122,6 +122,11 @@ public static class CadSlabAnalyzer
             : CadPlanarGraph.BuildFaces(openingOutlines, options.VertexSnapToleranceMm, out _);
 
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
+        // A shaded area bounds the pour just as a drawn line does: the slab drops where the shading
+        // ends, whether or not a line runs there. Where the plan shades part of a bay -- or two
+        // parts of one bay -- the lines alone give a single face and the shading inside it is lost,
+        // so those bays are cut along their shading before anything is read from them.
+        faces = SplitAlongHatches(faces, hatchRegions, options);
         var cells = ClassifyCells(faces, usable, annotations, hatchRegions, marks, options);
         var regions = MergeCells(cells, marks, usable, options, hatchRegions);
 
@@ -155,6 +160,66 @@ public static class CadSlabAnalyzer
         {
             HatchStyles = styles
         };
+    }
+
+    /// <summary>
+    /// Cuts each bay the plan shades only part of into the shaded pieces and what is left over. A
+    /// bay whose shading the lines already trace is left as it is.
+    /// </summary>
+    private static IReadOnlyList<CadSlabLoop> SplitAlongHatches(
+        IReadOnlyList<CadSlabLoop> faces,
+        IReadOnlyList<CadHatchRegion> hatches,
+        CadSlabAnalysisOptions options)
+    {
+        if (hatches.Count == 0) return faces;
+
+        var result = new List<CadSlabLoop>();
+        foreach (var face in faces)
+        {
+            // A hatch clipped to the bay: it may straddle a line and shade part of the next bay
+            // too, and only the part falling in this one divides it.
+            var inside = hatches
+                .Where(hatch => !SameArea(face, hatch.BoundaryMm))
+                .Where(hatch => hatch.BoundaryMm.Any(point =>
+                    ContainsPoint(face.VerticesMm, point)))
+                .Select(hatch => hatch.BoundaryMm)
+                .ToArray();
+            if (inside.Length == 0)
+            {
+                result.Add(face);
+                continue;
+            }
+
+            var pieces = CadPlanarGraph.Subdivide(
+                face.VerticesMm, inside, options.VertexSnapToleranceMm);
+            // The cut has to stay within the bay, or the shading crosses its edge in a way the cut
+            // cannot express and the bay is safer left whole.
+            if (pieces.Count < 2
+                || pieces.Sum(piece => piece.AreaMm2) > face.AreaMm2 * 1.05)
+            {
+                result.Add(face);
+                continue;
+            }
+
+            // A cell is a single closed area with no holes of its own. What the shading leaves is a
+            // ring, which no cell can hold, so it is left out here: the floor's outline is traced
+            // from the lines regardless of the cells, and what the shading covers is cut out of it
+            // as a hole further on. Keeping the ring's whole edge instead would lay it over the
+            // shaded pieces and pour the same ground twice.
+            result.AddRange(pieces
+                .Where(piece => piece.Holes.Count == 0)
+                .Select(piece => piece.Outer));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Whether two outlines cover the same ground, to the tolerance a drawing is worked to.
+    /// </summary>
+    private static bool SameArea(CadSlabLoop face, IReadOnlyList<CadStructurePoint2> other)
+    {
+        var area = new CadSlabLoop(other.ToArray()).AreaMm2;
+        return Math.Abs(face.AreaMm2 - area) <= Math.Max(area, 1.0) * 0.05;
     }
 
     private static IReadOnlyList<CadSlabCell> ClassifyCells(
@@ -623,7 +688,13 @@ public static class CadSlabAnalyzer
         return Math.Min(firstEnd, secondEnd) - Math.Max(firstStart, secondStart) > 1.0;
     }
 
-    private sealed record GroupBoundary(CadSlabLoop Outer, IReadOnlyList<CadSlabLoop> Holes);
+    private sealed record GroupBoundary(CadSlabLoop Outer, IReadOnlyList<CadSlabLoop> Holes)
+    {
+        /// <summary>
+        /// Parts of the same pour standing clear of the outer loop -- bays a beam separates.
+        /// </summary>
+        public IReadOnlyList<CadSlabLoop> DetachedParts { get; init; } = Array.Empty<CadSlabLoop>();
+    }
 
     /// <summary>
     /// The outline of a merged group, read the way the plan is: the outside edge first, then the
@@ -683,10 +754,17 @@ public static class CadSlabAnalyzer
         // either way round. Revit rejects a profile whose loops disagree, and a reversed outer
         // loop also reports a negative area in the review.
         var outer = Orient(ordered[0], counterClockwise: true);
+        // A loop the largest one surrounds is a void within it. One standing outside it is a
+        // separate part of the same pour -- two bays a beam runs between -- and calling that a hole
+        // cut the smaller of them away instead of keeping both.
         var holes = ordered.Skip(1)
+            .Where(loop => ContainsPoint(outer.VerticesMm, Centroid(loop)))
             .Select(loop => Orient(loop, counterClockwise: false))
             .ToArray();
-        return new GroupBoundary(outer, holes);
+        var detached = ordered.Skip(1)
+            .Where(loop => !ContainsPoint(outer.VerticesMm, Centroid(loop)))
+            .ToArray();
+        return new GroupBoundary(outer, holes) { DetachedParts = detached };
     }
 
     /// <summary>
@@ -836,69 +914,65 @@ public static class CadSlabAnalyzer
         if (covering.Length == 1)
             return new CadSlabLoop(covering[0].BoundaryMm.ToArray());
 
-        // Only hatches that meet make one edge. Tracing round hatches standing apart would sweep
-        // the ground between them into the pour, which is how two shaded bays became one solid
-        // rectangle swallowing the unshaded strip beside them.
-        var touching = LargestTouchingSet(covering);
-        if (touching.Length == 1)
-            return new CadSlabLoop(touching[0].BoundaryMm.ToArray());
+        // Shaded areas standing apart are in one pour only because a beam runs between them, so
+        // the edge runs round the outside of them all and takes the beam's strip in. What separates
+        // them was already judged narrow enough for that before they were put together.
+        return JoinLoops(covering
+            .Select(hatch => new CadSlabLoop(hatch.BoundaryMm.ToArray()))
+            .ToArray());
+    }
+
+    /// <summary>
+    /// One edge round several separate shapes. Shapes standing apart cannot be walked round as one,
+    /// so the strip between each pair is bridged at their nearest corners first, closing them into
+    /// a single figure the walk can follow.
+    /// </summary>
+    private static CadSlabLoop? JoinLoops(IReadOnlyList<CadSlabLoop> loops)
+    {
+        if (loops.Count == 0) return null;
+        if (loops.Count == 1) return loops[0];
 
         var segments = new List<CadStructureSegment>();
         var id = 0;
-        foreach (var hatch in touching)
+        foreach (var loop in loops)
         {
-            var boundary = hatch.BoundaryMm;
-            for (var index = 0; index < boundary.Count; index++)
+            var points = loop.VerticesMm;
+            for (var index = 0; index < points.Count; index++)
                 segments.Add(new CadStructureSegment(
-                    --id, boundary[index], boundary[(index + 1) % boundary.Count],
-                    "HATCH", string.Empty));
+                    --id, points[index], points[(index + 1) % points.Count],
+                    "EDGE", string.Empty));
+        }
+
+        // Two bridges, not one. A single link is a spur: the walk goes out along it and back, and
+        // the stretch it retraced is dropped again as an excursion, losing the shape it led to. A
+        // second link at the far end of the same gap closes the two shapes into one ring instead,
+        // and the strip between them -- the beam -- falls inside it.
+        for (var index = 1; index < loops.Count; index++)
+        {
+            var previous = loops[index - 1].VerticesMm;
+            var current = loops[index].VerticesMm;
+
+            var pairs = previous
+                .SelectMany(a => current.Select(b => (A: a, B: b, Distance: a.DistanceTo(b))))
+                .OrderBy(pair => pair.Distance)
+                .ToArray();
+            if (pairs.Length == 0) continue;
+
+            var first = pairs[0];
+            segments.Add(new CadStructureSegment(--id, first.A, first.B, "BRIDGE", string.Empty));
+
+            // The second link has to span the same gap elsewhere along it, so it is the nearest
+            // pair sharing neither end with the first.
+            var second = pairs.FirstOrDefault(pair =>
+                pair.A.DistanceTo(first.A) > 1.0 && pair.B.DistanceTo(first.B) > 1.0);
+            if (second.Distance > 0.0)
+                segments.Add(new CadStructureSegment(
+                    --id, second.A, second.B, "BRIDGE", string.Empty));
         }
 
         return CadPlanarGraph.BuildOuterBoundary(segments, 20.0);
     }
 
-    /// <summary>
-    /// The biggest run of hatches that touch one another, directly or through their neighbours.
-    /// </summary>
-    private static CadHatchRegion[] LargestTouchingSet(CadHatchRegion[] hatches)
-    {
-        var groupOf = new int[hatches.Length];
-        for (var index = 0; index < groupOf.Length; index++) groupOf[index] = index;
-
-        int Root(int index)
-        {
-            while (groupOf[index] != index) index = groupOf[index] = groupOf[groupOf[index]];
-            return index;
-        }
-
-        for (var first = 0; first < hatches.Length; first++)
-        for (var second = first + 1; second < hatches.Length; second++)
-        {
-            if (!Touch(hatches[first], hatches[second])) continue;
-            groupOf[Root(first)] = Root(second);
-        }
-
-        return hatches
-            .Select((hatch, index) => (hatch, group: Root(index)))
-            .GroupBy(entry => entry.group)
-            .OrderByDescending(group => group.Sum(entry => new CadSlabLoop(entry.hatch.BoundaryMm.ToArray()).AreaMm2))
-            .First()
-            .Select(entry => entry.hatch)
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Whether two hatches share ground: one holds a corner of the other, or their edges meet.
-    /// </summary>
-    private static bool Touch(CadHatchRegion first, CadHatchRegion second)
-    {
-        const double reach = 20.0;
-        if (first.BoundaryMm.Any(point => ContainsPoint(second.BoundaryMm, point))) return true;
-        if (second.BoundaryMm.Any(point => ContainsPoint(first.BoundaryMm, point))) return true;
-
-        var loop = new CadSlabLoop(second.BoundaryMm.ToArray());
-        return first.BoundaryMm.Any(point => DistanceToLoop(loop, point) <= reach);
-    }
 
     /// <summary>
     /// One slab from a set of cells: the edge round them, and whatever they enclose cut out of it.
@@ -911,12 +985,21 @@ public static class CadSlabAnalyzer
         CadSlabAnalysisOptions options,
         IReadOnlyList<CadHatchRegion>? hatches = null)
     {
-        var boundary = BuildGroupBoundary(part);
-        if (boundary is null) return null;
         // A hatched pour is drawn by its hatch, not by the grid of lines that happens to cross it.
         // Following the hatch edge keeps the slab exactly where the plan shades it, including the
-        // stretches the lines never enclose.
-        var outer = HatchOutline(part, hatches) ?? boundary.Outer;
+        // stretches the lines never enclose, and holds parts a beam separates together -- which the
+        // edge round the cells cannot do, as it keeps only the largest of them.
+        var shadedEdge = HatchOutline(part, hatches);
+        var boundary = BuildGroupBoundary(part);
+        if (boundary is null && shadedEdge is null) return null;
+        // Parts a beam separates are one pour, so the edge runs round the outside of them all and
+        // takes the beam's strip in. They were put together only because they stand close enough
+        // for that, so the ground taken in is the beam and no more.
+        var outer = shadedEdge
+                    ?? (boundary!.DetachedParts.Count > 0
+                        ? JoinLoops(new[] { boundary.Outer }.Concat(boundary.DetachedParts).ToArray())
+                          ?? boundary.Outer
+                        : boundary.Outer);
         if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) return null;
 
         var partIds = part.Select(cell => cell.Id).ToHashSet();
@@ -928,7 +1011,7 @@ public static class CadSlabAnalyzer
         var holes = marks
             .Where(mark => ContainsPoint(outer.VerticesMm, Centroid(mark)))
             .Concat(MergeVoids(inside))
-            .Concat(boundary.Holes)
+            .Concat(boundary?.Holes ?? Array.Empty<CadSlabLoop>())
             .Select(hole => Orient(hole, counterClockwise: false))
             .Where(hole => hole.AreaMm2 >= 10_000.0)
             .ToArray();
