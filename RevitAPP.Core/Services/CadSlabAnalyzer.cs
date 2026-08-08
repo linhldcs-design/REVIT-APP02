@@ -399,7 +399,12 @@ public static class CadSlabAnalyzer
         // A lowered bay is a slab of its own laid beside the floor, so the floor's edge stops where
         // the shading starts. Tracing over the shaded bays as well pushed the edge out to cover
         // them, and the floor was then poured on top of the very slabs it should sit beside.
-        var plainBlock = LargestConnectedRun(cells.Where(cell => !cell.IsLowered).ToArray());
+        // A column is cast with the floor round it, so it neither breaks the run of cells nor
+        // notches the edge. Leaving the columns out left the edge running round every one of them
+        // and gave the floor a saw-tooth outline.
+        var plainBlock = LargestConnectedRun(cells
+            .Where(cell => !cell.IsLowered || cell.IsColumn)
+            .ToArray());
         var plainEdge = plainBlock.Length == 0
             ? null
             : CadPlanarGraph.BuildOuterBoundary(
@@ -415,6 +420,7 @@ public static class CadSlabAnalyzer
             ? LargestConnectedRun(cells)
             : LargestConnectedRun(cells
                 .Where(cell => !cell.IsLowered
+                               || cell.IsColumn
                                || ContainsPoint(plainEdge.VerticesMm, cell.CentroidMm))
                 .ToArray());
         var boundaryLineIds = mainBlock
@@ -422,7 +428,8 @@ public static class CadSlabAnalyzer
             .ToHashSet();
         var outline = CadPlanarGraph.BuildOuterBoundary(
             usableLines.Where(line => boundaryLineIds.Contains(line.Id)).ToArray(),
-            options.VertexSnapToleranceMm);
+            options.VertexSnapToleranceMm,
+            options.MaximumColumnSizeMm);
         var totalBoundary = outline is null
             ? null
             : new GroupBoundary(outline, Array.Empty<CadSlabLoop>());

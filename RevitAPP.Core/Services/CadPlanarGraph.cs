@@ -25,7 +25,8 @@ public static class CadPlanarGraph
     /// </summary>
     public static CadSlabLoop? BuildOuterBoundary(
         IReadOnlyList<CadStructureSegment> segmentsMm,
-        double snapToleranceMm)
+        double snapToleranceMm,
+        double maximumNotchDepthMm = 0.0)
     {
         var split = SplitAtIntersections(segmentsMm);
         var vertices = new List<CadStructurePoint2>();
@@ -93,10 +94,66 @@ public static class CadPlanarGraph
         loop = RemoveExcursions(loop);
         if (loop.Count < 3) return null;
 
-        var outline = new CadSlabLoop(loop.Select(index => vertices[index]).ToArray());
+        var points = loop.Select(index => vertices[index]).ToList();
+        // Columns are drawn on the grid lines, so the walk round the outside steps in and out again
+        // at every one of them and leaves the edge saw-toothed. A notch that shallow is the column,
+        // not the shape of the floor -- the floor is cast round its columns, edge included.
+        points = SmoothNotches(points, maximumNotchDepthMm);
+        if (points.Count < 3) return null;
+
+        var outline = new CadSlabLoop(points);
         return outline.SignedAreaMm2 < 0
             ? new CadSlabLoop(outline.VerticesMm.Reverse().ToArray())
             : outline;
+    }
+
+    /// <summary>
+    /// Straightens the edge across notches shallower than the given depth: where the outline steps
+    /// aside and comes back to the line it was on, the step is dropped and the line runs through.
+    /// </summary>
+    private static List<CadStructurePoint2> SmoothNotches(
+        List<CadStructurePoint2> points,
+        double maximumDepthMm)
+    {
+        if (maximumDepthMm <= 0.0 || points.Count < 4) return points;
+
+        var changed = true;
+        while (changed && points.Count >= 4)
+        {
+            changed = false;
+            for (var index = 0; index < points.Count; index++)
+            {
+                var before = points[(index - 1 + points.Count) % points.Count];
+                var after = points[(index + 2) % points.Count];
+                var first = points[index];
+                var second = points[(index + 1) % points.Count];
+
+                // Both corners of the step have to sit close to the line the edge would take, and
+                // the step itself has to be short, or it is a real feature of the plan.
+                if (PointToSegment(before, after, first) > maximumDepthMm) continue;
+                if (PointToSegment(before, after, second) > maximumDepthMm) continue;
+                if (first.DistanceTo(second) > maximumDepthMm * 4.0) continue;
+
+                var removeSecond = (index + 1) % points.Count;
+                points.RemoveAt(Math.Max(index, removeSecond));
+                points.RemoveAt(Math.Min(index, removeSecond));
+                changed = true;
+                break;
+            }
+        }
+        return points;
+    }
+
+    private static double PointToSegment(
+        CadStructurePoint2 from, CadStructurePoint2 to, CadStructurePoint2 point)
+    {
+        var dx = to.X - from.X;
+        var dy = to.Y - from.Y;
+        var lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared < 1e-9) return point.DistanceTo(from);
+        var along = Math.Max(0.0, Math.Min(1.0,
+            ((point.X - from.X) * dx + (point.Y - from.Y) * dy) / lengthSquared));
+        return point.DistanceTo(new CadStructurePoint2(from.X + dx * along, from.Y + dy * along));
     }
 
     /// <summary>
