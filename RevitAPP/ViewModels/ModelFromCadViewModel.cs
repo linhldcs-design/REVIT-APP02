@@ -211,6 +211,9 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private string _minimumSlabAreaText = "1";
 
     [ObservableProperty]
+    private string _minimumOpeningAreaText = "0.05";
+
+    [ObservableProperty]
     private string _beamStripWidthText = "500";
 
     [ObservableProperty]
@@ -334,6 +337,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         TryNumber(VertexSnapText, out var snap) && snap is >= 0 and <= 500
         && TryNumber(MinimumSlabLineText, out var minLine) && minLine >= 0
         && TryNumber(MinimumSlabAreaText, out var area) && area >= 0
+        && TryNumber(MinimumOpeningAreaText, out var openingArea) && openingArea >= 0
         && TryNumber(BeamStripWidthText, out var strip) && strip >= 0
         && TryNumber(HatchJoinDistanceText, out var hatchJoin) && hatchJoin >= 0
         && TryNumber(DefaultSlabThicknessText, out var thickness) && thickness is >= 30 and <= 2000
@@ -357,6 +361,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         VertexSnapToleranceMm: ParseNumber(VertexSnapText),
         MinimumLineLengthMm: ParseNumber(MinimumSlabLineText),
         MinimumRegionAreaM2: ParseNumber(MinimumSlabAreaText),
+        MinimumOpeningAreaM2: ParseNumber(MinimumOpeningAreaText),
         MaximumBeamStripWidthMm: ParseNumber(BeamStripWidthText),
         HatchJoinDistanceMm: ParseNumber(HatchJoinDistanceText),
         DefaultThicknessMm: ParseNumber(DefaultSlabThicknessText),
@@ -575,6 +580,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     partial void OnVertexSnapTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnMinimumSlabLineTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnMinimumSlabAreaTextChanged(string value) => NotifySlabAnalysisSettings();
+
+    partial void OnMinimumOpeningAreaTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnBeamStripWidthTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnHatchJoinDistanceTextChanged(string value) => NotifySlabAnalysisSettings();
     partial void OnDefaultSlabThicknessTextChanged(string value) => NotifySlabAnalysisSettings();

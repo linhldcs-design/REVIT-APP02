@@ -164,6 +164,10 @@ public sealed record CadSlabAnalysisOptions(
     double MinimumLineLengthMm = 200.0,
     // Below this a region is a duct or a technical shaft rather than a slab worth pouring.
     double MinimumRegionAreaM2 = 1.0,
+    // An outline the user picked that encloses less than this is a slip of the mouse rather
+    // than an opening, and the floor is poured across it. Guards against a stray pick leaving
+    // a hole the plan does not show.
+    double MinimumOpeningAreaM2 = 0.05,
     // A strip narrower than this between two cells is a beam drawn by its two faces. Wider than
     // this and it is a corridor or a room, which stays a region of its own.
     double MaximumBeamStripWidthMm = 500.0,

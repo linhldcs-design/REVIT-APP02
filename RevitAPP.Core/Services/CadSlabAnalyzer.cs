@@ -117,9 +117,13 @@ public static class CadSlabAnalyzer
                 End = segment.End * scale - origin
             })
             .ToArray();
+        // A pick too small to be an opening is a slip of the mouse, and the floor is poured
+        // across it rather than left with a hole the plan does not show.
         var marks = openingOutlines.Length == 0
             ? Array.Empty<CadSlabLoop>()
-            : CadPlanarGraph.BuildFaces(openingOutlines, options.VertexSnapToleranceMm, out _);
+            : CadPlanarGraph.BuildFaces(openingOutlines, options.VertexSnapToleranceMm, out _)
+                .Where(mark => mark.AreaMm2 >= options.MinimumOpeningAreaM2 * 1_000_000.0)
+                .ToArray();
 
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
         // A shaded area bounds the pour just as a drawn line does: the slab drops where the shading
@@ -186,10 +190,10 @@ public static class CadSlabAnalyzer
         // laid at another level, and for nothing else -- so a count that does not add up says the
         // cut came from somewhere it should not have.
         var holeCount = regions.Sum(region => region.Holes.Count);
-        if (holeCount > 0 || marks.Count > 0)
+        if (holeCount > 0 || marks.Length > 0)
         {
             var loweredCount = regions.Count(region => region.IsLowered);
-            warnings.Add($"Lỗ khoét: {holeCount} (ô pick: {marks.Count}, sàn hạ: {loweredCount}). "
+            warnings.Add($"Lỗ khoét: {holeCount} (ô pick: {marks.Length}, sàn hạ: {loweredCount}). "
                 + "Sàn chỉ khoét cho ô pick và sàn hạ — số khác là bất thường.");
         }
 
