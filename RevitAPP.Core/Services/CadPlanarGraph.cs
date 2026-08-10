@@ -169,6 +169,11 @@ public static class CadPlanarGraph
                     // Every corner of the detour sits close to the line the edge would take, and
                     // the detour is short -- a column is about that wide -- or it is a feature of
                     // the plan and closing it would cut a real corner off the floor.
+                    // The line that replaces the detour has to run the way the edge was already running.
+                    // Joining two corners that do not line up drew a diagonal across them, and a plan drawn
+                    // square came back with sloped sides where it has steps.
+                    if (!SameDirection(beforeRun, before, before, after)) continue;
+
                     var shallow = true;
                     for (var step = 1; step <= span && shallow; step++)
                         shallow = PointToSegment(before, after, points[(start + step) % points.Count])
