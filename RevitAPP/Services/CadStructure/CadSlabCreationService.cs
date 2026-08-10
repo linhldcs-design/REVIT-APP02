@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using RevitAPP.Core.Models.CadStructure;
+using RevitAPP.Core.Services;
 using Serilog;
 
 namespace RevitAPP.Services.CadStructure;
@@ -295,15 +296,25 @@ internal static class CadSlabCreationService
         CadSlabTypeOption seed,
         int thicknessMm)
     {
+        // The type the plan asks for is the chosen one at the thickness written on the drawing.
+        // Every floor type in Revit answers to the family name "Floor", so matching on that alone
+        // took whichever type happened to be that thick -- a deck where the plan wanted a slab.
+        // How a type is built is what makes it the same as another.
+        if (Math.Abs(seed.ThicknessMm - thicknessMm) <= ThicknessToleranceMm)
+            return seed.FloorType;
+
         var existing = new FilteredElementCollector(document)
             .OfClass(typeof(FloorType))
             .Cast<FloorType>()
-            .FirstOrDefault(type => type.FamilyName == seed.FloorType.FamilyName
+            .FirstOrDefault(type => BuiltLike(type, seed.FloorType)
                                     && Math.Abs(new CadSlabTypeOption(type).ThicknessMm - thicknessMm)
                                         <= ThicknessToleranceMm);
         if (existing is not null) return existing;
 
-        var name = $"{seed.FloorType.FamilyName} {thicknessMm}";
+        // The copy is named after the type it came from, with the thickness the plan states.
+        // Naming it after the family gave every generated type the name "Floor 120", which says
+        // nothing about how the slab is built.
+        var name = CadSlabTypeNaming.ForThickness(seed.Name, thicknessMm);
         var duplicate = (FloorType)seed.FloorType.Duplicate(UniqueTypeName(document, name));
         var structure = duplicate.GetCompoundStructure();
         if (structure is null)
@@ -318,6 +329,25 @@ internal static class CadSlabCreationService
         structure.SetLayerWidth(coreIndex, thicknessMm / MillimetresPerFoot);
         duplicate.SetCompoundStructure(structure);
         return duplicate;
+    }
+
+    /// <summary>
+    /// Whether two floor types are made the same way: the same layers, of the same materials, in
+    /// the same order. Their thicknesses may differ -- that is what is being varied.
+    /// </summary>
+    private static bool BuiltLike(FloorType candidate, FloorType seed)
+    {
+        var left = candidate.GetCompoundStructure();
+        var right = seed.GetCompoundStructure();
+        if (left is null || right is null) return false;
+        if (left.LayerCount != right.LayerCount) return false;
+
+        for (var layer = 0; layer < left.LayerCount; layer++)
+        {
+            if (left.GetLayerFunction(layer) != right.GetLayerFunction(layer)) return false;
+            if (left.GetMaterialId(layer) != right.GetMaterialId(layer)) return false;
+        }
+        return true;
     }
 
     private static string UniqueTypeName(Document document, string name)
