@@ -71,6 +71,24 @@ internal static class AutoCadModelSelectionService
         SelectInternal(slabPackage, includeHatch: true, promptOverride:
             "\nQuét chọn các vùng HATCH sàn hạ rồi nhấn Enter...\n");
 
+    /// <summary>
+    /// Whether a layer carries annotation rather than the building: dimensions, text, hatch
+    /// and setting-out points. Hatch and grid layers stay: the shading marks a lowered pour and
+    /// the axes are picked in their own step.
+    /// </summary>
+    private static bool IsAnnotationLayer(string layer)
+    {
+        if (string.IsNullOrWhiteSpace(layer)) return false;
+        foreach (var mark in AnnotationLayerMarks)
+            if (layer.Contains(mark, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static readonly string[] AnnotationLayerMarks =
+    {
+        "DIM", "TEXT", "NOTE", "LABEL", "TAG", "DEFPOINTS"
+    };
+
     private static AutoCadModelSelectionResult SelectInternal(
         CadStructureTransferPackage? gridPackage,
         bool includeHatch = false,
@@ -272,6 +290,13 @@ internal static class AutoCadModelSelectionService
                         && !string.IsNullOrWhiteSpace(inheritedLayer)
                 ? inheritedLayer!
                 : entityLayer;
+
+              // A dimension line and a text frame are drawn on the plan, not built. Reading them as
+              // slab edges put a notch in the outline at every one of them -- a scan of a hundred
+              // objects held sixteen real slab lines and the rest was annotation. Text still comes
+              // through: the thickness and level are written on those layers too.
+              if (objectName is not ("AcDbText" or "AcDbMText" or "AcDbHatch")
+                && IsAnnotationLayer(layer)) return;
 
             if (string.Equals(objectName, "AcDbLine", StringComparison.Ordinal))
             {
