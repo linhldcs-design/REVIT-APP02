@@ -73,8 +73,9 @@ internal static class AutoCadModelSelectionService
 
     /// <summary>
     /// Whether a layer carries annotation rather than the building: dimensions, text, hatch
-    /// and setting-out points. Hatch and grid layers stay: the shading marks a lowered pour and
-    /// the axes are picked in their own step.
+    /// setting-out points, and the grid. The axes are picked in their own step, so reading them
+    /// again here only puts their overrun into the floor edge. Hatch layers stay: the shading
+    /// marks a lowered pour.
     /// </summary>
     private static bool IsAnnotationLayer(string layer)
     {
@@ -86,7 +87,7 @@ internal static class AutoCadModelSelectionService
 
     private static readonly string[] AnnotationLayerMarks =
     {
-        "DIM", "TEXT", "NOTE", "LABEL", "TAG", "DEFPOINTS"
+        "DIM", "TEXT", "NOTE", "LABEL", "TAG", "DEFPOINTS", "GRID", "TRUC", "AXIS"
     };
 
     private static AutoCadModelSelectionResult SelectInternal(
