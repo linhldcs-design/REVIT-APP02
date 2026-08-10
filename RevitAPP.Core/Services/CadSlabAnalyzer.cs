@@ -182,6 +182,17 @@ public static class CadSlabAnalyzer
         if (readThicknesses.Length > 0)
             warnings.Add("Chiều dày đọc được: " + string.Join(", ", readThicknesses) + " mm.");
 
+        // Where each hole came from. A floor is cut for an outline the user picked and for a pour
+        // laid at another level, and for nothing else -- so a count that does not add up says the
+        // cut came from somewhere it should not have.
+        var holeCount = regions.Sum(region => region.Holes.Count);
+        if (holeCount > 0 || marks.Count > 0)
+        {
+            var loweredCount = regions.Count(region => region.IsLowered);
+            warnings.Add($"Lỗ khoét: {holeCount} (ô pick: {marks.Count}, sàn hạ: {loweredCount}). "
+                + "Sàn chỉ khoét cho ô pick và sàn hạ — số khác là bất thường.");
+        }
+
 
         var anchor = slabPackage.SourceAnchor * scale - origin;
         return new CadSlabAnalysis(origin, anchor, regions, cells,
