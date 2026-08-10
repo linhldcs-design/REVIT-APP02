@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.10.0`
+- Release mới nhất đã phát hành: `v1.10.1`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -65,6 +65,8 @@
 - `v1.10.0`: thêm tab `Create Slab` vào `Model From CAD`. Workflow bốn bước `Grid Axes` → `Slab Lines` → `Ô Trống` → `Vùng Hatch`; biên sàn tính một lần từ toàn bộ line đã quét rồi làm phẳng qua cột; vùng hatch là sàn hạ riêng, cắt khỏi sàn chính theo đúng đường bao của nó; hai mảng hatch chỉ cách nhau một dầm thì nối, cách xa thì tách; ô trống chỉ nhận từ outline người dùng pick; chiều dày và cao độ đọc từ TEXT/MTEXT. Kiểm thử tự động đạt 449/449; build R22–R27 thành công.
 - Các lỗi đã sửa trong `v1.10.0` sau khi người dùng thử trên bản vẽ thật: hatch nhỏ hơn ô lưới không còn biến mất; hatch không nuốt bay không tô bên cạnh; sàn chính dừng ở mép sàn hạ thay vì đổ đè lên; lỗ nằm ngoài hoặc chạm biên bị bỏ riêng thay vì làm hỏng cả profile; biên chạy thẳng qua cột thay vì răng cưa; khe giữa hai vùng hatch được lấp vuông góc thay vì nối chéo; vùng không hatch là một tấm một cao độ và chỉ tách khi thật sự không liên thông; nhãn chỉ lan trong cùng loại vùng; dải dầm chỉ đọc nhãn từ bay cùng loại vùng — trước đó dải cạnh vùng hatch kéo cao độ sàn hạ ra khắp sàn.
 - **Runtime smoke của tab `Create Slab` chưa được người dùng xác nhận đầy đủ khi phát hành `v1.10.0`.** Bản R25 đã deploy và người dùng thử nhiều vòng; lần sửa cuối (`8008c28`) chưa có phản hồi. Lần mở phiên sau cần kiểm tra bảng review có ra đúng cao độ CAD không, và thanh trạng thái có dòng `Cao độ đọc được` / `Chiều dày đọc được` để chẩn đoán.
+- `v1.10.1`: sửa hai lỗi của lệnh `Xuất DWG Model` trên máy khách. Máy có AutoCAD vẫn báo "Không tìm thấy AutoCAD đầy đủ" vì add-in dò bằng danh sách ProgId cứng chỉ có 2024–2027; nay bổ sung 2016–2023 và dò thẳng `HKEY_CLASSES_ROOT` để nhận mọi bản đã đăng ký Automation, kể cả bản phát hành sau này. Lệnh `_.SCRIPT` gửi sang AutoCAD mà không tắt `FILEDIA` nên AutoCAD mở hộp thoại `Select Script File` và chờ người dùng bấm; nay tắt `FILEDIA` trước khi gửi, khôi phục lại sau kể cả khi lỗi, và ghi đường dẫn bằng dấu `/`. Thông báo khi thiếu AutoCAD nói rõ cần bản đầy đủ 2016 trở lên, AutoCAD LT và Revit không thay thế được.
+- Sửa kèm `v1.10.1`: `FootingDrawing.Addin` không còn khai báo extension `ToLong` riêng. `Nice3point.Revit.Extensions` cung cấp sẵn cho mọi phiên bản đích, nên bản trùng tên làm build local hỏng `CS0121` ở R22–R27.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

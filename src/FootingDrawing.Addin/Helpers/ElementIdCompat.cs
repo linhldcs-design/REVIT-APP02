@@ -13,12 +13,6 @@ internal static class ElementIdCompat
 #endif
     }
 
-    public static long ToLong(this ElementId id)
-    {
-#if REVIT2024_OR_GREATER
-        return id.Value;
-#else
-        return id.IntegerValue;
-#endif
-    }
+    // ToLong is not declared here: Nice3point.Revit.Extensions supplies one for every release
+    // the add-in targets, and a second extension of the same name leaves every call ambiguous.
 }

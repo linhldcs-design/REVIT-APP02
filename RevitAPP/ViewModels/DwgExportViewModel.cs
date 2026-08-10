@@ -23,7 +23,9 @@ public sealed partial class DwgExportViewModel : ObservableObject
         OutputPath = string.Empty;
         CoreConsoleStatus = autoCadAvailable
             ? "AutoCAD Automation đã sẵn sàng."
-            : "Không tìm thấy AutoCAD đầy đủ trên máy.";
+            : "Lệnh này cần AutoCAD bản đầy đủ (2016 trở lên) cài trên cùng máy. "
+              + "AutoCAD LT và Revit không thay thế được. "
+              + "Nếu máy đã có AutoCAD, hãy mở AutoCAD một lần rồi thử lại để nó đăng ký Automation.";
         HasFatalError = !autoCadAvailable;
         SelectedDwgSetup = DwgSetups.FirstOrDefault();
         SelectedDwgVersion = DwgVersions.FirstOrDefault(option =>

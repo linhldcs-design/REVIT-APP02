@@ -20,9 +20,73 @@ public static class AutoCadDwgPostProcessor
     public const string OwnedProcessLeaseFileName = "autocad-worker.lease";
     public const string ProgressFileName = "worker-progress.txt";
 
-    private const string AutoCad2024ProgId = "AutoCAD.Application.24.3";
+    // Every release AutoCAD registers for Automation, newest first. A machine running an
+    // older release than the ones listed still answers to the version-less ProgId, which
+    // points at whichever release registered itself most recently.
+    private static readonly string[] ProgIds =
+    {
+        "AutoCAD.Application.26",   // AutoCAD 2027
+        "AutoCAD.Application.25.1", // AutoCAD 2026
+        "AutoCAD.Application.25",   // AutoCAD 2025
+        "AutoCAD.Application.24.3", // AutoCAD 2024
+        "AutoCAD.Application.24.2", // AutoCAD 2023
+        "AutoCAD.Application.24.1", // AutoCAD 2022
+        "AutoCAD.Application.24",   // AutoCAD 2021
+        "AutoCAD.Application.23.1", // AutoCAD 2020
+        "AutoCAD.Application.23",   // AutoCAD 2019
+        "AutoCAD.Application.22",   // AutoCAD 2018
+        "AutoCAD.Application.21",   // AutoCAD 2017
+        "AutoCAD.Application.20.1", // AutoCAD 2016
+        "AutoCAD.Application"
+    };
 
-    public static bool IsAvailable() => Type.GetTypeFromProgID(AutoCad2024ProgId, false) is not null;
+    public static bool IsAvailable() => ResolveInstalledProgId() is not null;
+
+    /// <summary>
+    /// Returns the newest AutoCAD release registered for Automation, or null when the
+    /// machine has none. The version-less ProgId is the last resort because it points at
+    /// whichever release registered itself most recently.
+    /// </summary>
+    private static string? ResolveInstalledProgId() =>
+        ProgIds.FirstOrDefault(progId => Type.GetTypeFromProgID(progId, false) is not null)
+        ?? RegisteredProgIds().FirstOrDefault(progId =>
+            Type.GetTypeFromProgID(progId, false) is not null);
+
+    /// <summary>
+    /// Every AutoCAD.Application ProgId the machine has registered, newest first. A release
+    /// newer or older than the ones listed above still shows up here, so a machine is never
+    /// turned away for running a version this build had not heard of.
+    /// </summary>
+    private static IEnumerable<string> RegisteredProgIds()
+    {
+        Microsoft.Win32.RegistryKey? classes = null;
+        try
+        {
+            classes = Microsoft.Win32.Registry.ClassesRoot;
+            return classes.GetSubKeyNames()
+                .Where(name => name.StartsWith("AutoCAD.Application.", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(name => VersionOf(name))
+                .ToArray();
+        }
+        catch (Exception exception) when (exception is System.Security.SecurityException
+                                              or UnauthorizedAccessException
+                                              or IOException)
+        {
+            return Array.Empty<string>();
+        }
+        finally
+        {
+            classes?.Dispose();
+        }
+
+        static Version VersionOf(string progId)
+        {
+            var suffix = progId["AutoCAD.Application.".Length..];
+            return Version.TryParse(suffix.Contains('.') ? suffix : suffix + ".0", out var parsed)
+                ? parsed
+                : new Version(0, 0);
+        }
+    }
 
     public static string Compose(DwgExportJob job, TimeSpan? commandTimeout = null)
     {
@@ -179,15 +243,17 @@ public static class AutoCadDwgPostProcessor
             foreach (var process in existingProcesses) process.Dispose();
         }
         Exception? last = null;
-        var type = Type.GetTypeFromProgID(AutoCad2024ProgId, false)
-                   ?? throw new InvalidOperationException("Máy chưa cài AutoCAD 2024 Automation.");
+        var progId = ResolveInstalledProgId()
+                     ?? throw new InvalidOperationException("Máy chưa cài AutoCAD hỗ trợ Automation.");
+        var type = Type.GetTypeFromProgID(progId, false)
+                   ?? throw new InvalidOperationException($"Không tải được {progId}.");
         for (var attempt = 0; attempt < 5; attempt++)
         {
             object? application = null;
             try
             {
                 application = Activator.CreateInstance(type)
-                    ?? throw new InvalidOperationException($"Không khởi động được {AutoCad2024ProgId}.");
+                    ?? throw new InvalidOperationException($"Không khởi động được {progId}.");
                 var processId = GetApplicationProcessId(application);
                 if (processId <= 0)
                 {
@@ -206,7 +272,7 @@ public static class AutoCadDwgPostProcessor
                 if (processId <= 0 || existingProcessIds.Contains(processId))
                 {
                     throw new InvalidOperationException(
-                        $"Không xác nhận được phiên {AutoCad2024ProgId} là AutoCAD riêng do RevitAPP tạo. " +
+                        $"Không xác nhận được phiên {progId} là AutoCAD riêng do RevitAPP tạo. " +
                         "Đã dừng để không ảnh hưởng bản vẽ AutoCAD đang mở.");
                 }
                 using var process = Process.GetProcessById(processId);
@@ -558,7 +624,22 @@ public static class AutoCadDwgPostProcessor
             Call(document, "SetVariable", "USERS5", string.Empty);
             Call(document, "SetVariable", "USERR1", 0d);
             Call(document, "SetVariable", "USERR2", 0d);
-            Call(document, "SendCommand", $"_.SCRIPT\r\"{scriptPath.Replace("\"", string.Empty)}\"\r");
+            // FILEDIA has to be off or AutoCAD answers _.SCRIPT with the Select Script File
+            // dialog and waits for the user, which never comes in an automated session. The
+            // path is written with forward slashes because AutoCAD reads a backslash on the
+            // command line as the start of an escape.
+            var filedia = Convert.ToInt32(
+                Convert.ToDouble(Call(document, "GetVariable", "FILEDIA"), CultureInfo.InvariantCulture));
+            if (filedia != 0) Call(document, "SetVariable", "FILEDIA", 0);
+            try
+            {
+                Call(document, "SendCommand",
+                    $"_.SCRIPT\r{scriptPath.Replace("\"", string.Empty).Replace('\\', '/')}\r");
+            }
+            finally
+            {
+                if (filedia != 0) Call(document, "SetVariable", "FILEDIA", filedia);
+            }
 
             // ANNOUPDATE/-OBJECTSCALE is a single native batch and COM does not yield while
             // AutoCAD regenerates a large drawing. A 1,500+ DIM print set can legitimately
