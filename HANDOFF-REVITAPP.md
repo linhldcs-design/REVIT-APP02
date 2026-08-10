@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.10.1`
+- Release mới nhất đã phát hành: `v1.11.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,7 +35,7 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 449/449 đạt.
+- Test gần nhất: `RevitAPP.Tests` 482/482 đạt.
 - Chat AI có registry **57 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
@@ -67,6 +67,10 @@
 - **Runtime smoke của tab `Create Slab` chưa được người dùng xác nhận đầy đủ khi phát hành `v1.10.0`.** Bản R25 đã deploy và người dùng thử nhiều vòng; lần sửa cuối (`8008c28`) chưa có phản hồi. Lần mở phiên sau cần kiểm tra bảng review có ra đúng cao độ CAD không, và thanh trạng thái có dòng `Cao độ đọc được` / `Chiều dày đọc được` để chẩn đoán.
 - `v1.10.1`: sửa hai lỗi của lệnh `Xuất DWG Model` trên máy khách. Máy có AutoCAD vẫn báo "Không tìm thấy AutoCAD đầy đủ" vì add-in dò bằng danh sách ProgId cứng chỉ có 2024–2027; nay bổ sung 2016–2023 và dò thẳng `HKEY_CLASSES_ROOT` để nhận mọi bản đã đăng ký Automation, kể cả bản phát hành sau này. Lệnh `_.SCRIPT` gửi sang AutoCAD mà không tắt `FILEDIA` nên AutoCAD mở hộp thoại `Select Script File` và chờ người dùng bấm; nay tắt `FILEDIA` trước khi gửi, khôi phục lại sau kể cả khi lỗi, và ghi đường dẫn bằng dấu `/`. Thông báo khi thiếu AutoCAD nói rõ cần bản đầy đủ 2016 trở lên, AutoCAD LT và Revit không thay thế được.
 - Sửa kèm `v1.10.1`: `FootingDrawing.Addin` không còn khai báo extension `ToLong` riêng. `Nice3point.Revit.Extensions` cung cấp sẵn cho mọi phiên bản đích, nên bản trùng tên làm build local hỏng `CS0121` ở R22–R27.
+- `v1.11.0`: `Create Slab` đọc được đường cong và dựng đúng biên sàn trên bản vẽ thật. Bổ sung đọc `ARC` vẽ riêng (đi theo tâm và bán kính của chính nó, 5° một bước — dựng lại từ dây cung sai tới 1,6 m với cung nông trên dây dài) và cạnh cong trong polyline qua bulge (`CadArcChords`, 30 test). Ô trống pick nhận cả rectangle, closed polyline và line rời: mỗi pick đi theo riêng nên góc lệch vài mm vẫn khép. Thêm tùy chọn `Ô trống min` (m²) bỏ qua pick quá nhỏ. Kiểm thử 482/482; build R22–R27 thành công.
+- Các lỗi đã sửa trong `v1.11.0`: sàn không còn khoét lỗ tại cột, hố thang hay bay biên hở — chỉ khoét ô người dùng pick và sàn hạ; biên chạy thẳng qua cột thay vì răng cưa (vết khía nhiều đỉnh trước đây không khớp vì so nhầm hai cạnh của chính đầu dầm thay vì hai đoạn biên hai bên); biên giữ góc vuông nơi bản vẽ vẽ vuông, không nối chéo; trục lưới thò ra ngoài công trình không còn kéo méo biên — mỗi line bị cắt về đoạn giữa hai điểm cắt ngoài cùng, phần đuôi không bao quanh ô nào thì không định hình biên.
+- **Bài học `v1.11.0`:** một bộ lọc theo tên layer (`GRID`, `DIM`, `TEXT`) từng được thêm rồi phải `git revert` — trục lưới nằm trên `S-GRID` nên bước `Select Grid Axes` không đọc được gì. Tên layer không nói lên công dụng của line; hình học thì có.
+- **Bài học `v1.11.0`:** công thức cung tròn ban đầu được dò dấu bằng script rời, tám vòng không hội tụ. Viết `CadArcChordsTests` (30 ca: nửa tròn, 1/4, cung nông, cung lớn, cạnh xiên, cả hai chiều) trước rồi mới sửa — ba lần là xanh.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
