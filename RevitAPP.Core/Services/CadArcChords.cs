@@ -25,7 +25,9 @@ public static class CadArcChords
         var chordX = end.X - start.X;
         var chordY = end.Y - start.Y;
         var chord = Math.Sqrt(chordX * chordX + chordY * chordY);
-        if (chord < 1e-9 || Math.Abs(bulge) < 1e-9 || !double.IsFinite(bulge))
+        // double.IsFinite is not available on the framework the older releases target.
+        if (chord < 1e-9 || Math.Abs(bulge) < 1e-9
+            || double.IsNaN(bulge) || double.IsInfinity(bulge))
             return new[] { start, end };
 
         var sweep = 4.0 * Math.Atan(bulge);
