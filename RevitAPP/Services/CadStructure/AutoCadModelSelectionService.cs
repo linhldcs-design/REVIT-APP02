@@ -341,11 +341,11 @@ internal static class AutoCadModelSelectionService
             for (var index = 0; index + 1 < values.Length; index += stride)
                 points.Add(transform.Apply(new CadStructurePoint2(values[index], values[index + 1])));
 
-            // V1 detects straight outlines only. Treating an arc chord as a straight side could
-            // turn a rounded block into a false column, so a bulged side is dropped -- but the
-            // straight sides of the same polyline are still real beam boundaries. Discarding the
-            // whole outline would lose a beam whenever one corner happens to be filleted.
+            // A polyline can have curved sides, and each one is followed as a chain of short chords.
+            // Dropping them left the outline open wherever the plan draws an arc, so a bay with a
+            // rounded edge never closed into a region at all.
             var curved = new bool[points.Count];
+            var bulges = new double[points.Count];
             var curvedSides = 0;
             if (objectName is "AcDbPolyline" or "AcDb2dPolyline")
             {
@@ -354,21 +354,33 @@ internal static class AutoCadModelSelectionService
                     var bulge = Safe(() => Convert.ToDouble(Call(entity, "GetBulge", index)));
                     if (Math.Abs(bulge) <= 1e-9) continue;
                     curved[index] = true;
+                    bulges[index] = bulge;
                     curvedSides++;
                 }
             }
 
-            for (var index = 0; index < points.Count - 1; index++)
+            // A curved side is followed as a chain of short chords. Dropping it left the outline open
+            // where the plan draws an arc, and a bay with a rounded edge never closed into a region.
+            void AddSide(CadStructurePoint2 from, CadStructurePoint2 to, double bulge)
             {
-                if (curved[index]) continue;
-                AddSegment(points[index], points[index + 1], layer, polylinePath, sourceText);
+                if (Math.Abs(bulge) <= 1e-9)
+                {
+                    AddSegment(from, to, layer, polylinePath, sourceText);
+                    return;
+                }
+                var traced = CadArcChords.Trace(from, to, bulge);
+                for (var step = 1; step < traced.Count; step++)
+                    AddSegment(traced[step - 1], traced[step], layer, polylinePath, sourceText);
             }
 
+            for (var index = 0; index < points.Count - 1; index++)
+                AddSide(points[index], points[index + 1], bulges[index]);
+
             if (closed && points.Count > 2 && !curved[points.Count - 1])
-                AddSegment(points[^1], points[0], layer, polylinePath, sourceText);
+                AddSide(points[^1], points[0], bulges[points.Count - 1]);
 
             if (curvedSides > 0)
-                Log.Warning("Skipped {CurvedSides} curved side(s) of a polyline on layer {Layer}",
+                Log.Information("Followed {CurvedSides} curved side(s) of a polyline on layer {Layer}",
                     curvedSides, layer);
         }
 
