@@ -99,6 +99,9 @@ public static class CadPlanarGraph
         // at every one of them and leaves the edge saw-toothed. A notch that shallow is the column,
         // not the shape of the floor -- the floor is cast round its columns, edge included.
         points = SmoothNotches(points, maximumNotchDepthMm);
+        // Straightening a notch leaves its two ends sitting on the line that replaced it. They
+        // draw the same edge but make the outline look stepped in the review, so they go too.
+        points = DropCollinear(points);
         if (points.Count < 3) return null;
 
         var outline = new CadSlabLoop(points);
@@ -111,6 +114,29 @@ public static class CadPlanarGraph
     /// Straightens the edge across notches shallower than the given depth: where the outline steps
     /// aside and comes back to the line it was on, the step is dropped and the line runs through.
     /// </summary>
+    /// <summary>
+    /// Drops a corner that lies on the line between its neighbours: it turns the edge nowhere
+    /// and only makes the outline look stepped where it is straight.
+    /// </summary>
+    private static List<CadStructurePoint2> DropCollinear(List<CadStructurePoint2> points)
+    {
+        var changed = true;
+        while (changed && points.Count > 3)
+        {
+            changed = false;
+            for (var index = 0; index < points.Count; index++)
+            {
+                var before = points[(index - 1 + points.Count) % points.Count];
+                var after = points[(index + 1) % points.Count];
+                if (PointToSegment(before, after, points[index]) > 1.0) continue;
+                points.RemoveAt(index);
+                changed = true;
+                break;
+            }
+        }
+        return points;
+    }
+
     private static List<CadStructurePoint2> SmoothNotches(
         List<CadStructurePoint2> points,
         double maximumDepthMm)
@@ -132,9 +158,13 @@ public static class CadPlanarGraph
                 for (var span = 1; span <= maximumCorners; span++)
                 {
                     var after = points[(start + span + 1) % points.Count];
-                    if (!SameDirection(before, points[(start + 1) % points.Count],
-                            points[(start + span) % points.Count], after))
-                        continue;
+                    // The run the edge was on before the detour, and the run it is on after: those are what
+                    // have to line up. Comparing the step into the detour with the step out of it instead
+                    // compared two edges of the beam end itself, which run parallel to each other and square
+                    // to the wall -- so a real notch never matched and the edge kept every one of them.
+                    var beforeRun = points[(start - 1 + points.Count) % points.Count];
+                    var afterRun = points[(start + span + 2) % points.Count];
+                    if (!SameDirection(beforeRun, before, after, afterRun)) continue;
 
                     // Every corner of the detour sits close to the line the edge would take, and
                     // the detour is short -- a column is about that wide -- or it is a feature of
