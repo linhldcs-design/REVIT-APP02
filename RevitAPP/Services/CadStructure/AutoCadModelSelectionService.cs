@@ -112,12 +112,12 @@ internal static class AutoCadModelSelectionService
             Call(selection, "SelectOnScreen",
                 new short[] { DxfEntityType },
                 new object[] { promptOverride is not null
-                    ? "LINE,LWPOLYLINE,POLYLINE"
+                    ? "LINE,ARC,LWPOLYLINE,POLYLINE"
                     : gridPackage is null
-                        ? "LINE,LWPOLYLINE,POLYLINE,INSERT"
+                        ? "LINE,ARC,LWPOLYLINE,POLYLINE,INSERT"
                         : includeHatch
-                            ? "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT,HATCH"
-                            : "LINE,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
+                            ? "LINE,ARC,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT,HATCH"
+                            : "LINE,ARC,LWPOLYLINE,POLYLINE,INSERT,TEXT,MTEXT" });
 
             var selectedCount = Convert.ToInt32(Get(selection, "Count"));
             if (selectedCount > MaximumSelectedEntityCount)
@@ -280,6 +280,40 @@ internal static class AutoCadModelSelectionService
                 if (start is not null && end is not null)
                     AddSegment(transform.Apply(start.Value), transform.Apply(end.Value), layer,
                         sourcePath, inheritedText);
+                return;
+            }
+
+            // A plan draws a rounded corner as an arc in its own right as often as it draws it into a
+            // polyline. Reading only the polyline left the outline open wherever the plan used an arc,
+            // so the bay behind that corner never closed.
+            if (string.Equals(objectName, "AcDbArc", StringComparison.Ordinal))
+            {
+                var centre = ToPoint(Safe(() => Get(entity, "Center")));
+                var radius = Safe(() => Convert.ToDouble(Get(entity, "Radius")));
+                var startAngle = Safe(() => Convert.ToDouble(Get(entity, "StartAngle")));
+                var endAngle = Safe(() => Convert.ToDouble(Get(entity, "EndAngle")));
+                if (centre is not null && radius > 1e-9)
+                {
+                    // AutoCAD stores an arc counter-clockwise from its start angle to its end angle. The
+                    // centre and radius are given, so the arc is walked directly rather than rebuilt from its
+                    // chord -- a shallow arc drawn on a long chord loses most of its curvature that way.
+                    var sweep = endAngle - startAngle;
+                    while (sweep <= 0) sweep += Math.PI * 2.0;
+                    var steps = Math.Max(2, (int)Math.Ceiling(sweep / (5.0 * Math.PI / 180.0)));
+                    var previous = new CadStructurePoint2(
+                        centre.Value.X + radius * Math.Cos(startAngle),
+                        centre.Value.Y + radius * Math.Sin(startAngle));
+                    for (var step = 1; step <= steps; step++)
+                    {
+                        var angle = startAngle + sweep * step / steps;
+                        var next = new CadStructurePoint2(
+                            centre.Value.X + radius * Math.Cos(angle),
+                            centre.Value.Y + radius * Math.Sin(angle));
+                        AddSegment(transform.Apply(previous), transform.Apply(next),
+                            layer, sourcePath, inheritedText);
+                        previous = next;
+                    }
+                }
                 return;
             }
 
