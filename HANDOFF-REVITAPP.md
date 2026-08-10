@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.11.0`
+- Release mới nhất đã phát hành: `v1.11.1`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,7 +35,7 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 482/482 đạt.
+- Test gần nhất: `RevitAPP.Tests` 495/495 đạt.
 - Chat AI có registry **57 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
@@ -71,6 +71,7 @@
 - Các lỗi đã sửa trong `v1.11.0`: sàn không còn khoét lỗ tại cột, hố thang hay bay biên hở — chỉ khoét ô người dùng pick và sàn hạ; biên chạy thẳng qua cột thay vì răng cưa (vết khía nhiều đỉnh trước đây không khớp vì so nhầm hai cạnh của chính đầu dầm thay vì hai đoạn biên hai bên); biên giữ góc vuông nơi bản vẽ vẽ vuông, không nối chéo; trục lưới thò ra ngoài công trình không còn kéo méo biên — mỗi line bị cắt về đoạn giữa hai điểm cắt ngoài cùng, phần đuôi không bao quanh ô nào thì không định hình biên.
 - **Bài học `v1.11.0`:** một bộ lọc theo tên layer (`GRID`, `DIM`, `TEXT`) từng được thêm rồi phải `git revert` — trục lưới nằm trên `S-GRID` nên bước `Select Grid Axes` không đọc được gì. Tên layer không nói lên công dụng của line; hình học thì có.
 - **Bài học `v1.11.0`:** công thức cung tròn ban đầu được dò dấu bằng script rời, tám vòng không hội tụ. Viết `CadArcChordsTests` (30 ca: nửa tròn, 1/4, cung nông, cung lớn, cạnh xiên, cả hai chiều) trước rồi mới sửa — ba lần là xanh.
+- `v1.11.1`: `Create Slab` tự sinh Floor Type đúng chiều dày CAD ghi. Cơ chế nhân bản đã có từ `v1.10.0` nhưng tìm nhầm type: mọi Floor Type trong Revit đều có `FamilyName = "Floor"`, nên điều kiện `FamilyName == seed.FamilyName` khớp với bất kỳ type nào cùng chiều dày — chọn sàn bê tông có thể lấy nhầm sàn metal deck. Nay hai type là một khi cấu tạo giống nhau (cùng số lớp, chức năng lớp, vật liệu, thứ tự); chiều dày khác là thứ đang được thay đổi. Tên type sinh ra lấy theo type gốc thay vì family: `160mm Concrete With 50mm Metal Deck (210 mm)` sinh ra `Concrete With Metal Deck 120mm`, không còn `Floor 120`. Thêm `CadSlabTypeNaming` + 13 test (gồm ca sao chép hai lần không được thành `Concrete 150mm 200mm 250mm`). Kiểm thử 495/495; build R22–R27 thành công.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
