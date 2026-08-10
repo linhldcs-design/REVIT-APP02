@@ -189,6 +189,16 @@ public static class CadSlabAnalyzer
         // Where each hole came from. A floor is cut for an outline the user picked and for a pour
         // laid at another level, and for nothing else -- so a count that does not add up says the
         // cut came from somewhere it should not have.
+        // How many corners each edge came out with. A floor drawn on a rectangular grid has a
+        // handful; dozens means the edge is stepping round something -- the columns -- and the
+        // notches were not straightened out.
+        var corners = regions
+            .Select(region => region.OuterLoop.VerticesMm.Count)
+            .ToArray();
+        if (corners.Length > 0)
+            warnings.Add($"Đỉnh biên: {string.Join(", ", corners)}"
+                + $" (làm phẳng khía ≤ {options.MaximumColumnSizeMm:0} mm).");
+
         var holeCount = regions.Sum(region => region.Holes.Count);
         if (holeCount > 0 || marks.Length > 0)
         {
