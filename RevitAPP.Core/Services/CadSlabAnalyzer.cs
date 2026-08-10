@@ -117,13 +117,15 @@ public static class CadSlabAnalyzer
                 End = segment.End * scale - origin
             })
             .ToArray();
-        // A pick too small to be an opening is a slip of the mouse, and the floor is poured
-        // across it rather than left with a hole the plan does not show.
-        var marks = openingOutlines.Length == 0
-            ? Array.Empty<CadSlabLoop>()
-            : CadPlanarGraph.BuildFaces(openingOutlines, options.VertexSnapToleranceMm, out _)
-                .Where(mark => mark.AreaMm2 >= options.MinimumOpeningAreaM2 * 1_000_000.0)
-                .ToArray();
+        // Each outline the user picked stands on its own: a rectangle or a closed polyline drawn
+        // round the opening. Tracing them all together as one graph only found an outline where
+        // its own sides met exactly, so a rectangle whose corners were a millimetre apart, or one
+        // picked on its own with nothing to cross, gave no opening at all.
+        // A pick too small to be an opening is a slip of the mouse, and the floor is poured across
+        // it rather than left with a hole the plan does not show.
+        var marks = OpeningOutlines(openingOutlines, options)
+            .Where(mark => mark.AreaMm2 >= options.MinimumOpeningAreaM2 * 1_000_000.0)
+            .ToArray();
 
         var faces = CadPlanarGraph.BuildFaces(usable, options.VertexSnapToleranceMm, out var unclosed);
         // A shaded area bounds the pour just as a drawn line does: the slab drops where the shading
@@ -1097,6 +1099,65 @@ public static class CadSlabAnalyzer
             });
         }
         return trimmed.ToArray();
+    }
+
+    /// <summary>
+    /// The outlines the user picked, as closed loops. Each pick is followed on its own -- a
+    /// rectangle, a closed polyline, or several lines drawn round a bay -- and only picks that
+    /// cannot be followed that way are traced together as a graph.
+    /// </summary>
+    private static IReadOnlyList<CadSlabLoop> OpeningOutlines(
+        IReadOnlyList<CadStructureSegment> outlines,
+        CadSlabAnalysisOptions options)
+    {
+        if (outlines.Count == 0) return Array.Empty<CadSlabLoop>();
+
+        var loops = new List<CadSlabLoop>();
+        var leftover = new List<CadStructureSegment>();
+        foreach (var pick in outlines.GroupBy(segment => segment.SourcePath))
+        {
+            var loop = ClosedLoopFrom(pick.ToArray(), options.VertexSnapToleranceMm);
+            if (loop is not null) loops.Add(loop);
+            else leftover.AddRange(pick);
+        }
+
+        if (leftover.Count > 0)
+            loops.AddRange(CadPlanarGraph.BuildFaces(
+                leftover, options.VertexSnapToleranceMm, out _));
+        return loops;
+    }
+
+    /// <summary>
+    /// The loop a run of segments draws, when they join end to end and come back to where they
+    /// started. Null when they do not close, so the caller can fall back to tracing them.
+    /// </summary>
+    private static CadSlabLoop? ClosedLoopFrom(
+        IReadOnlyList<CadStructureSegment> segments,
+        double toleranceMm)
+    {
+        if (segments.Count < 3) return null;
+
+        var remaining = segments.ToList();
+        var first = remaining[0];
+        remaining.RemoveAt(0);
+        var points = new List<CadStructurePoint2> { first.Start, first.End };
+
+        while (remaining.Count > 0)
+        {
+            var tail = points[^1];
+            var index = remaining.FindIndex(segment =>
+                segment.Start.DistanceTo(tail) <= toleranceMm
+                || segment.End.DistanceTo(tail) <= toleranceMm);
+            if (index < 0) return null;
+
+            var next = remaining[index];
+            remaining.RemoveAt(index);
+            points.Add(next.Start.DistanceTo(tail) <= toleranceMm ? next.End : next.Start);
+        }
+
+        if (points[^1].DistanceTo(points[0]) > toleranceMm) return null;
+        points.RemoveAt(points.Count - 1);
+        return points.Count >= 3 ? new CadSlabLoop(points) : null;
     }
 
     /// <summary>

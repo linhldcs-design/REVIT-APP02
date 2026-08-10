@@ -694,6 +694,61 @@ public sealed class CadSlabAnalyzerTests
         Assert.Empty(floor.Holes);
     }
 
+    [Fact]
+    public void Analyze_OpeningPickedAsARectangle_IsCutOut()
+    {
+        var package = Package(Grid(3, 2, 6000, 5000),
+            Annotation(90, 15000, 7500, "+0.000 Hs=100"));
+
+        var result = CadSlabAnalyzer.Analyze(package, Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions
+            {
+                OpeningOutlinesMm = Rectangle(500, 2000, 1500, 4000, 3500)
+            });
+
+        var floor = Assert.Single(result.Regions);
+        var hole = Assert.Single(floor.Holes);
+        Assert.Equal(4.0, hole.AreaMm2 / 1_000_000.0, 2);
+    }
+
+    [Fact]
+    public void Analyze_OpeningPickedWithCornersThatDoNotQuiteMeet_IsStillCutOut()
+    {
+        // A rectangle drawn by four separate lines rarely closes to the millimetre. Reading the
+        // picks as one graph found nothing there; each pick is followed on its own instead.
+        var outline = new List<CadStructureSegment>
+        {
+            Segment(500, 2000, 1500, 4005, 1500),
+            Segment(501, 4000, 1497, 4000, 3500),
+            Segment(502, 4003, 3502, 2000, 3502),
+            Segment(503, 1998, 3498, 1998, 1503)
+        };
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(3, 2, 6000, 5000), Annotation(90, 15000, 7500, "+0.000 Hs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions { OpeningOutlinesMm = outline });
+
+        var floor = Assert.Single(result.Regions);
+        Assert.Single(floor.Holes);
+    }
+
+    [Fact]
+    public void Analyze_TwoOpeningsPickedTogether_AreBothCutOut()
+    {
+        var outline = new List<CadStructureSegment>();
+        outline.AddRange(Rectangle(500, 1000, 1000, 3000, 3000));
+        outline.AddRange(Rectangle(600, 8000, 1000, 10000, 3000));
+
+        var result = CadSlabAnalyzer.Analyze(
+            Package(Grid(3, 2, 6000, 5000), Annotation(90, 15000, 7500, "+0.000 Hs=100")),
+            Array.Empty<CadHatchRegion>(),
+            new CadSlabAnalysisOptions { OpeningOutlinesMm = outline });
+
+        var floor = Assert.Single(result.Regions);
+        Assert.Equal(2, floor.Holes.Count);
+    }
+
     private static CadHatchRegion Hatch(
         int id, double x1, double y1, double x2, double y2, string pattern, double scale) =>
         new(id, new[]
