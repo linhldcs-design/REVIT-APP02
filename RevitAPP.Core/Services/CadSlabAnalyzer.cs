@@ -483,8 +483,17 @@ public static class CadSlabAnalyzer
         var boundaryLineIds = mainBlock
             .SelectMany(cell => cell.SourceSegmentIds)
             .ToHashSet();
-        var outline = CadPlanarGraph.BuildOuterBoundary(
+        // A line is trimmed back to the bays it bounds before the edge is traced. A grid axis runs
+        // out past the building to carry its bubble, and a dimension line stands off the plan
+        // altogether: both cross other lines somewhere, so both help carve a bay and reach the
+        // edge -- and the stretch hanging beyond the last crossing then dragged the outline out
+        // with it. What bounds a bay is the stretch between crossings; the tail beyond them
+        // bounds nothing.
+        var edgeLines = TrimToCrossings(
             usableLines.Where(line => boundaryLineIds.Contains(line.Id)).ToArray(),
+            options.VertexSnapToleranceMm);
+        var outline = CadPlanarGraph.BuildOuterBoundary(
+            edgeLines,
             options.VertexSnapToleranceMm,
             options.MaximumColumnSizeMm);
         var totalBoundary = outline is null
@@ -1040,6 +1049,54 @@ public static class CadSlabAnalyzer
             .OrderByDescending(piece => piece.Outer.AreaMm2)
             .FirstOrDefault();
         return shared?.Outer;
+    }
+
+    /// <summary>
+    /// Cuts each line back to the outermost points where another line crosses it. The stretch
+    /// beyond that bounds no bay -- it is the overrun of a grid axis, or a dimension line
+    /// standing off the plan -- and tracing it pulls the floor edge away from the building.
+    /// </summary>
+    private static CadStructureSegment[] TrimToCrossings(
+        IReadOnlyList<CadStructureSegment> lines,
+        double toleranceMm)
+    {
+        var trimmed = new List<CadStructureSegment>(lines.Count);
+        foreach (var line in lines)
+        {
+            var direction = line.End - line.Start;
+            var length = Math.Sqrt(direction.X * direction.X + direction.Y * direction.Y);
+            if (length < 1e-9) continue;
+
+            var first = double.MaxValue;
+            var last = double.MinValue;
+            foreach (var other in lines)
+            {
+                if (ReferenceEquals(other, line)) continue;
+                foreach (var point in new[] { other.Start, other.End })
+                {
+                    var along = ((point.X - line.Start.X) * direction.X
+                        + (point.Y - line.Start.Y) * direction.Y) / (length * length);
+                    if (along < -0.001 || along > 1.001) continue;
+                    var closest = new CadStructurePoint2(
+                        line.Start.X + direction.X * along,
+                        line.Start.Y + direction.Y * along);
+                    if (closest.DistanceTo(point) > toleranceMm) continue;
+                    first = Math.Min(first, along);
+                    last = Math.Max(last, along);
+                }
+            }
+
+            // A line nothing meets bounds nothing, and one met at a single point only touches.
+            if (first > last || (last - first) * length < toleranceMm) continue;
+            trimmed.Add(line with
+            {
+                Start = new CadStructurePoint2(
+                    line.Start.X + direction.X * first, line.Start.Y + direction.Y * first),
+                End = new CadStructurePoint2(
+                    line.Start.X + direction.X * last, line.Start.Y + direction.Y * last)
+            });
+        }
+        return trimmed.ToArray();
     }
 
     /// <summary>
