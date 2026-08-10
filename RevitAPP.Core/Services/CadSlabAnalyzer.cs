@@ -456,7 +456,10 @@ public static class CadSlabAnalyzer
                     .Where(line => plainBlock.SelectMany(cell => cell.SourceSegmentIds)
                         .ToHashSet().Contains(line.Id))
                     .ToArray(),
-                options.VertexSnapToleranceMm);
+                options.VertexSnapToleranceMm,
+                // The columns must not notch this edge either: it decides which bays belong to the
+                // floor, and a saw-toothed one reads a bay as lying outside when it does not.
+                options.MaximumColumnSizeMm);
         // A shaded bay the floor surrounds is a hole in it, so the edge still runs round the
         // outside of it. One hanging off the floor is a slab laid beside it, and taking that into
         // the edge poured the floor over the very slab it should sit next to.
@@ -1136,7 +1139,8 @@ public static class CadSlabAnalyzer
     /// </summary>
     private static CadSlabLoop? HatchOutline(
         CadSlabCell[] part,
-        IReadOnlyList<CadHatchRegion>? hatches)
+        IReadOnlyList<CadHatchRegion>? hatches,
+        double notchDepthMm = 0.0)
     {
         if (hatches is null || hatches.Count == 0) return null;
 
@@ -1161,9 +1165,9 @@ public static class CadSlabAnalyzer
         // Shaded areas standing apart are in one pour only because a beam runs between them, so
         // the edge runs round the outside of them all and takes the beam's strip in. What separates
         // them was already judged narrow enough for that before they were put together.
-        return JoinLoops(covering
-            .Select(hatch => new CadSlabLoop(hatch.BoundaryMm.ToArray()))
-            .ToArray());
+        return JoinLoops(
+            covering.Select(hatch => new CadSlabLoop(hatch.BoundaryMm.ToArray())).ToArray(),
+            notchDepthMm);
     }
 
     /// <summary>
@@ -1231,7 +1235,9 @@ public static class CadSlabAnalyzer
     /// so the strip between each pair is bridged at their nearest corners first, closing them into
     /// a single figure the walk can follow.
     /// </summary>
-    private static CadSlabLoop? JoinLoops(IReadOnlyList<CadSlabLoop> loops)
+    private static CadSlabLoop? JoinLoops(
+        IReadOnlyList<CadSlabLoop> loops,
+        double maximumNotchDepthMm = 0.0)
     {
         if (loops.Count == 0) return null;
         if (loops.Count == 1) return loops[0];
@@ -1261,7 +1267,9 @@ public static class CadSlabAnalyzer
                     "BRIDGE", string.Empty));
         }
 
-        return CadPlanarGraph.BuildOuterBoundary(segments, 20.0);
+        // A pour traced round its own columns comes out saw-toothed just as the floor does, so
+        // the same shallow notches are straightened out of it.
+        return CadPlanarGraph.BuildOuterBoundary(segments, 20.0, maximumNotchDepthMm);
     }
 
 
@@ -1280,7 +1288,7 @@ public static class CadSlabAnalyzer
         // Following the hatch edge keeps the slab exactly where the plan shades it, including the
         // stretches the lines never enclose, and holds parts a beam separates together -- which the
         // edge round the cells cannot do, as it keeps only the largest of them.
-        var shadedEdge = HatchOutline(part, hatches);
+        var shadedEdge = HatchOutline(part, hatches, options.MaximumColumnSizeMm);
         var boundary = BuildGroupBoundary(part);
         if (boundary is null && shadedEdge is null) return null;
         // Parts a beam separates are one pour, so the edge runs round the outside of them all and
@@ -1288,7 +1296,8 @@ public static class CadSlabAnalyzer
         // for that, so the ground taken in is the beam and no more.
         var outer = shadedEdge
                     ?? (boundary!.DetachedParts.Count > 0
-                        ? JoinLoops(new[] { boundary.Outer }.Concat(boundary.DetachedParts).ToArray())
+                        ? JoinLoops(new[] { boundary.Outer }.Concat(boundary.DetachedParts).ToArray(),
+                            options.MaximumColumnSizeMm)
                           ?? boundary.Outer
                         : boundary.Outer);
         if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) return null;

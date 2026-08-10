@@ -121,32 +121,44 @@ public static class CadPlanarGraph
         while (changed && points.Count >= 4)
         {
             changed = false;
-            for (var index = 0; index < points.Count; index++)
+            for (var start = 0; start < points.Count && !changed; start++)
             {
-                var before = points[(index - 1 + points.Count) % points.Count];
-                var after = points[(index + 2) % points.Count];
-                var first = points[index];
-                var second = points[(index + 1) % points.Count];
+                var before = points[start];
+                // A detour off a straight run can turn several corners before it rejoins -- going
+                // out, along and back is three of them, and a column drawn by its four faces gives
+                // four. Looking only one corner ahead left every one of them in the edge, so the
+                // run is followed until it comes back to the line it left.
+                var maximumCorners = Math.Min(6, points.Count - 2);
+                for (var span = 1; span <= maximumCorners; span++)
+                {
+                    var after = points[(start + span + 1) % points.Count];
+                    if (!SameDirection(before, points[(start + 1) % points.Count],
+                            points[(start + span) % points.Count], after))
+                        continue;
 
-                // The edge has to arrive and leave along the same line, or the step is a corner of
-                // the building and closing it would cut that corner off. Only a detour that comes
-                // straight back to the line it left is the column standing on it.
-                if (!SameDirection(before, first, second, after)) continue;
+                    // Every corner of the detour sits close to the line the edge would take, and
+                    // the detour is short -- a column is about that wide -- or it is a feature of
+                    // the plan and closing it would cut a real corner off the floor.
+                    var shallow = true;
+                    for (var step = 1; step <= span && shallow; step++)
+                        shallow = PointToSegment(before, after, points[(start + step) % points.Count])
+                            <= maximumDepthMm;
+                    if (!shallow) continue;
 
-                // Both corners of the step sit close to that line, and the step itself is short --
-                // a column's width -- or it is a feature of the plan rather than a column.
-                if (PointToSegment(before, after, first) > maximumDepthMm) continue;
-                if (PointToSegment(before, after, second) > maximumDepthMm) continue;
-                if (first.DistanceTo(second) > maximumDepthMm * 4.0) continue;
+                    var wide = false;
+                    for (var step = 1; step < span && !wide; step++)
+                        wide = points[(start + step) % points.Count]
+                            .DistanceTo(points[(start + step + 1) % points.Count]) > maximumDepthMm * 4.0;
+                    if (wide) continue;
 
-                var removeSecond = (index + 1) % points.Count;
-                points.RemoveAt(Math.Max(index, removeSecond));
-                points.RemoveAt(Math.Min(index, removeSecond));
-                changed = true;
-                break;
+                    for (var step = span; step >= 1; step--)
+                        points.RemoveAt((start + step) % points.Count);
+                    changed = true;
+                    break;
+                }
             }
         }
-        return points;
+    return points;
     }
 
     /// <summary>
