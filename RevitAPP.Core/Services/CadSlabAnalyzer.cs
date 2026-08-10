@@ -572,13 +572,13 @@ public static class CadSlabAnalyzer
                     .Where(pour => pour is not null)
                     .Select(pour => pour!)
                     .ToArray();
+                // The floor is cut only for what the plan says is not poured: an outline the user
+                // picked, and a pour laid at another level. A bay left over for any other reason --
+                // a column, a shaft the lines happen to enclose, a bay whose edge did not close --
+                // is concrete, and cutting it left the slab riddled with holes the plan never shows.
                 var wholeFloorHoles = marks
                     .Where(mark => ContainsPoint(outerEdge.VerticesMm, Centroid(mark)))
                     .Concat(poursOnTheFloor)
-                    .Concat(MergeVoids(cutOut
-                        .Where(cell => !markedCells.Contains(cell.Id)
-                                       && !coveredCells.Contains(cell.Id))
-                        .ToArray()))
                     .Select(hole => Orient(hole, counterClockwise: false))
                     .Where(hole => hole.AreaMm2 >= 10_000.0)
                     .ToArray();
