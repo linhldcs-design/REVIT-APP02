@@ -896,13 +896,11 @@ public static class CadSlabAnalyzer
         // either way round. Revit rejects a profile whose loops disagree, and a reversed outer
         // loop also reports a negative area in the review.
         var outer = Orient(ordered[0], counterClockwise: true);
-        // A loop the largest one surrounds is a void within it. One standing outside it is a
-        // separate part of the same pour -- two bays a beam runs between -- and calling that a hole
-        // cut the smaller of them away instead of keeping both.
-        var holes = ordered.Skip(1)
-            .Where(loop => ContainsPoint(outer.VerticesMm, Centroid(loop)))
-            .Select(loop => Orient(loop, counterClockwise: false))
-            .ToArray();
+        // A loop the largest one surrounds is a bay the pour runs round -- a column, a shaft --
+        // and the pour is cast round it rather than cut for it. Only what the plan states is not
+        // poured makes a hole, and that is decided by the caller from the outlines the user
+        // picked. Cutting here as well left a hole at every column in the floor.
+        var holes = Array.Empty<CadSlabLoop>();
         var detached = ordered.Skip(1)
             .Where(loop => !ContainsPoint(outer.VerticesMm, Centroid(loop)))
             .ToArray();
@@ -1280,15 +1278,12 @@ public static class CadSlabAnalyzer
                         : boundary.Outer);
         if (outer.AreaMm2 / 1_000_000.0 < options.MinimumRegionAreaM2) return null;
 
-        var partIds = part.Select(cell => cell.Id).ToHashSet();
-        var inside = allCells
-            .Where(cell => !partIds.Contains(cell.Id)
-                           && ContainsPoint(outer.VerticesMm, cell.CentroidMm))
-            .ToArray();
-
+        // A pour is cut for an outline the user picked and for a pour laid at another level,
+        // and for nothing else. Cutting every bay that fell inside its edge took the columns,
+        // the shafts and the bays whose edges never closed with it, and left the slab riddled
+        // with holes the plan does not show.
         var holes = marks
             .Where(mark => ContainsPoint(outer.VerticesMm, Centroid(mark)))
-            .Concat(MergeVoids(inside))
             .Concat(boundary?.Holes ?? Array.Empty<CadSlabLoop>())
             .Select(hole => Orient(hole, counterClockwise: false))
             .Where(hole => hole.AreaMm2 >= 10_000.0)
