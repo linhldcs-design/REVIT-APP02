@@ -12,7 +12,8 @@ internal enum ModelFromCadMode
     Grid,
     Column,
     Beam,
-    Slab
+    Slab,
+    Wall
 }
 
 internal sealed record CadModelPreviewData(
@@ -25,6 +26,10 @@ internal sealed record CadModelPreviewData(
 internal sealed record CadBeamPreviewData(
     CadStructureTransferPackage Package,
     CadBeamAnalysis Analysis);
+
+internal sealed record CadWallPreviewData(
+    CadStructureTransferPackage Package,
+    CadWallAnalysis Analysis);
 
 internal sealed record CadSlabPreviewData(
     CadStructureTransferPackage Package,
@@ -50,6 +55,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private readonly Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? _selectSlab;
     private readonly Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? _selectOpeningOutlines;
     private readonly Func<CadStructureTransferPackage, IReadOnlyList<CadHatchRegion>?>? _selectHatchRegions;
+    private readonly Func<CadStructureTransferPackage, CadWallAnalysisOptions, CadWallPreviewData?>? _selectWall;
     private bool _suppressItemNotifications;
 
     public ModelFromCadViewModel(
@@ -59,7 +65,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         Func<CadStructureTransferPackage, CadBeamAnalysisOptions, CadBeamPreviewData?>? selectBeam = null,
         Func<CadStructureTransferPackage, CadSlabAnalysisOptions, CadSlabPreviewData?>? selectSlab = null,
         Func<CadStructureTransferPackage, IReadOnlyList<CadStructureSegment>?>? selectOpeningOutlines = null,
-        Func<CadStructureTransferPackage, IReadOnlyList<CadHatchRegion>?>? selectHatchRegions = null)
+        Func<CadStructureTransferPackage, IReadOnlyList<CadHatchRegion>?>? selectHatchRegions = null,
+        Func<CadStructureTransferPackage, CadWallAnalysisOptions, CadWallPreviewData?>? selectWall = null)
     {
         Data = data;
         _reselect = reselect;
@@ -67,6 +74,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         _selectSlab = selectSlab;
         _selectOpeningOutlines = selectOpeningOutlines;
         _selectHatchRegions = selectHatchRegions;
+        _selectWall = selectWall;
         GridAxes = new ObservableCollection<CadGridAxisViewModel>(
             data.GridPreview.Axes.Select(axis => new CadGridAxisViewModel(axis)));
         Columns = new ObservableCollection<CadColumnRowViewModel>(
@@ -76,6 +84,9 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         SlabTypes = new ObservableCollection<CadSlabTypeOption>(options.SlabTypes);
         Levels = new ObservableCollection<CadColumnLevelOption>(options.Levels);
         Slabs = new ObservableCollection<CadSlabRowViewModel>();
+        Walls = new ObservableCollection<CadWallRowViewModel>();
+        WallLayers = new ObservableCollection<CadLayerRowViewModel>();
+        WallTypes = new ObservableCollection<CadWallTypeOption>(options.WallTypes);
 
         foreach (var axis in GridAxes) axis.PropertyChanged += OnItemChanged;
         foreach (var column in Columns) column.PropertyChanged += OnItemChanged;
@@ -93,6 +104,9 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
                                option.Name.Contains("Concrete", StringComparison.OrdinalIgnoreCase))
                            ?? SlabTypes.FirstOrDefault();
         SelectedSlabLevel = Levels.FirstOrDefault();
+        SelectedWallType = WallTypes.FirstOrDefault();
+        SelectedWallBaseLevel = Levels.FirstOrDefault();
+        SelectedWallTopLevel = Levels.Skip(1).FirstOrDefault() ?? Levels.FirstOrDefault();
     }
 
     public CadModelPreviewData Data { get; private set; }
@@ -104,6 +118,9 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     public ObservableCollection<CadBeamFamilyOption> BeamFamilies { get; }
     public ObservableCollection<CadSlabTypeOption> SlabTypes { get; }
     public ObservableCollection<CadSlabRowViewModel> Slabs { get; }
+    public ObservableCollection<CadWallRowViewModel> Walls { get; }
+    public ObservableCollection<CadLayerRowViewModel> WallLayers { get; }
+    public ObservableCollection<CadWallTypeOption> WallTypes { get; }
     public ObservableCollection<string> BeamWidthParameters { get; } = new();
     public ObservableCollection<string> BeamHeightParameters { get; } = new();
     public ObservableCollection<string> WidthParameters { get; } = new();
@@ -116,6 +133,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
 
     public CadBeamPreviewData? BeamData { get; private set; }
     public CadSlabPreviewData? SlabData { get; private set; }
+    public CadWallPreviewData? WallData { get; private set; }
 
     [ObservableProperty]
     private int _activeTabIndex;
@@ -202,6 +220,45 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private CadColumnLevelOption? _selectedSlabLevel;
 
     [ObservableProperty]
+    private CadWallTypeOption? _selectedWallType;
+
+    [ObservableProperty]
+    private CadColumnLevelOption? _selectedWallBaseLevel;
+
+    [ObservableProperty]
+    private CadColumnLevelOption? _selectedWallTopLevel;
+
+    // What the user says a wall can be. Both are typed before the scan, because they decide what
+    // is picked up at all: a drawing carries beams drawn exactly like walls.
+    [ObservableProperty]
+    private string _minimumWallThicknessText = "100";
+
+    [ObservableProperty]
+    private string _maximumWallThicknessText = "400";
+
+    [ObservableProperty]
+    private string _minimumWallLengthText = "300";
+
+    [ObservableProperty]
+    private string _wallLengthRatioText = "3";
+
+    [ObservableProperty]
+    private string _wallBaseOffsetText = "0";
+
+    /// <summary>
+    /// Whether the layers or the limits have changed since the walls were last read, so the
+    /// review no longer shows what the settings would give.
+    /// </summary>
+    [ObservableProperty]
+    private bool _wallAnalysisDirty;
+
+    [ObservableProperty]
+    private bool _showWallLabels = true;
+
+    [ObservableProperty]
+    private CadWallRowViewModel? _selectedWall;
+
+    [ObservableProperty]
     private string _vertexSnapText = "20";
 
     [ObservableProperty]
@@ -276,6 +333,11 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     public IReadOnlyList<CadBeamCandidate> SelectedBeams =>
         Beams.Where(beam => beam.IsIncluded && beam.IsValid)
             .Select(beam => beam.Candidate)
+            .ToArray();
+
+    public IReadOnlyList<CadWallCandidate> SelectedWalls =>
+        Walls.Where(wall => wall.IsIncluded)
+            .Select(wall => wall.ToCandidate())
             .ToArray();
 
     public bool HasCadData => !string.IsNullOrWhiteSpace(Data.Package.SelectionId);
@@ -550,6 +612,110 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         _suppressItemNotifications = false;
         NotifyState();
         RenderRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private CadWallAnalysisOptions WallOptions() => new(
+        MinimumThicknessMm: ParseNumber(MinimumWallThicknessText),
+        MaximumThicknessMm: ParseNumber(MaximumWallThicknessText),
+        MinimumLengthMm: ParseNumber(MinimumWallLengthText),
+        MinimumLengthRatio: ParseNumber(WallLengthRatioText))
+    {
+        WallLayers = WallLayers.Where(layer => layer.IsWall)
+            .Select(layer => layer.Layer)
+            .ToArray()
+    };
+
+    public bool WallSettingsValid =>
+        TryNumber(MinimumWallThicknessText, out var minimum)
+        && TryNumber(MaximumWallThicknessText, out var maximum)
+        && TryNumber(MinimumWallLengthText, out _)
+        && TryNumber(WallLengthRatioText, out var ratio)
+        && TryNumber(WallBaseOffsetText, out _)
+        && minimum > 0
+        && maximum >= minimum
+        && ratio >= 1;
+
+    public bool WallCreateSettingsValid =>
+        SelectedWallType is not null
+        && SelectedWallBaseLevel is not null
+        && SelectedWallTopLevel is not null
+        && SelectedWallTopLevel.Level.Id != SelectedWallBaseLevel.Level.Id
+        && SelectedWallTopLevel.Elevation > SelectedWallBaseLevel.Elevation
+        && WallSettingsValid
+        && RotationValid;
+
+    public double WallBaseOffsetMm => ParseNumber(WallBaseOffsetText);
+
+    public string WallWarningLabel =>
+        WallData is null || WallData.Analysis.Warnings.Count == 0
+            ? string.Empty
+            : "  |  " + string.Join("  |  ", WallData.Analysis.Warnings);
+
+    [RelayCommand(CanExecute = nameof(CanSelectWallLines))]
+    private void SelectWallLines()
+    {
+        var replacement = _selectWall?.Invoke(GridPackageForBeam(), WallOptions());
+        if (replacement is null) return;
+        SetWallData(replacement);
+    }
+
+    private bool CanSelectWallLines() => HasCadData && WallSettingsValid;
+
+    [RelayCommand(CanExecute = nameof(CanApplyWallAnalysis))]
+    private void ApplyWallAnalysis()
+    {
+        if (WallData is null) return;
+        var analysis = CadWallAnalyzer.Analyze(WallData.Package, WallOptions());
+        if (analysis.Error is not null) return;
+        SetWallData(WallData with { Analysis = analysis }, keepLayers: true);
+    }
+
+    private bool CanApplyWallAnalysis() => WallData is not null && WallSettingsValid;
+
+    [RelayCommand]
+    private void SelectAllWalls()
+    {
+        foreach (var wall in Walls) wall.IsIncluded = true;
+    }
+
+    [RelayCommand]
+    private void ClearWallSelection()
+    {
+        foreach (var wall in Walls) wall.IsIncluded = false;
+    }
+
+    private void SetWallData(CadWallPreviewData replacement, bool keepLayers = false)
+    {
+        foreach (var row in Walls) row.PropertyChanged -= OnItemChanged;
+        Walls.Clear();
+        WallData = replacement;
+        WallAnalysisDirty = false;
+
+        // A fresh scan brings its own layers; re-analysing the same scan keeps the ticks the user
+        // has already made, or every Apply would undo their choice.
+        if (!keepLayers)
+        {
+            foreach (var row in WallLayers) row.PropertyChanged -= OnItemChanged;
+            WallLayers.Clear();
+            foreach (var tally in replacement.Analysis.Layers)
+            {
+                var row = new CadLayerRowViewModel(tally);
+                row.PropertyChanged += OnItemChanged;
+                WallLayers.Add(row);
+            }
+        }
+
+        foreach (var wall in replacement.Analysis.Walls)
+        {
+            var row = new CadWallRowViewModel(wall);
+            row.PropertyChanged += OnItemChanged;
+            Walls.Add(row);
+        }
+
+        Zoom = 1.0;
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+        ReselectCompleted?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetSlabData(CadSlabPreviewData replacement)

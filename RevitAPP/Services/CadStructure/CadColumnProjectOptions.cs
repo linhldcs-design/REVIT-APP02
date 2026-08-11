@@ -38,6 +38,9 @@ internal sealed record CadColumnProjectOptions(
 
     public IReadOnlyList<CadSlabTypeOption> SlabTypes { get; init; } =
         Array.Empty<CadSlabTypeOption>();
+
+    public IReadOnlyList<CadWallTypeOption> WallTypes { get; init; } =
+        Array.Empty<CadWallTypeOption>();
 }
 
 internal static class CadColumnProjectOptionsReader
@@ -128,10 +131,23 @@ internal static class CadColumnProjectOptionsReader
             .OrderBy(option => option.Name)
             .ToArray();
 
+        // A wall type is only usable as a seed when its layers say which one carries the
+        // structure, since that is the layer a measured thickness applies to. Curtain and
+        // stacked walls have no such layer and cannot be built to a thickness.
+        var wallTypes = new FilteredElementCollector(document)
+            .OfClass(typeof(WallType))
+            .Cast<WallType>()
+            .Where(type => type.Kind == WallKind.Basic)
+            .Where(type => type.GetCompoundStructure() is not null)
+            .Select(type => new CadWallTypeOption(type))
+            .OrderBy(option => option.Name)
+            .ToArray();
+
         return new CadColumnProjectOptions(families, levels)
         {
             BeamFamilies = beamFamilies,
-            SlabTypes = slabTypes
+            SlabTypes = slabTypes,
+            WallTypes = wallTypes
         };
     }
 }

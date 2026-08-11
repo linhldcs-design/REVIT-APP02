@@ -52,6 +52,14 @@ internal static class AutoCadModelSelectionService
         SelectInternal(gridPackage, includeHatch: true);
 
     /// <summary>
+    /// Picks the lines and rectangles that draw walls. Which of them are walls rather than beams
+    /// is settled afterwards, by the layers the user ticks: the two are drawn identically.
+    /// </summary>
+    public static AutoCadModelSelectionResult SelectWall(CadStructureTransferPackage gridPackage) =>
+        SelectInternal(gridPackage, promptOverride:
+            "\nQuét chọn vùng có tường rồi nhấn Enter...\n");
+
+    /// <summary>
     /// Picks a point inside each bay that stays open, the way the HATCH command picks an area.
     /// Nothing is selected and the drawing is not touched; the points only say which bays to leave
     /// out of the pour.
