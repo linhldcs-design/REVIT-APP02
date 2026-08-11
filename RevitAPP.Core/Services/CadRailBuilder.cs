@@ -30,6 +30,14 @@ public sealed record CadRail(
     IReadOnlyList<int> SourceIds,
     IReadOnlyList<CadRailSource> Sources)
 {
+    /// <summary>
+    /// The layer this boundary was drawn on. Two boundaries only describe one element when they
+    /// were drawn together, and the layer is what says so: a wall face and a beam face can run
+    /// parallel at exactly a wall's thickness and mean nothing to each other.
+    /// </summary>
+    public string Layer { get; init; } = string.Empty;
+
+
     public double Start => Intervals.Min(interval => interval.Start);
     public double End => Intervals.Max(interval => interval.End);
     public double CoveredLength => Intervals.Sum(interval => interval.End - interval.Start);
@@ -81,7 +89,10 @@ public static class CadRailBuilder
         // pieces of one drawn boundary must stay together even when their offsets fall either
         // side of a cell edge, which would otherwise split a beam over a millimetre of drift.
         var groups = pieces
-            .GroupBy(piece => (int)Math.Round(Angle(piece.Direction) / AngleBucketDegrees))
+            // Boundaries on different layers never belong to the same element, so a layer is
+            // part of what makes a rail rather than something checked afterwards.
+            .GroupBy(piece => (Layer: piece.Segment.Layer ?? string.Empty,
+                Angle: (int)Math.Round(Angle(piece.Direction) / AngleBucketDegrees)))
             .SelectMany(family =>
             {
                 var clusters = new List<List<(CadStructureSegment Segment,
@@ -122,7 +133,10 @@ public static class CadRailBuilder
             }).ToArray();
 
             return new CadRail(index + 1, direction, normal, offset, intervals,
-                group.Select(piece => piece.Segment.Id).Distinct().ToArray(), sources);
+                group.Select(piece => piece.Segment.Id).Distinct().ToArray(), sources)
+            {
+                Layer = group[0].Segment.Layer ?? string.Empty
+            };
         }).ToArray();
     }
 
