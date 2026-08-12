@@ -13,7 +13,7 @@
 | 01 — Phân tích | **Xong** — fix bridge cửa đạt 542/542 toàn bộ; 80 Wall/Rail/Beam |
 | 02 — Dựng trong Revit | **Xong**, chưa có test tích hợp |
 | 03 — Giao diện | **Xong về code** — tab Wall, review 2D/3D và command đã nối |
-| 04 — Kiểm chứng, phát hành | **Đang phát hành v1.12.0** — test/build final đã qua; người dùng yêu cầu phát hành trước khi smoke Wall riêng hoàn tất |
+| 04 — Kiểm chứng, phát hành | **Đã phát hành v1.12.0** — workflow, 8 asset và `latest.json` đều đạt; smoke Wall riêng còn là việc sau phát hành |
 
 Commit nền gần nhất: `268338f`; fix analyzer cuối đang ở working tree. Test 542/542 pass.
 `Debug.R25` và `Release.R22`–`Release.R27` build final đều exit 0 với deploy tắt.
@@ -73,9 +73,7 @@ bề dày, trạng thái chọn và dòng đang chọn được giữ qua lần 
 
 ## Việc còn lại
 
-1. Theo dõi GitHub Actions cho `v1.12.0` tới khi đủ sáu build, installer và release.
-2. Kiểm tra đủ tám asset và `latest.json` HTTP 200.
-3. Sau phát hành, tiếp tục smoke tab Wall trên bản vẽ thật, gồm contract bridge cửa và
+1. Sau phát hành, tiếp tục smoke tab Wall trên bản vẽ thật, gồm contract bridge cửa và
    các guard âm ở `phase-04-verify.md`.
 
 Kết quả kiểm chứng hiện tại: `542/542` test pass; 80 test Wall/Rail/Beam pass. Các guard
