@@ -339,6 +339,14 @@ release hand-off remain pending in Phase 03-06; the feature is not released.
 
 ## 14. Model From CAD (v1.8.0)
 
+The Wall tab implementation is code-complete. Door openings consolidate to one wall only when both longitudinal
+bridge lines continue the two wall faces on the exact user-selected wall layer; transverse jamb/end-cap geometry
+never implies a bridge. Both rails must overlap, and closed-rectangle segments consolidate only through those
+bridges. Offset-drift clustering and bridge-duplicate cleanup preserve the staggered-face regression. The current
+verification baseline is **542/542** passing `RevitAPP.Tests` (**80** Wall/Rail/Beam tests). Final no-deploy builds
+for `Debug.R25` and `Release.R22` through `Release.R27` all exit successfully; artifacts span 11:58:54–12:01:40.
+Debug R25 deployment and user runtime validation remain pending while Revit PID 17284 is open.
+
 `ModelFromCadCommand` opens one modal options window before any AutoCAD selection begins. The user chooses
 `Create Grid` or `Create Column`, then starts acquisition with the `Select From CAD` button inside that tab.
 Both tabs write the selection result to the same in-window Data state, so the user can switch tabs and review the

@@ -126,6 +126,304 @@ public sealed class CadWallAnalyzerTests
     }
 
     [Fact]
+    public void Analyze_AWallBrokenAtADoor_WithTwoBridgeLines_StaysContinuous()
+    {
+        // A door interrupts both wall faces by more than GapJoinTolerance. Carrying both faces
+        // through the opening says this is one wall, not two unrelated collinear walls.
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 0, 3000, 0, 6000),
+            Segment(3, 200, 0, 200, 2000),
+            Segment(4, 200, 3000, 200, 6000),
+            Segment(5, 0, 2000, 0, 3000),
+            Segment(6, 200, 2000, 200, 3000)
+        });
+
+        var wall = Assert.Single(result.Walls);
+        Assert.Equal(200.0, wall.ThicknessMm, 1);
+        Assert.Equal(6000.0, wall.LengthMm, 1);
+        Assert.Equal(100.0, wall.StartMm.X, 1);
+        Assert.Equal(100.0, wall.EndMm.X, 1);
+    }
+
+    [Fact]
+    public void Analyze_DoorBridgeLinesSplitIntoPieces_StillBridgeTheWall()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 0, 3000, 0, 6000),
+            Segment(3, 200, 0, 200, 2000),
+            Segment(4, 200, 3000, 200, 6000),
+            Segment(5, 0, 2000, 0, 2500),
+            Segment(6, 0, 2500, 0, 3000),
+            Segment(7, 200, 2000, 200, 2500),
+            Segment(8, 200, 2500, 200, 3000)
+        });
+
+        var wall = Assert.Single(result.Walls);
+        Assert.Equal(6000.0, wall.LengthMm, 1);
+    }
+
+    [Fact]
+    public void Analyze_CappedWallPiecesAroundADoor_AreConsolidatedIntoOneWall()
+    {
+        // This is the shape seen in real plans: each solid piece is closed by an end cap or a
+        // door jamb. Closed-rectangle recognition must not leave the two pieces as separate walls.
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 0, 3000, 0, 6000),
+            Segment(3, 200, 0, 200, 2000),
+            Segment(4, 200, 3000, 200, 6000),
+            Segment(5, 0, 2000, 200, 2000),
+            Segment(6, 0, 3000, 200, 3000),
+            Segment(7, 0, 0, 200, 0),
+            Segment(8, 0, 6000, 200, 6000),
+            Segment(9, 0, 2000, 0, 3000),
+            Segment(10, 200, 2000, 200, 3000)
+        });
+
+        var wall = Assert.Single(result.Walls);
+        Assert.Equal(6000.0, wall.LengthMm, 1);
+        Assert.Equal(200.0, wall.ThicknessMm, 1);
+    }
+
+    [Fact]
+    public void Analyze_UnselectedDoorBridgeLayer_DoesNotAlterTheSelectedWallLayer()
+    {
+        // Only layers the user ticked may affect wall geometry. Otherwise dimensions, grids or
+        // door details can silently join two real walls across a large empty space.
+        const string bridgeLayer = "A-DOOR-BRIDGE";
+        var result = Analyze(new CadStructureSegment[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 0, 3000, 0, 6000),
+            Segment(3, 200, 0, 200, 2000),
+            Segment(4, 200, 3000, 200, 6000),
+            new(5, new CadStructurePoint2(0, 2000), new CadStructurePoint2(0, 3000),
+                bridgeLayer, string.Empty),
+            new(6, new CadStructurePoint2(200, 2000), new CadStructurePoint2(200, 3000),
+                bridgeLayer, string.Empty)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+        Assert.DoesNotContain(result.Walls, wall => Math.Abs(wall.LengthMm - 6000.0) < 1.0);
+    }
+
+    [Fact]
+    public void Analyze_AWallGapWithOnlyOneBridgeLine_IsNotBridged()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 0, 3000, 0, 6000),
+            Segment(3, 200, 0, 200, 2000),
+            Segment(4, 200, 3000, 200, 6000),
+            Segment(5, 0, 2000, 0, 3000)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+        Assert.DoesNotContain(result.Walls, wall => Math.Abs(wall.LengthMm - 6000.0) < 1.0);
+    }
+
+    [Fact]
+    public void Analyze_BridgeLinesOnAnotherSelectedLayer_DoNotBridgeTheWallLayer()
+    {
+        const string doorLayer = "A-DOOR";
+        var result = CadWallAnalyzer.Analyze(
+            Package(new CadStructureSegment[]
+            {
+                Segment(1, 0, 0, 0, 2000),
+                Segment(2, 0, 3000, 0, 6000),
+                Segment(3, 200, 0, 200, 2000),
+                Segment(4, 200, 3000, 200, 6000),
+                new(5, new CadStructurePoint2(0, 2000), new CadStructurePoint2(0, 3000),
+                    doorLayer, string.Empty),
+                new(6, new CadStructurePoint2(200, 2000), new CadStructurePoint2(200, 3000),
+                    doorLayer, string.Empty)
+            }),
+            new CadWallAnalysisOptions { WallLayers = new[] { WallLayer, doorLayer } });
+
+        // The selected door layer may produce its own candidate, but it must not extend A-WALL.
+        Assert.Equal(3, result.Walls.Count);
+        Assert.DoesNotContain(result.Walls, wall => Math.Abs(wall.LengthMm - 6000.0) < 1.0);
+    }
+
+    [Fact]
+    public void Analyze_AnUnopposedBoundaryFragment_DoesNotCreateAPhantomWall()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 2000, 0),
+            Segment(2, 0, 200, 2000, 200),
+            Segment(3, 3000, 200, 6000, 200)
+        });
+
+        var wall = Assert.Single(result.Walls);
+        Assert.Equal(2000.0, wall.LengthMm, 1);
+    }
+
+    [Fact]
+    public void Analyze_StaggeredFaceGaps_StillReconstructOneWall()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 1600, 0),
+            Segment(2, 2000, 0, 4000, 0),
+            Segment(3, 0, 200, 2000, 200),
+            Segment(4, 2400, 200, 4000, 200)
+        });
+
+        var wall = Assert.Single(result.Walls);
+        Assert.Equal(4000.0, wall.LengthMm, 1);
+    }
+
+    [Fact]
+    public void Analyze_UnselectedGridLinesAtGapEnds_DoNotBridgeSeparateWalls()
+    {
+        const string gridLayer = "S-GRID";
+        var result = Analyze(new CadStructureSegment[]
+        {
+            Segment(1, 0, 0, 2000, 0),
+            Segment(2, 0, 200, 2000, 200),
+            Segment(3, 5000, 0, 7000, 0),
+            Segment(4, 5000, 200, 7000, 200),
+            new(5, new CadStructurePoint2(2000, -1000), new CadStructurePoint2(2000, 1000),
+                gridLayer, string.Empty),
+            new(6, new CadStructurePoint2(5000, -1000), new CadStructurePoint2(5000, 1000),
+                gridLayer, string.Empty)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+        Assert.DoesNotContain(result.Walls, wall => Math.Abs(wall.LengthMm - 7000.0) < 1.0);
+    }
+
+    [Fact]
+    public void Analyze_LongCrossingWallLinesAtGapEnds_AreNotMistakenForDoorJambs()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 2000, 0),
+            Segment(2, 0, 200, 2000, 200),
+            Segment(3, 5000, 0, 7000, 0),
+            Segment(4, 5000, 200, 7000, 200),
+            Segment(5, 2000, -1000, 2000, 1000),
+            Segment(6, 5000, -1000, 5000, 1000)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+        Assert.DoesNotContain(result.Walls, wall => Math.Abs(wall.LengthMm - 7000.0) < 1.0);
+    }
+
+    [Fact]
+    public void Analyze_NearlyParallelButNonCollinearWalls_AreNotStraightenedTogether()
+    {
+        const double angle = 4.0 * Math.PI / 180.0;
+        var direction = new CadStructurePoint2(Math.Cos(angle), Math.Sin(angle));
+        var normal = new CadStructurePoint2(-direction.Y, direction.X);
+        var secondStart = new CadStructurePoint2(3000, 30);
+        var secondEnd = secondStart + direction * 2000;
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 2000, 0),
+            Segment(2, 0, 200, 2000, 200),
+            new CadStructureSegment(3, secondStart - normal * 100, secondEnd - normal * 100,
+                WallLayer, string.Empty),
+            new CadStructureSegment(4, secondStart + normal * 100, secondEnd + normal * 100,
+                WallLayer, string.Empty),
+            Segment(5, 2000, 0, 3000, 0),
+            Segment(6, 2000, 200, 3000, 200)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+    }
+
+    [Fact]
+    public void Analyze_DoorNearWallEnd_PreservesShortNibWhenJambsProveContinuation()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 200),
+            Segment(2, 0, 1200, 0, 6000),
+            Segment(3, 200, 0, 200, 200),
+            Segment(4, 200, 1200, 200, 6000),
+            Segment(5, 0, 200, 0, 1200),
+            Segment(6, 200, 200, 200, 1200)
+        });
+
+        var wall = Assert.Single(result.Walls);
+        Assert.Equal(6000.0, wall.LengthMm, 1);
+    }
+
+    [Fact]
+    public void Analyze_SeparateCappedWalls_DoNotMergeWithoutLongitudinalBridgeLines()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 200, 0, 200, 2000),
+            Segment(3, 0, 0, 200, 0),
+            Segment(4, 0, 2000, 200, 2000),
+            Segment(5, 0, 12000, 0, 14000),
+            Segment(6, 200, 12000, 200, 14000),
+            Segment(7, 0, 12000, 200, 12000),
+            Segment(8, 0, 14000, 200, 14000)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+    }
+
+    [Fact]
+    public void Analyze_CappedWallsInsideRailGapTolerance_StillNeedBridgeLines()
+    {
+        var result = Analyze(new[]
+        {
+            Segment(1, 0, 0, 0, 2000),
+            Segment(2, 200, 0, 200, 2000),
+            Segment(3, 0, 0, 200, 0),
+            Segment(4, 0, 2000, 200, 2000),
+            Segment(5, 0, 2200, 0, 4000),
+            Segment(6, 200, 2200, 200, 4000),
+            Segment(7, 0, 2200, 200, 2200),
+            Segment(8, 0, 4000, 200, 4000)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+    }
+
+    [Fact]
+    public void Analyze_DoorContinuationWithOffsetDrift_MergesBeforeADistantExactOffsetWall()
+    {
+        CadStructureSegment PathSegment(
+            int id, double x1, double y1, double x2, double y2, string path) =>
+            new(id, new CadStructurePoint2(x1, y1), new CadStructurePoint2(x2, y2),
+                WallLayer, path);
+
+        var result = Analyze(new[]
+        {
+            PathSegment(1, 0, 0, 2000, 0, "A"),
+            PathSegment(2, 2000, 0, 2000, 200, "A"),
+            PathSegment(3, 2000, 200, 0, 200, "A"),
+            PathSegment(4, 0, 200, 0, 0, "A"),
+            PathSegment(5, 3000, 5, 6000, 5, "C"),
+            PathSegment(6, 6000, 5, 6000, 205, "C"),
+            PathSegment(7, 6000, 205, 3000, 205, "C"),
+            PathSegment(8, 3000, 205, 3000, 5, "C"),
+            PathSegment(9, 10000, 0, 12000, 0, "B"),
+            PathSegment(10, 12000, 0, 12000, 200, "B"),
+            PathSegment(11, 12000, 200, 10000, 200, "B"),
+            PathSegment(12, 10000, 200, 10000, 0, "B"),
+            Segment(13, 2000, 0, 3000, 5),
+            Segment(14, 2000, 200, 3000, 205)
+        });
+
+        Assert.Equal(2, result.Walls.Count);
+        Assert.Contains(result.Walls, wall => Math.Abs(wall.LengthMm - 6000.0) < 20.0);
+    }
+
+    [Fact]
     public void Analyze_LayersTheUserDidNotPick_AreLeftAlone()
     {
         // A beam is drawn exactly like a wall, so only the layer tells them apart.

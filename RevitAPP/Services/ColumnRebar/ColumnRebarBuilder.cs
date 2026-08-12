@@ -32,6 +32,20 @@ public sealed class ColumnRebarBuilder
     private bool _addPartition;
     private string _currentPartition = "";
 
+    /// <summary>
+    ///     Exposes the same stack inputs as a pure, explicit centreline plan for the 2D/3D review. Creating this
+    ///     plan does not touch the document or create temporary Revit elements.
+    /// </summary>
+    public static ColumnRebarGeometryPlan CreateGeometryPlan(IReadOnlyList<ColumnStackItem> stack,
+        IReadOnlyList<StoreyRebarPlan> plans, RebarLapOptions lap, FoundationStarterOptions? starter = null,
+        StirrupSpreadOptions? spread = null, ColumnEndOptions? ends = null,
+        SectionTransitionOptions? transition = null)
+    {
+        var pureStack = stack.Select(item => new ColumnRebarStackContext(item.Storey,
+            ToMm(item.CenterXFeet), ToMm(item.CenterYFeet), item.RotationRad)).ToArray();
+        return ColumnRebarGeometryFactory.Create(pureStack, plans, lap, starter, spread, ends, transition);
+    }
+
     public RebarBuildResult Build(Document document, IReadOnlyList<ColumnStackItem> stack,
         IReadOnlyList<StoreyRebarPlan> plans, RebarLapOptions lap, FoundationStarterOptions? starter = null,
         StirrupSpreadOptions? spread = null, ColumnEndOptions? ends = null, bool addPartition = false,
@@ -40,6 +54,7 @@ public sealed class ColumnRebarBuilder
         spread ??= new StirrupSpreadOptions();
         ends ??= new ColumnEndOptions();
         transition ??= new SectionTransitionOptions();
+        var geometry = CreateGeometryPlan(stack, plans, lap, starter, spread, ends, transition);
         _addPartition = addPartition;
         var hook135 = FindHook135(document);
         if (hook135 == null)
@@ -70,29 +85,20 @@ public sealed class ColumnRebarBuilder
             // Partition = Mark của cột (nhóm thép theo cột trong schedule/browser); fallback tên tầng.
             var columnMark = host.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)?.AsString();
             _currentPartition = string.IsNullOrWhiteSpace(columnMark) ? plan.Storey.LevelName : columnMark!;
-            stirrupSetCount += BuildStirrups(document, host, item, plan, stirrupType, hook135, lap.CoverMm, spread);
+            var storeyPaths = geometry.Paths.Where(p => p.StoreyIndex == plan.Storey.Index).ToArray();
+            stirrupSetCount += BuildStirrupsFromGeometry(document, host, plan, stirrupType, hook135,
+                storeyPaths, spread);
 
-            // Phát hiện bóp cột: so sánh tiết diện tầng này với tầng trên; prevPlan để neo xuống qua đáy dầm
-            var nextPlan = i < plans.Count - 1 ? plans[i + 1] : null;
-            var nextItem = i < plans.Count - 1 ? stack[i + 1] : null;
-            var prevPlan = i > 0 ? plans[i - 1] : null;
-            var prevItem = i > 0 ? stack[i - 1] : null;
-            // Tầng 1 có thép chờ móng (so le) → chân thép chủ tầng 1 cũng so le để khớp mối nối.
-            var hasStarter = i == 0 && starter is { Enabled: true };
-            var staggerBottom = hasStarter && lap.StaggerLap;
-            // Có thép chờ → thép chủ tầng 1 BẮT ĐẦU tại mối nối cách sàn LapDistanceFromBottomMm (50mm),
-            // gối lên đoạn lap thẳng của thép chờ. null = chân tại đáy tầng như cũ.
-            double? bottomStartMm = hasStarter ? plan.Storey.BaseElevationMm + lap.LapDistanceFromBottomMm : null;
-            mainBarCount += BuildMainBars(document, host, item, plan, nextPlan, nextItem, prevPlan, prevItem,
-                mainType, lap, ends, transition, isBottomStorey: i == 0, isTopStorey: i == plans.Count - 1,
-                staggerBottom: staggerBottom, bottomStartMm: bottomStartMm);
+            // Geometry plan đã bao gồm bóp cột, nối tầng và móc. Khi bật thép móng, thanh chữ L và thép
+            // dọc tầng đầu là cùng một FoundationStarter liên tục; không tạo MainBar riêng tại chân cột.
+            var distType = plan.DistributionBar != null
+                ? document.GetElement(ElementIdHelper.Create(plan.DistributionBar.BarTypeId)) as RebarBarType
+                : null;
+            mainBarCount += BuildMainBarsFromGeometry(document, host, item, plan, mainType, distType, storeyPaths);
 
             if (starter is { Enabled: true } && i == 0)
             {
-                var distType = plan.DistributionBar != null
-                    ? document.GetElement(ElementIdHelper.Create(plan.DistributionBar.BarTypeId)) as RebarBarType
-                    : null;
-                starterBarCount += BuildStarterBars(document, host, item, plan, mainType, distType, lap, starter, ends);
+                starterBarCount += BuildStarterBarsFromGeometry(document, host, plan, mainType, distType, storeyPaths);
             }
         }
 
@@ -165,6 +171,110 @@ public sealed class ColumnRebarBuilder
         if (_addPartition && _currentPartition.Length > 0)
             _created.Add((rebar.Id, _currentPartition));
     }
+
+    private int BuildStirrupsFromGeometry(Document document, FamilyInstance host, StoreyRebarPlan plan,
+        RebarBarType stirrupType, RebarHookType? hook, IReadOnlyList<ColumnRebarPath> paths,
+        StirrupSpreadOptions spread)
+    {
+        var crosstieHook = FindHook180(document) ?? hook;
+        var created = 0;
+        var groups = paths
+            .Where(p => p.Kind is ColumnRebarPathKind.Stirrup or ColumnRebarPathKind.Crosstie)
+            .GroupBy(p => $"{p.Kind}|{p.Zone}|{PlanShapeKey(p.Points)}");
+
+        foreach (var group in groups)
+        {
+            var stations = group.OrderBy(p => p.Points[0].Zmm).ToArray();
+            var first = stations[0];
+            var spacing = stations.Length > 1
+                ? stations[1].Points[0].Zmm - stations[0].Points[0].Zmm
+                : 0d;
+            var zone = new StirrupZone(0, Math.Max(1d, spacing * Math.Max(0, stations.Length - 1)),
+                spacing, stations.Length);
+            var curves = CurvesFromGeometry(first.Points);
+
+            if (first.Kind == ColumnRebarPathKind.Stirrup)
+            {
+                if (TryCreate(document, $"Äai {plan.Storey.LevelName}",
+                        () => CreateStirrup(document, host, curves, stirrupType, hook, zone))
+                    || TryCreate(document, $"Äai {plan.Storey.LevelName} (khÃ´ng mÃ³c)",
+                        () => CreateStirrup(document, host, curves, stirrupType, null, zone)))
+                    created++;
+                continue;
+            }
+
+            if (TryCreateQuiet(document, () => CreateTie(document, host, curves, RebarStyle.StirrupTie,
+                    stirrupType, crosstieHook, zone))
+                || TryCreateQuiet(document, () => CreateTie(document, host, curves, RebarStyle.StirrupTie,
+                    stirrupType, hook, zone))
+                || TryCreate(document, $"MÃ³c chÃ©o {plan.Storey.LevelName}",
+                    () => CreateTie(document, host, curves, RebarStyle.StirrupTie, stirrupType, null, zone)))
+                created++;
+        }
+
+        return created;
+    }
+
+    private int BuildMainBarsFromGeometry(Document document, FamilyInstance host, ColumnStackItem item,
+        StoreyRebarPlan plan, RebarBarType mainType, RebarBarType? distributionType,
+        IReadOnlyList<ColumnRebarPath> paths)
+    {
+        var placements = paths
+            .Where(p => p.Kind is ColumnRebarPathKind.MainBar or ColumnRebarPathKind.DistributionBar)
+            .Select(p =>
+            {
+                var primaryCurves = CurvesFromGeometry(p.Points);
+                var straightCurves = CurvesFromGeometry(p.FallbackPoints ?? p.Points);
+                var first = p.Points[0];
+                var anchor = WorldMmToLocal(item, first.Xmm, first.Ymm);
+                var type = p.UsesDistributionBarType ? distributionType ?? mainType : mainType;
+                return new MainBarPlacement(type, anchor, p.Points.Count > 2 ? primaryCurves : null, straightCurves);
+            })
+            .ToArray();
+
+        return CreateGroupedMainBars(document, host, item, plan.Storey.LevelName, placements);
+    }
+
+    private int BuildStarterBarsFromGeometry(Document document, FamilyInstance host, StoreyRebarPlan plan,
+        RebarBarType mainType, RebarBarType? distributionType, IReadOnlyList<ColumnRebarPath> paths)
+    {
+        var created = 0;
+        foreach (var path in paths.Where(p => p.Kind == ColumnRebarPathKind.FoundationStarter))
+        {
+            var type = path.UsesDistributionBarType ? distributionType ?? mainType : mainType;
+            var curves = CurvesFromGeometry(path.Points);
+            var fallback = CurvesFromGeometry(path.FallbackPoints ?? path.Points);
+            if (TryCreateQuiet(document, () => CreateTie(document, host, curves, RebarStyle.Standard, type, null, null))
+                || TryCreate(document, $"ThÃ©p chá» {plan.Storey.LevelName}",
+                    () => CreateTie(document, host, fallback, RebarStyle.Standard, type, null, null)))
+                created++;
+        }
+
+        return created;
+    }
+
+    private static List<Curve> CurvesFromGeometry(IReadOnlyList<GeometryPoint3D> points)
+    {
+        var curves = new List<Curve>(Math.Max(0, points.Count - 1));
+        for (var i = 1; i < points.Count; i++)
+            curves.Add(Line.CreateBound(ToXyz(points[i - 1]), ToXyz(points[i])));
+        return curves;
+    }
+
+    private static XYZ ToXyz(GeometryPoint3D point) =>
+        new(ToFeet(point.Xmm), ToFeet(point.Ymm), ToFeet(point.Zmm));
+
+    private static Point2D WorldMmToLocal(ColumnStackItem item, double xMm, double yMm)
+    {
+        var dx = xMm - ToMm(item.CenterXFeet);
+        var dy = yMm - ToMm(item.CenterYFeet);
+        var cos = Math.Cos(item.RotationRad);
+        var sin = Math.Sin(item.RotationRad);
+        return new Point2D(dx * cos + dy * sin, -dx * sin + dy * cos);
+    }
+
+    private static string PlanShapeKey(IReadOnlyList<GeometryPoint3D> points) => string.Join(";",
+        points.Select(p => $"{Round(p.Xmm)},{Round(p.Ymm)}"));
 
     private int BuildStirrups(Document document, FamilyInstance host, ColumnStackItem item,
         StoreyRebarPlan plan, RebarBarType stirrupType, RebarHookType? hook, double coverMm, StirrupSpreadOptions spread)

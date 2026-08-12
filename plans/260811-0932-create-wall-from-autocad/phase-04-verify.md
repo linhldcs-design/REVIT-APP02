@@ -1,7 +1,7 @@
 # Phase 04 — Kiểm chứng và phát hành
 
 **Ưu tiên:** cao — chạy suốt, không để cuối
-**Trạng thái:** chưa bắt đầu
+**Trạng thái:** đang thực hiện — 542/542 test (80 Wall/Rail/Beam) và build final Debug.R25/Release.R22–R27 đã qua với deploy tắt; còn deploy R25 và thử runtime
 
 ## Vì sao phase này quan trọng
 
@@ -27,6 +27,21 @@ Không phát hành trước rồi mới nhờ kiểm. Thứ tự là:
 4. **Deploy `Debug R25`** — chờ người dùng đóng Revit, không tự đóng
 5. **Người dùng thử trên bản vẽ thật** và xác nhận đạt
 6. Chỉ khi đó mới sang bước phát hành
+
+Checkpoint final: `RevitAPP.Tests` **542/542**, trong đó **80** test Wall/Rail/Beam.
+`Debug.R25` và `Release.R22`–`Release.R27` đều exit 0 với `DeployAddin=false`; artifact
+có timestamp từ 11:58:54 đến 12:01:40. Chưa deploy được Debug R25 vì Revit PID 17284
+đang mở; không tự đóng tiến trình này.
+
+Regression bắt buộc cho lỗi “line nối cửa chưa ăn”:
+
+- Cả hai bridge dọc cùng chính layer tường được chọn mới nối thành một tường.
+- Layer không chọn hoặc layer khác cũng được chọn không được bridge `A-WALL`.
+- Một bridge, jamb/end-cap ngang, boundary không đối diện và line gần song song nhưng
+  không đồng tuyến đều không được tạo kết quả nối giả.
+- Hai tường cap độc lập dày 200 mm, dài 10 m vẫn tách riêng.
+- Short nib sống đến final filter; rectangle chỉ consolidate qua đúng hai bridge dọc.
+- Offset-drift clustering và bridge duplicate cleanup không làm hỏng ca hai mặt tường so le.
 
 Lệnh deploy:
 

@@ -59,6 +59,7 @@ public partial class ModelFromCadWindow : Window
         AttachInteraction(ColumnPreviewScroll, ColumnPreviewCanvas);
         AttachInteraction(BeamPreviewScroll, BeamPreviewCanvas);
         AttachInteraction(SlabPreviewScroll, SlabPreviewCanvas);
+        AttachInteraction(WallPreviewScroll, WallPreviewCanvas);
         ColumnPreview3DHost.PreviewMouseWheel += On3DMouseWheel;
         ColumnPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
         ColumnPreview3DHost.MouseMove += On3DOrbitMove;
@@ -71,6 +72,10 @@ public partial class ModelFromCadWindow : Window
         SlabPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
         SlabPreview3DHost.MouseMove += On3DOrbitMove;
         SlabPreview3DHost.MouseLeftButtonUp += On3DOrbitEnd;
+        WallPreview3DHost.PreviewMouseWheel += On3DMouseWheel;
+        WallPreview3DHost.MouseLeftButtonDown += On3DOrbitStart;
+        WallPreview3DHost.MouseMove += On3DOrbitMove;
+        WallPreview3DHost.MouseLeftButtonUp += On3DOrbitEnd;
     }
 
     private void AttachInteraction(ScrollViewer viewer, Canvas canvas)
@@ -100,6 +105,13 @@ public partial class ModelFromCadWindow : Window
         {
             if (_viewModel.SlabPreviewModeIndex == 0) RenderSlabs();
             else RenderSlabs3D();
+            return;
+        }
+
+        if (_viewModel.SelectedMode == ModelFromCadMode.Wall)
+        {
+            if (_viewModel.WallPreviewModeIndex == 0) RenderWalls();
+            else RenderWalls3D();
             return;
         }
 
@@ -610,6 +622,199 @@ public partial class ModelFromCadWindow : Window
         e.Handled = true;
     }
 
+    private void RenderWalls()
+    {
+        WallPreviewCanvas.Children.Clear();
+        if (_viewModel.WallData is null) return;
+
+        var analysis = _viewModel.WallData.Analysis;
+        var wallScale = CadGridUnitConverter.MillimetresPerDrawingUnit(
+            _viewModel.WallData.Package.InsUnits);
+        var gridScale = CadGridUnitConverter.MillimetresPerDrawingUnit(
+            _viewModel.Data.Package.InsUnits);
+        var wallSegments = _viewModel.WallData.Package.Segments.Select(segment => segment with
+        {
+            Start = segment.Start * wallScale - analysis.OriginMm,
+            End = segment.End * wallScale - analysis.OriginMm
+        }).ToArray();
+        var gridSegments = _viewModel.Data.Package.Segments.Select(segment => segment with
+        {
+            Start = segment.Start * gridScale - analysis.OriginMm,
+            End = segment.End * gridScale - analysis.OriginMm
+        }).ToArray();
+        var points = wallSegments.SelectMany(segment => new[]
+            {
+                WallPoint(segment.Start), WallPoint(segment.End)
+            })
+            .Concat(_viewModel.ShowWallGridOverlay
+                ? gridSegments.SelectMany(segment => new[]
+                {
+                    WallPoint(segment.Start), WallPoint(segment.End)
+                })
+                : Array.Empty<CadStructurePoint2>())
+            .Concat(_viewModel.Walls.SelectMany(WallCorners))
+            .ToArray();
+        var viewport = Prepare(WallPreviewCanvas, BoundsOf(points));
+
+        if (_viewModel.ShowWallGridOverlay)
+        {
+            foreach (var segment in gridSegments)
+            {
+                var start = viewport.ToCanvas(WallPoint(segment.Start));
+                var end = viewport.ToCanvas(WallPoint(segment.End));
+                WallPreviewCanvas.Children.Add(new Line
+                {
+                    X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                    Stroke = Brush("Brush.TextSecondary"), StrokeThickness = 1,
+                    StrokeDashArray = new DoubleCollection { 6, 4 }, Opacity = 0.35
+                });
+            }
+        }
+
+        var selectedSourceIds = _viewModel.SelectedWall?.Source.SourceSegmentIds.ToHashSet()
+                                ?? new HashSet<int>();
+        foreach (var segment in wallSegments)
+        {
+            var start = viewport.ToCanvas(WallPoint(segment.Start));
+            var end = viewport.ToCanvas(WallPoint(segment.End));
+            var highlighted = selectedSourceIds.Contains(segment.Id);
+            WallPreviewCanvas.Children.Add(new Line
+            {
+                X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                Stroke = highlighted ? Brush("Brush.Accent") : Brush("Brush.TextSecondary"),
+                StrokeThickness = highlighted ? 1.8 : 1,
+                Opacity = highlighted ? 0.75 : 0.25
+            });
+        }
+
+        foreach (var row in _viewModel.Walls)
+        {
+            var corners = WallCorners(row).ToArray();
+            if (corners.Length != 4) continue;
+            var polygon = new Polygon
+            {
+                Points = new PointCollection(corners.Select(viewport.ToCanvas)),
+                Fill = Brush("Brush.Accent"),
+                Stroke = Brush("Brush.Accent"),
+                StrokeThickness = ReferenceEquals(row, _viewModel.SelectedWall) ? 2.6 : 1.2,
+                Opacity = row.IsIncluded ? 0.55 : 0.16,
+                Cursor = Cursors.Hand,
+                Tag = row
+            };
+            polygon.MouseLeftButtonDown += OnWallClicked;
+            WallPreviewCanvas.Children.Add(polygon);
+
+            var start = viewport.ToCanvas(WallPoint(row.Source.StartMm));
+            var end = viewport.ToCanvas(WallPoint(row.Source.EndMm));
+            WallPreviewCanvas.Children.Add(new Line
+            {
+                X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                Stroke = Brush("Brush.Text"), StrokeThickness = 0.9,
+                StrokeDashArray = new DoubleCollection { 5, 3 },
+                Opacity = row.IsIncluded ? 0.72 : 0.24,
+                IsHitTestVisible = false
+            });
+
+            if (!_viewModel.ShowWallLabels) continue;
+            var label = new TextBlock
+            {
+                Text = $"W{row.Number}  {row.ThicknessMm:0} mm",
+                Foreground = Brush("Brush.Text"),
+                Background = Brush("Brush.Background"),
+                FontSize = 11,
+                Padding = new Thickness(3, 1, 3, 1),
+                Opacity = 0.92
+            };
+            Canvas.SetLeft(label, (start.X + end.X) / 2.0 + 5);
+            Canvas.SetTop(label, (start.Y + end.Y) / 2.0 - 18);
+            WallPreviewCanvas.Children.Add(label);
+        }
+    }
+
+    private void RenderWalls3D()
+    {
+        WallPreview3D.Children.Clear();
+        var rows = _viewModel.Walls.Where(row => row.IsValid).ToArray();
+        var points = rows.SelectMany(WallCorners).ToArray();
+        var bounds = BoundsOf(points);
+        var planSpan = Math.Max(Math.Max(bounds.MaxX - bounds.MinX, bounds.MaxY - bounds.MinY), 1000.0);
+        var heightMm = WallPreviewHeightMm();
+        var baseZ = _viewModel.WallBaseOffsetMm;
+        _cameraTarget = new Point3D((bounds.MinX + bounds.MaxX) / 2.0,
+            (bounds.MinY + bounds.MaxY) / 2.0, baseZ + heightMm / 2.0);
+        _cameraMinimumDistance = Math.Max(planSpan * 0.08, 100.0);
+        if (!_cameraInitialized)
+        {
+            _cameraDistance = Math.Max(planSpan, heightMm) * 1.8;
+            _cameraYaw = -0.93;
+            _cameraPitch = 0.48;
+            _cameraInitialized = true;
+        }
+        Update3DCamera();
+
+        var lights = new Model3DGroup();
+        lights.Children.Add(new AmbientLight(Colors.DimGray));
+        lights.Children.Add(new DirectionalLight(Colors.White, new Vector3D(-1, 1, -2)));
+        WallPreview3D.Children.Add(new ModelVisual3D { Content = lights });
+
+        var models = new Model3DGroup();
+        foreach (var row in rows)
+        {
+            var opacity = ReferenceEquals(row, _viewModel.SelectedWall)
+                ? 0.96
+                : row.IsIncluded ? 0.82 : 0.16;
+            models.Children.Add(BoxModel(WallCorners(row).ToArray(), heightMm,
+                ColorOf("Brush.Accent"), opacity, baseZ));
+        }
+        WallPreview3D.Children.Add(new ModelVisual3D { Content = models });
+    }
+
+    private IEnumerable<CadStructurePoint2> WallCorners(CadWallRowViewModel row)
+    {
+        if (!row.IsValid) yield break;
+        var start = WallPoint(row.Source.StartMm);
+        var end = WallPoint(row.Source.EndMm);
+        var vector = end - start;
+        var length = Math.Sqrt(vector.X * vector.X + vector.Y * vector.Y);
+        if (length < 1.0) yield break;
+        var half = row.ThicknessMm / 2.0;
+        var normal = new CadStructurePoint2(-vector.Y / length * half, vector.X / length * half);
+        yield return start + normal;
+        yield return end + normal;
+        yield return end - normal;
+        yield return start - normal;
+    }
+
+    private CadStructurePoint2 WallPoint(CadStructurePoint2 point)
+    {
+        var anchor = _viewModel.WallData?.Analysis.AnchorMm ?? default;
+        var radians = _viewModel.RotationDegrees * Math.PI / 180.0;
+        if (Math.Abs(radians) < 1e-12) return point;
+        var local = point - anchor;
+        var cosine = Math.Cos(radians);
+        var sine = Math.Sin(radians);
+        return anchor + new CadStructurePoint2(
+            local.X * cosine - local.Y * sine,
+            local.X * sine + local.Y * cosine);
+    }
+
+    private double WallPreviewHeightMm()
+    {
+        if (_viewModel.SelectedWallBaseLevel is null || _viewModel.SelectedWallTopLevel is null)
+            return 3000.0;
+        var height = (_viewModel.SelectedWallTopLevel.Elevation
+                      - _viewModel.SelectedWallBaseLevel.Elevation) * 304.8
+                     - _viewModel.WallBaseOffsetMm;
+        return Math.Max(height, 100.0);
+    }
+
+    private void OnWallClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Polygon { Tag: CadWallRowViewModel row }) return;
+        _viewModel.SelectedWall = row;
+        e.Handled = true;
+    }
+
     private void On3DMouseWheel(object sender, MouseWheelEventArgs e)
     {
         var factor = e.Delta > 0 ? 0.84 : 1.19;
@@ -669,6 +874,7 @@ public partial class ModelFromCadWindow : Window
         };
         if (_viewModel.SelectedMode == ModelFromCadMode.Beam) BeamPreview3D.Camera = camera;
         else if (_viewModel.SelectedMode == ModelFromCadMode.Slab) SlabPreview3D.Camera = camera;
+        else if (_viewModel.SelectedMode == ModelFromCadMode.Wall) WallPreview3D.Camera = camera;
         else ColumnPreview3D.Camera = camera;
     }
 

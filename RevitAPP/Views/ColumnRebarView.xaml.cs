@@ -9,6 +9,11 @@ public partial class ColumnRebarView : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        viewModel.PreviewFitRequested += (_, _) =>
+        {
+            ColumnReview2D.Fit();
+            ColumnReview3D.Fit();
+        };
         viewModel.CloseRequested += (_, confirmed) =>
         {
             DialogResult = confirmed;

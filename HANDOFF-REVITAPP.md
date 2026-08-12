@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.11.1`
+- Release đang phát hành: `v1.12.0` (release ổn định gần nhất: `v1.11.1`)
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -72,6 +72,7 @@
 - **Bài học `v1.11.0`:** một bộ lọc theo tên layer (`GRID`, `DIM`, `TEXT`) từng được thêm rồi phải `git revert` — trục lưới nằm trên `S-GRID` nên bước `Select Grid Axes` không đọc được gì. Tên layer không nói lên công dụng của line; hình học thì có.
 - **Bài học `v1.11.0`:** công thức cung tròn ban đầu được dò dấu bằng script rời, tám vòng không hội tụ. Viết `CadArcChordsTests` (30 ca: nửa tròn, 1/4, cung nông, cung lớn, cạnh xiên, cả hai chiều) trước rồi mới sửa — ba lần là xanh.
 - `v1.11.1`: `Create Slab` tự sinh Floor Type đúng chiều dày CAD ghi. Cơ chế nhân bản đã có từ `v1.10.0` nhưng tìm nhầm type: mọi Floor Type trong Revit đều có `FamilyName = "Floor"`, nên điều kiện `FamilyName == seed.FamilyName` khớp với bất kỳ type nào cùng chiều dày — chọn sàn bê tông có thể lấy nhầm sàn metal deck. Nay hai type là một khi cấu tạo giống nhau (cùng số lớp, chức năng lớp, vật liệu, thứ tự); chiều dày khác là thứ đang được thay đổi. Tên type sinh ra lấy theo type gốc thay vì family: `160mm Concrete With 50mm Metal Deck (210 mm)` sinh ra `Concrete With Metal Deck 120mm`, không còn `Floor 120`. Thêm `CadSlabTypeNaming` + 13 test (gồm ca sao chép hai lần không được thành `Concrete 150mm 200mm 250mm`). Kiểm thử 495/495; build R22–R27 thành công.
+- `v1.12.0`: thêm tab `Create Wall` trong `Model From CAD`, nhận tường từ hai biên/rectangle theo layer, review 2D/3D và dựng Wall theo Level/Wall Type; đồng thời nâng cấp `Vẽ Thép Cột` với review 2D/3D có level, hình học dùng chung với Revit, thép móng chạy liên tục và so le, nối thép theo nguyên tắc 2, chuyển tiết diện, móc/uốn, đai một khoảng cách duy nhất và giao diện responsive. Preset/license người dùng được giữ nguyên khi cập nhật.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.

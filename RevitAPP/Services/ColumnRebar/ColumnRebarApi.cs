@@ -174,7 +174,11 @@ public static class ColumnRebarApi
                 mainBar.DiameterMm, floor.BarsX, floor.BarsY, stirrup.DiameterMm,
                 floor.SpacingEndMm, floor.SpacingMidMm, floor.ConfineZoneLenMm,
                 Math.Round(item.AutoBeamDepthMm), floor.UseDistributionBar,
-                distributionBar?.DiameterMm ?? mainBar.DiameterMm, floor.StirrupSectionType);
+                distributionBar?.DiameterMm ?? mainBar.DiameterMm, floor.StirrupSectionType)
+            {
+                UniformStirrupSpacing = floor.UniformStirrupSpacing,
+                UniformSpacingMm = floor.UniformSpacingMm > 0 ? floor.UniformSpacingMm : 150
+            };
             plans.Add(new StoreyRebarPlan(item.Storey, floorConfig, mainBar, stirrup, distributionBar));
         }
 

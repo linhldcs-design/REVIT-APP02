@@ -10,14 +10,17 @@
 
 | Phase | Trạng thái |
 |---|---|
-| 01 — Phân tích | **Xong**, 30 test |
+| 01 — Phân tích | **Xong** — fix bridge cửa đạt 542/542 toàn bộ; 80 Wall/Rail/Beam |
 | 02 — Dựng trong Revit | **Xong**, chưa có test tích hợp |
-| 03 — Giao diện | **Chưa** — XAML chưa viết, tab chưa lên ribbon |
-| 04 — Kiểm chứng, phát hành | **Chưa** |
+| 03 — Giao diện | **Xong về code** — tab Wall, review 2D/3D và command đã nối |
+| 04 — Kiểm chứng, phát hành | **Đang phát hành v1.12.0** — test/build final đã qua; người dùng yêu cầu phát hành trước khi smoke Wall riêng hoàn tất |
 
-Commit gần nhất: `268338f`. Test 527/527 pass. Build R22–R27 sạch.
+Commit nền gần nhất: `268338f`; fix analyzer cuối đang ở working tree. Test 542/542 pass.
+`Debug.R25` và `Release.R22`–`Release.R27` build final đều exit 0 với deploy tắt.
 
-**Người dùng chưa thử được gì** — không có tab nên không có đường nào gọi tới code đã viết.
+Ngày 12/08/2026, người dùng đã ra lệnh phát hành `v1.12.0` sau khi kiểm tra thực tế các
+thay đổi Vẽ Thép Cột. Runtime smoke riêng cho tab Wall chưa được xác nhận đầy đủ; đây là
+rủi ro phát hành đã được chấp nhận bằng lệnh phát hành trực tiếp.
 
 ## Người dùng đã chốt
 
@@ -31,7 +34,7 @@ Commit gần nhất: `268338f`. Test 527/527 pass. Build R22–R27 sạch.
 | Bề dày min/max | Ô nhập **trước khi quét** |
 | Lọc layer | **Bắt buộc** — người dùng tick, add-in tick sẵn theo tên |
 | Ghép cặp | Hai line phải **cùng layer** mới thành tường |
-| Cửa đi/cửa sổ | Người dùng vẽ hai line nối qua, cùng layer — add-in không xử lý |
+| Cửa đi/cửa sổ | Chỉ nối khi cả hai bridge dọc tiếp tục đúng hai mặt tường trên chính layer tường người dùng chọn; không suy luận jamb/end-cap ngang |
 | Review | 2D/3D như tab Beam, sửa được bề dày |
 | Trước phát hành | Deploy R25 → người dùng kiểm → mới phát hành |
 
@@ -43,8 +46,10 @@ thực tế ở tab Beam. Rail mang theo `Layer`, và gom theo layer nên hai la
 16 test.
 
 **`RevitAPP.Core/Services/CadWallAnalyzer.cs`** — nhận tường từ hai line song song và
-rectangle hẹp; đo bề dày; kéo trục tới giao điểm ở góc. 14 test, gồm ca phòng bốn tường
-phải gặp nhau đủ bốn góc.
+rectangle hẹp; đo bề dày; kéo trục tới giao điểm ở góc. Fix cuối chỉ consolidate đoạn
+qua cửa khi cả hai bridge dọc tiếp tục hai mặt tường trên chính layer được chọn. Pairing
+đòi cả hai rail overlap; short nib được giữ đến final filter; rectangle không được nối
+bằng jamb/end-cap ngang.
 
 **`RevitAPP.Core/Models/CadStructure/CadWallModels.cs`** — `CadWallCandidate`,
 `CadWallAnalysisOptions`, `CadLayerTally`.
@@ -59,87 +64,32 @@ Wall Type theo cấu tạo lớp, bỏ tường trùng, `TransactionGroup` bọc
 **`ModelFromCadViewModel.cs`** — đã thêm: `ModelFromCadMode.Wall`, `WallData`, `Walls`,
 `WallLayers`, `WallTypes`, các `[ObservableProperty]` cho tùy chọn, và `SetWallData`.
 
+**Phase 03 UI** — tab thứ năm `Create Wall` đã có đủ quy trình Grid → quét Wall → chọn
+layer → Apply, bảng sửa bề dày, preview 2D/3D, chọn dòng/canvas, zoom/pan/orbit. Override
+bề dày, trạng thái chọn và dòng đang chọn được giữ qua lần Apply.
+
+**`ModelFromCadCommand.cs`** — đã truyền `selectWall`, nối preview, gọi
+`CadWallCreationService.Create` và hiển thị số tạo/trùng/lỗi.
+
 ## Việc còn lại
 
-### 1. Hoàn tất ViewModel
+1. Theo dõi GitHub Actions cho `v1.12.0` tới khi đủ sáu build, installer và release.
+2. Kiểm tra đủ tám asset và `latest.json` HTTP 200.
+3. Sau phát hành, tiếp tục smoke tab Wall trên bản vẽ thật, gồm contract bridge cửa và
+   các guard âm ở `phase-04-verify.md`.
 
-Đã có: `WallOptions()`, `WallSettingsValid`, `WallCreateSettingsValid`, `SelectedWalls`,
-`SetWallData`, và các command `SelectWallLines`, `ApplyWallAnalysis`, `SelectAllWalls`,
-`ClearWallSelection`.
+Kết quả kiểm chứng hiện tại: `542/542` test pass; 80 test Wall/Rail/Beam pass. Các guard
+âm xác nhận layer khác không bridge `A-WALL`, một bridge không đủ, boundary đơn không
+sinh tường ma, line gần song song không bị nắn thẳng và hai tường cap độc lập
+200 mm × 10 m vẫn tách. Offset-drift clustering và cleanup duplicate bridge vẫn giữ ca
+hai mặt tường so le. Build artifacts final có timestamp 11:58:54–12:01:40; chỉ DLL
+deploy/hash và runtime còn chờ.
 
-Còn thiếu:
-
-- `SummaryLabel` chưa có nhánh `ModelFromCadMode.Wall` — hiện rơi vào nhánh mặc định và
-  báo nhầm là dầm
-- `CreateCommand` / `CanCreate` chưa xử `ModelFromCadMode.Wall`
-- `NotifyState()` chưa báo các thuộc tính của Wall
-- Đổi tùy chọn hay tick layer chưa đặt `WallAnalysisDirty = true` — xem cách phần Slab
-  làm trong `OnItemChanged`
-
-### 2. XAML — `RevitAPP/Views/ModelFromCadWindow.xaml`
-
-Tab Slab là mẫu gần nhất. Bố cục đã chốt với người dùng:
-
-```
-[1. Select Grid Axes]  [2. Select Wall Lines]
-     (bắt buộc trước)   (mở khi bước 1 xong)
-
-Wall Type:    [dropdown]        Bề dày min: [100]
-Base Level:   [dropdown]        Bề dày max: [400]
-Top Level:    [dropdown]        Min Line:   [300]
-Offset:       [0]               Tỷ lệ dài/dày: [3.0]
-              [Apply / Re-analyze]
-
-Layer nào là tường?
-  ☑ A-WALL              86 line
-  ☐ NT2-NET DAM 0.4    142 line
-
-[Chọn tất cả] [Bỏ chọn]
-
-┌ Tạo │ Dài │ Dày │ Vẽ bằng │ Trạng thái ┐
-        (cột Dày sửa được, như tiết diện ở tab Beam)
-
-[2D] [3D]  ☑ Lưới ☑ Nhãn  [+] [-] [Vừa màn hình]
-```
-
-**Bề dày min/max đặt hàng đầu**, cạnh nút quét — người dùng chỉnh trước khi quét.
-
-Ràng buộc: `CommunityToolkit.Mvvm`, mọi màu dùng `{DynamicResource}`, code-behind chỉ
-`InitializeComponent()`.
-
-### 3. Preview 2D/3D
-
-- **2D**: vẽ dải tường (hai mép theo bề dày + trục tim nét mảnh), zoom/dời/vừa màn hình,
-  tick thì nổi màu, chọn dòng thì tường sáng lên
-- **3D**: khối hộp theo bề dày × chiều cao level, orbit xoay được
-
-Xem cách tab Beam vẽ trong `ModelFromCadWindow.xaml.cs`.
-
-### 4. Nối lệnh — `RevitAPP/Commands/ModelFromCadCommand.cs`
-
-- Truyền `selectWall` vào constructor ViewModel (tham số đã có, chưa ai truyền)
-- Thêm `SelectAndBuildWallPreview` theo mẫu `SelectAndBuildSlabPreview`
-- Nhánh `ModelFromCadMode.Wall` gọi `CadWallCreationService.Create`
-- `ShowWallResult` báo số tường tạo/trùng/lỗi
-
-### 5. Kiểm chứng — theo `phase-04-verify.md`
-
-Thứ tự **bắt buộc**, không đảo:
-
-1. Test xanh hết (kể cả Beam, Slab cũ)
-2. Build R22–R27
-3. Deploy `Debug R25` — chờ người dùng đóng Revit, **không tự đóng**
-4. Người dùng thử trên bản vẽ thật, xác nhận đạt
-5. Chỉ khi đó mới phát hành `v1.12.0` theo `HANDOFF-REVITAPP.md`
-
-## Hai câu hỏi chưa có lời
+## Câu hỏi còn mở
 
 **1. Rectangle 300×900 là vách ngắn hay cột chữ nhật?** Tỷ lệ 3:1. Mặc định
 `MinimumLengthRatio = 3.0` đang nhận nó là tường. Hỏi người dùng bản vẽ có cột cỡ đó
 không — nhận nhầm cả loạt cột thành tường thì hỏng nặng.
-
-**2. Cách vẽ cửa** — tôi hiểu là người dùng vẽ hai line nối qua chỗ cửa, cùng layer
-tường, nên add-in thấy tường liền mạch. Chưa được xác nhận dứt khoát.
 
 ## Bài học phải theo
 

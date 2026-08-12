@@ -256,6 +256,12 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private bool _showWallLabels = true;
 
     [ObservableProperty]
+    private bool _showWallGridOverlay = true;
+
+    [ObservableProperty]
+    private int _wallPreviewModeIndex;
+
+    [ObservableProperty]
     private CadWallRowViewModel? _selectedWall;
 
     [ObservableProperty]
@@ -317,7 +323,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         0 => ModelFromCadMode.Grid,
         1 => ModelFromCadMode.Column,
         2 => ModelFromCadMode.Beam,
-        _ => ModelFromCadMode.Slab
+        3 => ModelFromCadMode.Slab,
+        _ => ModelFromCadMode.Wall
     };
 
     public IReadOnlyList<CadGridPreviewAxis> SelectedGridAxes =>
@@ -336,7 +343,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
             .ToArray();
 
     public IReadOnlyList<CadWallCandidate> SelectedWalls =>
-        Walls.Where(wall => wall.IsIncluded)
+        Walls.Where(wall => wall.IsIncluded && wall.IsValid)
             .Select(wall => wall.ToCandidate())
             .ToArray();
 
@@ -354,6 +361,9 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         ModelFromCadMode.Slab => $"Chọn {SelectedSlabs.Count}/{Slabs.Count} sàn"
              + (SlabAnalysisDirty ? " — cần Apply/Re-analyze" : string.Empty)
              + SlabWarningLabel,
+        ModelFromCadMode.Wall => $"Chọn {SelectedWalls.Count}/{Walls.Count} tường"
+             + (WallAnalysisDirty ? " — cần Apply/Re-analyze" : string.Empty)
+             + WallWarningLabel,
         _ => $"Chọn {SelectedBeams.Count}/{Beams.Count} dầm"
              + (BeamAnalysisDirty ? " — cần Apply/Re-analyze" : string.Empty)
              + BeamWarningLabel
@@ -376,6 +386,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         ModelFromCadMode.Grid => "Tạo Grid",
         ModelFromCadMode.Column => "Tạo Column",
         ModelFromCadMode.Slab => "Tạo Sàn",
+        ModelFromCadMode.Wall => "Tạo Wall",
         _ => "Tạo Beam"
     };
 
@@ -384,6 +395,7 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         ModelFromCadMode.Grid => SelectedGridAxes.Count > 0 && RotationValid,
         ModelFromCadMode.Column => SelectedColumns.Count > 0 && ColumnSettingsValid,
         ModelFromCadMode.Slab => SelectedSlabs.Count > 0 && SlabSettingsValid,
+        ModelFromCadMode.Wall => SelectedWalls.Count > 0 && WallCreateSettingsValid,
         _ => SelectedBeams.Count > 0 && BeamSettingsValid
     };
 
@@ -628,11 +640,12 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     public bool WallSettingsValid =>
         TryNumber(MinimumWallThicknessText, out var minimum)
         && TryNumber(MaximumWallThicknessText, out var maximum)
-        && TryNumber(MinimumWallLengthText, out _)
+        && TryNumber(MinimumWallLengthText, out var minimumLength)
         && TryNumber(WallLengthRatioText, out var ratio)
         && TryNumber(WallBaseOffsetText, out _)
         && minimum > 0
         && maximum >= minimum
+        && minimumLength >= 0
         && ratio >= 1;
 
     public bool WallCreateSettingsValid =>
@@ -642,7 +655,11 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         && SelectedWallTopLevel.Level.Id != SelectedWallBaseLevel.Level.Id
         && SelectedWallTopLevel.Elevation > SelectedWallBaseLevel.Elevation
         && WallSettingsValid
-        && RotationValid;
+        && !WallAnalysisDirty
+        && RotationValid
+        && (SelectedWallTopLevel.Elevation - SelectedWallBaseLevel.Elevation) * 304.8
+           > WallBaseOffsetMm
+        && Walls.Where(wall => wall.IsIncluded).All(wall => wall.IsValid);
 
     public double WallBaseOffsetMm => ParseNumber(WallBaseOffsetText);
 
@@ -659,7 +676,8 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         SetWallData(replacement);
     }
 
-    private bool CanSelectWallLines() => HasCadData && WallSettingsValid;
+    private bool CanSelectWallLines() =>
+        HasCadData && SelectedGridAxes.Count > 0 && WallSettingsValid;
 
     [RelayCommand(CanExecute = nameof(CanApplyWallAnalysis))]
     private void ApplyWallAnalysis()
@@ -670,22 +688,43 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         SetWallData(WallData with { Analysis = analysis }, keepLayers: true);
     }
 
-    private bool CanApplyWallAnalysis() => WallData is not null && WallSettingsValid;
+    private bool CanApplyWallAnalysis() =>
+        WallData is not null && WallSettingsValid && WallAnalysisDirty;
 
     [RelayCommand]
     private void SelectAllWalls()
     {
-        foreach (var wall in Walls) wall.IsIncluded = true;
+        _suppressItemNotifications = true;
+        foreach (var wall in Walls) wall.IsIncluded = wall.IsValid;
+        _suppressItemNotifications = false;
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand]
     private void ClearWallSelection()
     {
+        _suppressItemNotifications = true;
         foreach (var wall in Walls) wall.IsIncluded = false;
+        _suppressItemNotifications = false;
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetWallData(CadWallPreviewData replacement, bool keepLayers = false)
     {
+        var thicknessOverrides = keepLayers
+            ? Walls.Where(row => Math.Abs(row.ThicknessMm - row.Source.ThicknessMm) >= 0.5)
+                .GroupBy(WallIdentity)
+                .ToDictionary(group => group.Key, group => group.Last().ThicknessMm)
+            : new Dictionary<string, double>();
+        var inclusionOverrides = keepLayers
+            ? Walls.GroupBy(WallIdentity)
+                .ToDictionary(group => group.Key, group => group.Last().IsIncluded)
+            : new Dictionary<string, bool>();
+        var selectedIdentity = keepLayers && SelectedWall is not null
+            ? WallIdentity(SelectedWall)
+            : null;
         foreach (var row in Walls) row.PropertyChanged -= OnItemChanged;
         Walls.Clear();
         WallData = replacement;
@@ -708,15 +747,30 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         foreach (var wall in replacement.Analysis.Walls)
         {
             var row = new CadWallRowViewModel(wall);
+            if (thicknessOverrides.TryGetValue(WallIdentity(row), out var thicknessMm))
+                row.ThicknessMm = thicknessMm;
+            if (inclusionOverrides.TryGetValue(WallIdentity(row), out var isIncluded))
+                row.IsIncluded = isIncluded;
             row.PropertyChanged += OnItemChanged;
             Walls.Add(row);
         }
 
+        // The first pass intentionally returns only layer tallies. Suggested wall layers are
+        // already ticked, so enable Apply immediately to run the required second pass.
+        if (!keepLayers && Walls.Count == 0 && WallLayers.Any(layer => layer.IsWall))
+            WallAnalysisDirty = true;
+        SelectedWall = selectedIdentity is null
+            ? Walls.FirstOrDefault()
+            : Walls.FirstOrDefault(row => WallIdentity(row) == selectedIdentity)
+              ?? Walls.FirstOrDefault();
         Zoom = 1.0;
         NotifyState();
         RenderRequested?.Invoke(this, EventArgs.Empty);
         ReselectCompleted?.Invoke(this, EventArgs.Empty);
     }
+
+    private static string WallIdentity(CadWallRowViewModel row) =>
+        string.Join(",", row.Source.SourceSegmentIds.OrderBy(id => id));
 
     private void SetSlabData(CadSlabPreviewData replacement)
     {
@@ -794,11 +848,18 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         foreach (var axis in GridAxes) axis.PropertyChanged -= OnItemChanged;
         foreach (var row in Columns) row.PropertyChanged -= OnItemChanged;
         foreach (var row in Beams) row.PropertyChanged -= OnItemChanged;
+        foreach (var row in Walls) row.PropertyChanged -= OnItemChanged;
+        foreach (var row in WallLayers) row.PropertyChanged -= OnItemChanged;
         GridAxes.Clear();
         Columns.Clear();
         Beams.Clear();
+        Walls.Clear();
+        WallLayers.Clear();
         BeamData = null;
+        WallData = null;
+        SelectedWall = null;
         BeamAnalysisDirty = false;
+        WallAnalysisDirty = false;
         foreach (var axis in replacement.GridPreview.Axes)
         {
             var item = new CadGridAxisViewModel(axis);
@@ -897,6 +958,31 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     partial void OnBeamPreviewModeIndexChanged(int value) => RenderRequested?.Invoke(this, EventArgs.Empty);
     partial void OnShowBeamGridOverlayChanged(bool value) => RenderRequested?.Invoke(this, EventArgs.Empty);
     partial void OnShowBeamLabelsChanged(bool value) => RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnWallPreviewModeIndexChanged(int value) => RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnShowWallGridOverlayChanged(bool value) => RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnShowWallLabelsChanged(bool value) => RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnSelectedWallChanged(CadWallRowViewModel? value) => RenderRequested?.Invoke(this, EventArgs.Empty);
+    partial void OnSelectedWallTypeChanged(CadWallTypeOption? value) => NotifyState();
+    partial void OnSelectedWallBaseLevelChanged(CadColumnLevelOption? value)
+    {
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    }
+    partial void OnSelectedWallTopLevelChanged(CadColumnLevelOption? value)
+    {
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    }
+    partial void OnWallBaseOffsetTextChanged(string value)
+    {
+        NotifyState();
+        RenderRequested?.Invoke(this, EventArgs.Empty);
+    }
+    partial void OnMinimumWallThicknessTextChanged(string value) => NotifyWallAnalysisSettings();
+    partial void OnMaximumWallThicknessTextChanged(string value) => NotifyWallAnalysisSettings();
+    partial void OnMinimumWallLengthTextChanged(string value) => NotifyWallAnalysisSettings();
+    partial void OnWallLengthRatioTextChanged(string value) => NotifyWallAnalysisSettings();
+    partial void OnWallAnalysisDirtyChanged(bool value) => NotifyState();
     partial void OnSelectedWidthParameterChanged(string? value) => NotifyState();
     partial void OnSelectedHeightParameterChanged(string? value) => NotifyState();
     partial void OnSelectedBeamWidthParameterChanged(string? value) => NotifyState();
@@ -938,6 +1024,10 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
     private void OnItemChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (_suppressItemNotifications) return;
+        if (sender is CadLayerRowViewModel) WallAnalysisDirty = WallData is not null;
+        if (sender is CadWallRowViewModel
+            && e.PropertyName == nameof(CadWallRowViewModel.ThicknessMm))
+            WallAnalysisDirty = WallData is not null;
         NotifyState();
         RenderRequested?.Invoke(this, EventArgs.Empty);
     }
@@ -1007,6 +1097,11 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         OnPropertyChanged(nameof(SlabAnalysisSettingsValid));
         OnPropertyChanged(nameof(SlabAnalysisDirty));
         OnPropertyChanged(nameof(CanSelectSlabLines));
+        OnPropertyChanged(nameof(SelectedWalls));
+        OnPropertyChanged(nameof(WallSettingsValid));
+        OnPropertyChanged(nameof(WallCreateSettingsValid));
+        OnPropertyChanged(nameof(WallAnalysisDirty));
+        OnPropertyChanged(nameof(WallWarningLabel));
         AcceptCommand.NotifyCanExecuteChanged();
         SelectBeamLinesCommand.NotifyCanExecuteChanged();
         ApplyBeamAnalysisCommand.NotifyCanExecuteChanged();
@@ -1014,6 +1109,14 @@ internal sealed partial class ModelFromCadViewModel : ObservableObject
         ApplySlabAnalysisCommand.NotifyCanExecuteChanged();
         SelectOpeningOutlinesCommand.NotifyCanExecuteChanged();
         SelectHatchRegionsCommand.NotifyCanExecuteChanged();
+        SelectWallLinesCommand.NotifyCanExecuteChanged();
+        ApplyWallAnalysisCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyWallAnalysisSettings()
+    {
+        if (WallData is not null) WallAnalysisDirty = true;
+        NotifyState();
     }
 
     private void NotifyBeamAnalysisSettings()

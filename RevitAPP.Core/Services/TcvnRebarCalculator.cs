@@ -88,8 +88,16 @@ public static class TcvnRebarCalculator
     {
         EnsureRectangular(section);
         if (clearHeightMm <= 0) throw new ArgumentException("Chiều cao thông thuỷ phải > 0.", nameof(clearHeightMm));
-        if (config.SpacingEndMm <= 0) throw new ArgumentException("Khoảng cách đai vùng đầu/chân phải > 0.", nameof(config));
-        if (config.SpacingMidMm <= 0) throw new ArgumentException("Khoảng cách đai vùng thân phải > 0.", nameof(config));
+        if (config.UniformStirrupSpacing)
+        {
+            if (config.UniformSpacingMm <= 0)
+                throw new ArgumentException("Khoảng cách đai duy nhất phải > 0.", nameof(config));
+        }
+        else
+        {
+            if (config.SpacingEndMm <= 0) throw new ArgumentException("Khoảng cách đai vùng đầu/chân phải > 0.", nameof(config));
+            if (config.SpacingMidMm <= 0) throw new ArgumentException("Khoảng cách đai vùng thân phải > 0.", nameof(config));
+        }
         if (config.BeamDepthMm < 0) throw new ArgumentException("Chiều cao dầm không được âm.", nameof(config));
         if (confineClearanceDivisor <= 0) throw new ArgumentException("Hệ số chia vùng gia cường phải > 0.", nameof(confineClearanceDivisor));
 
@@ -97,6 +105,14 @@ public static class TcvnRebarCalculator
         var placeHeight = clearHeightMm - config.BeamDepthMm;
         if (placeHeight <= 0)
             throw new ArgumentException("Chiều cao dầm ≥ chiều cao tầng — không còn chỗ đặt đai.", nameof(config));
+
+        if (config.UniformStirrupSpacing)
+        {
+            var uniform = new StirrupZone(0d, placeHeight, config.UniformSpacingMm,
+                ZoneCount(placeHeight, config.UniformSpacingMm));
+            var empty = new StirrupZone(placeHeight, 0d, config.UniformSpacingMm, 0);
+            return new StirrupZones(uniform, empty, empty);
+        }
 
         var l0 = config.ConfineZoneLenMm > 0
             ? config.ConfineZoneLenMm

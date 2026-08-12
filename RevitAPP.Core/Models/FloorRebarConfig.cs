@@ -31,4 +31,11 @@ public sealed record FloorRebarConfig(
     double BeamDepthMm = 0,
     bool UseDistributionBar = false,
     double DistributionBarDiameterMm = 0,
-    SectionStirrupType StirrupSectionType = SectionStirrupType.ClosedTie);
+    SectionStirrupType StirrupSectionType = SectionStirrupType.ClosedTie)
+{
+    /// <summary>Dùng một khoảng cách đai duy nhất trên toàn chiều cao đặt đai.</summary>
+    public bool UniformStirrupSpacing { get; init; }
+
+    /// <summary>Khoảng cách đai duy nhất (mm), ví dụ 150 cho A150.</summary>
+    public double UniformSpacingMm { get; init; } = 150;
+}

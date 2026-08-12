@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.Input;
 using RevitAPP.Core.Models;
 using RevitAPP.Core.Services;
 using RevitAPP.Models;
+using RevitAPP.Services.ColumnRebar;
+using System.Windows.Threading;
 
 namespace RevitAPP.ViewModels;
 
@@ -17,6 +19,8 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
     private const double PreviewPadding = 24;
 
     private bool _canDraw;
+    private readonly IReadOnlyList<ColumnStackItem> _stack;
+    private readonly DispatcherTimer _previewTimer;
 
     /// <summary>Callback lưu preset (đặt bởi Command layer để tránh VM phụ thuộc trực tiếp Revit Document).</summary>
     public Func<ColumnRebarConfig, bool>? SavePresetCallback { get; set; }
@@ -27,6 +31,9 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
     public ColumnRebarViewModel(IReadOnlyList<ColumnStackItem> stack, IReadOnlyList<RebarBarTypeOption> barTypes,
         IReadOnlyList<ColumnRebarConfig>? savedPresets = null)
     {
+        _stack = stack;
+        _previewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+        _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); RebuildPreviewNow(); };
         BarTypes = barTypes;
         var defaultMain = barTypes.FirstOrDefault(b => b.DiameterMm >= 16) ?? barTypes[0];
         var defaultStirrup = barTypes.FirstOrDefault(b => b.DiameterMm is >= 6 and <= 10) ?? barTypes[0];
@@ -39,6 +46,7 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
 
         Revalidate();
         UpdateDetail();
+        RebuildPreviewNow();
     }
 
     public IReadOnlyList<RebarBarTypeOption> BarTypes { get; }
@@ -70,7 +78,21 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ApplyToAllCommand))]
     private FloorRebarRowViewModel? _selectedFloor;
 
-    partial void OnSelectedFloorChanged(FloorRebarRowViewModel? value) => UpdateDetail();
+    partial void OnSelectedFloorChanged(FloorRebarRowViewModel? value)
+    {
+        UpdateDetail();
+        OnPropertyChanged(nameof(SelectedStoreyIndex));
+    }
+
+    public int SelectedStoreyIndex => SelectedFloor?.Storey.Index ?? -1;
+
+    [ObservableProperty] private ColumnRebarGeometryPlan? _previewPlan;
+    [ObservableProperty] private string? _previewValidationMessage;
+    [ObservableProperty] private bool _previewSideView;
+    public event EventHandler? PreviewFitRequested;
+
+    [RelayCommand]
+    private void FitPreview() => PreviewFitRequested?.Invoke(this, EventArgs.Empty);
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DrawCommand))]
@@ -142,6 +164,7 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
         if (e.PropertyName == nameof(FloorRebarRowViewModel.Error)) return;
         Revalidate();
         if (ReferenceEquals(sender, SelectedFloor)) UpdateDetail();
+        RefreshPreview();
     }
 
     /// <summary>Tính lại thông số thép + section preview cho tầng đang chọn.</summary>
@@ -205,9 +228,57 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
     {
         Revalidate();
         UpdateDetail();
+        RefreshPreview();
     }
 
-    partial void OnLapFactorChanged(double value) => Revalidate();
+    partial void OnLapFactorChanged(double value) { Revalidate(); RefreshPreview(); }
+
+    partial void OnStaggerLapChanged(bool value) => RefreshPreview();
+    partial void OnLapPositionChanged(LapPosition value) => RefreshPreview();
+    partial void OnLapDistanceFromBottomMmChanged(double value) => RefreshPreview();
+    partial void OnFoundationEnabledChanged(bool value) => RefreshPreview();
+    partial void OnFoundationHmMmChanged(double value) => RefreshPreview();
+    partial void OnFoundationLbMmChanged(double value) => RefreshPreview();
+    partial void OnFoundationDirectionChanged(StarterBendDirection value) => RefreshPreview();
+    partial void OnFoundationSplitBothSidesChanged(bool value) => RefreshPreview();
+    partial void OnDistanceToFirstStirrupMmChanged(double value) => RefreshPreview();
+    partial void OnSpreadThroughBeamChanged(bool value) => RefreshPreview();
+    partial void OnMinConfineZoneMmChanged(double value) => RefreshPreview();
+    partial void OnConfineClearanceDivisorChanged(double value) => RefreshPreview();
+    partial void OnReinforceJointChanged(bool value) => RefreshPreview();
+    partial void OnJointStirrupCountChanged(double value) => RefreshPreview();
+    partial void OnCrosstieDirectionChanged(CrosstieDirection value) => RefreshPreview();
+    partial void OnTopHookBendingChanged(bool value) => RefreshPreview();
+    partial void OnTopHookLengthMmChanged(double value) => RefreshPreview();
+    partial void OnCrankAtLapChanged(bool value) => RefreshPreview();
+    partial void OnBendIfOffsetLeMmChanged(double value) => RefreshPreview();
+    partial void OnSlopeRatioHdOverEChanged(double value) => RefreshPreview();
+    partial void OnLargeStepModeChanged(LargeStepMode value) => RefreshPreview();
+    partial void OnJointAnchorDownMmChanged(double value) => RefreshPreview();
+
+    private void RefreshPreview()
+    {
+        _previewTimer.Stop();
+        _previewTimer.Start();
+    }
+
+    private void RebuildPreviewNow()
+    {
+        if (_stack == null || Floors.Count == 0) return;
+        try
+        {
+            var plans = Floors.Select(f => new StoreyRebarPlan(
+                f.Storey, f.ToConfig(), f.MainBarType, f.StirrupType, f.DistributionBarType)).ToArray();
+            PreviewPlan = ColumnRebarBuilder.CreateGeometryPlan(_stack, plans, LapOptions, FoundationOptions,
+                StirrupSpreadOptions, ColumnEndOptions, SectionTransitionOptions);
+            PreviewValidationMessage = null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            // Deliberately retain PreviewPlan: typed input can be temporarily invalid.
+            PreviewValidationMessage = $"Preview giữ cấu hình hợp lệ gần nhất: {ex.Message}";
+        }
+    }
 
     private void Revalidate()
     {
@@ -278,7 +349,11 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
         Floors.Select(f => new ColumnRebarFloorConfig(
             f.LevelName, f.MainBarType.DiameterMm, f.BarsX, f.BarsY, f.StirrupType.DiameterMm,
             f.SpacingEndMm, f.SpacingMidMm, f.ConfineZoneLenMm,
-            f.UseDistributionBar, f.DistributionBarType.DiameterMm, f.StirrupSectionType)).ToList());
+            f.UseDistributionBar, f.DistributionBarType.DiameterMm, f.StirrupSectionType)
+        {
+            UniformStirrupSpacing = f.UniformStirrupSpacing,
+            UniformSpacingMm = f.UniformSpacingMm
+        }).ToList());
 
     /// <summary>Khôi phục dialog từ DTO đã lưu. Dò lại loại thanh thép theo đường kính.</summary>
     private void ApplyConfig(ColumnRebarConfig c)
@@ -325,6 +400,8 @@ public sealed partial class ColumnRebarViewModel : ObservableObject
             floor.StirrupType = ResolveBarType(saved.StirrupDiameterMm, floor.StirrupType);
             floor.SpacingEndMm = saved.SpacingEndMm;
             floor.SpacingMidMm = saved.SpacingMidMm;
+            floor.UniformStirrupSpacing = saved.UniformStirrupSpacing;
+            floor.UniformSpacingMm = saved.UniformSpacingMm > 0 ? saved.UniformSpacingMm : 150;
             floor.ConfineZoneLenMm = saved.ConfineZoneLenMm;
             floor.UseDistributionBar = saved.UseDistributionBar;
             floor.DistributionBarType = ResolveBarType(saved.DistributionBarDiameterMm, floor.DistributionBarType);

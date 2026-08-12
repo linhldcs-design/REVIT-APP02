@@ -1,7 +1,7 @@
 # Phase 01 — Phân tích tường từ line CAD
 
 **Ưu tiên:** cao — mọi phase sau phụ thuộc phase này
-**Trạng thái:** chưa bắt đầu
+**Trạng thái:** hoàn thành — fix cuối đạt 542/542 toàn bộ; 80 test Wall/Rail/Beam xanh
 
 ## Liên kết
 
@@ -74,17 +74,19 @@ nên bước quét lưới không đọc được gì, phải `git revert`.
 Lần này phỏng đoán chỉ dùng để **tick sẵn**, không phải luật. Người dùng bỏ tick là
 xong — đoán sai không mất dữ liệu.
 
-## Cửa đi và cửa sổ — không phải việc của add-in
+## Cửa đi và cửa sổ — contract bridge dọc
 
-Chỗ có cửa, người dùng **vẽ hai line nối qua, cùng layer tường**. Hai rail chạy suốt,
-không đứt đoạn, và bộ lọc layer nhận chúng như mọi đoạn tường khác.
+Chỗ có cửa chỉ giữ thành **một tường** khi **cả hai line bridge dọc** tiếp tục đúng hai
+mặt tường. Hai bridge phải nằm trên chính layer tường người dùng đã chọn; layer không
+được chọn hoặc một layer khác dù cũng được chọn không được bridge `A-WALL`.
 
-Nghĩa là add-in không phải làm gì: không nhận diện nét cửa, không nối qua khoảng trống,
-không nới ngưỡng, không phân biệt đoạn nào là cửa. Tường dựng liền theo đúng hình đã
-vẽ; cửa đặt trong Revit sau.
+Không suy luận khoảng mở từ jamb/end-cap ngang. Một bridge là chưa đủ. Hai rail phải
+có phần overlap; boundary đơn độc không được sinh tường ma. Short nib được giữ đến
+bước lọc cuối để bridge có đủ hình học, và segment của rectangle khép kín chỉ được
+consolidate khi có đúng hai bridge dọc này.
 
-Điều này bỏ đi cả một nhóm rủi ro — không có ngưỡng nào để đoán sai, không có ca "hai
-tường thật bị nối nhầm".
+Clustering chịu được offset drift nhưng không nắn thẳng line gần song song không đồng
+tuyến. Cleanup loại duplicate sinh từ bridge mà vẫn giữ regression hai mặt tường so le.
 
 ## Điểm mấu chốt
 
@@ -177,7 +179,14 @@ phải kéo dài tới giao điểm, không dừng ở mép. Nếu không, Revit
 
 | Ca | Kỳ vọng |
 |---|---|
-| Tường 6000, hai rail vẽ liền qua chỗ cửa | Một tường 6000 — không phải làm gì thêm |
+| Tường 6000, cả hai bridge dọc cùng layer tường được chọn | Một tường 6000 |
+| Chỉ có một bridge dọc | Giữ các đoạn riêng, không nối qua cửa |
+| Bridge ở layer không chọn hoặc layer khác cũng được chọn | Không bridge `A-WALL` |
+| Chỉ có jamb/end-cap ngang | Không suy luận bridge, không sinh tường ma |
+| Boundary không có rail đối diện | Không sinh candidate |
+| Hai line gần song song nhưng không đồng tuyến | Không nắn thẳng để nối |
+| Hai tường độc lập có cap, dày 200 và dài 10 m | Vẫn là hai tường riêng |
+| Rectangle khép kín bị chia tại cửa | Chỉ consolidate khi đủ hai bridge dọc đúng layer |
 | Hai tường thật cách nhau 2000 | **Hai** tường riêng, không nối |
 
 **Chọn layer**

@@ -112,6 +112,12 @@ public static class CadWallAnalyzer
             remaining, options.GapJoinToleranceMm, options.RailOffsetToleranceMm);
         walls.AddRange(PairRails(rails, options));
 
+        // Door openings commonly split both wall faces into separate runs. The drawing still
+        // tells us that the wall continues when it carries both faces through the opening.
+        // Consolidate only with those two explicit bridge lines; a bare gap between two
+        // collinear walls remains two walls.
+        walls = ConsolidateDoorSpans(walls, wallSegments, picked, options).ToList();
+
         walls = walls
             .Select((wall, index) => wall with { Id = index + 1 })
             .ToList();
@@ -308,31 +314,438 @@ public static class CadWallAnalyzer
                     if (thickness < options.MinimumThicknessMm) continue;
                     if (thickness > options.MaximumThicknessMm) break;
 
-                    var facing = CadRailBuilder.FacingIntervals(
-                        first, second, options.GapJoinToleranceMm);
-                    var span = facing
-                        .OrderByDescending(interval => interval.End - interval.Start)
-                        .FirstOrDefault();
-                    var length = span.End - span.Start;
-                    if (length < options.MinimumLengthMm) continue;
-
-                    // The centre line runs along the axis the rails share, halfway between them.
-                    var direction = first.Direction;
-                    var normal = first.Normal;
-                    var offset = (first.Offset + second.Offset) / 2.0;
-                    var start = direction * span.Start + normal * offset;
-                    var end = direction * span.End + normal * offset;
+                    var facing = FacingWallRails(first, second, options.GapJoinToleranceMm,
+                        options.RailOffsetToleranceMm);
+                    // Keep short spans until door consolidation. A 200 mm nib beside an opening
+                    // is too short by itself but can be the end of a valid six-metre wall.
+                    var spans = facing
+                        .Where(interval => interval.End - interval.Start > 1e-9)
+                        .Where(interval => RailCoversPartOf(first, interval)
+                                           && RailCoversPartOf(second, interval))
+                        .ToArray();
+                    if (spans.Length == 0) continue;
 
                     used.Add(first.Id);
                     used.Add(second.Id);
-                    yield return new CadWallCandidate(0, start, end, thickness,
-                        CadWallSource.ParallelLines,
-                        first.SourceIds.Concat(second.SourceIds).Distinct().ToArray(),
-                        CadWallCandidateStatus.Ready);
+                    foreach (var span in spans)
+                    {
+                        // The centre line runs along the axis the rails share, halfway between them.
+                        var direction = first.Direction;
+                        var normal = first.Normal;
+                        var offset = (first.Offset + second.Offset) / 2.0;
+                        var start = direction * span.Start + normal * offset;
+                        var end = direction * span.End + normal * offset;
+                        var sourceIds = first.Sources.Concat(second.Sources)
+                            .Where(source => source.End >= span.Start - options.GapJoinToleranceMm
+                                             && source.Start <= span.End + options.GapJoinToleranceMm)
+                            .Select(source => source.SegmentId)
+                            .Distinct()
+                            .ToArray();
+
+                        yield return new CadWallCandidate(0, start, end, thickness,
+                            CadWallSource.ParallelLines, sourceIds, CadWallCandidateStatus.Ready);
+                    }
                     break;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Joins collinear wall candidates across an opening only when the selected geometry contains
+    /// two independent lines proving that the wall continues. Only layers the user selected as
+    /// walls may supply that evidence; grid and dimension geometry must not alter a wall run.
+    /// </summary>
+    private static IReadOnlyList<CadWallCandidate> ConsolidateDoorSpans(
+        IReadOnlyList<CadWallCandidate> source,
+        IReadOnlyList<CadStructureSegment> allSegments,
+        HashSet<string> wallLayers,
+        CadWallAnalysisOptions options)
+    {
+        var segmentsById = allSegments.ToDictionary(segment => segment.Id);
+        var evidenceRails = CadRailBuilder.Build(
+            allSegments, options.RailOffsetToleranceMm, options.RailOffsetToleranceMm);
+        var evidenceContainers = new Dictionary<int,
+            List<(HashSet<int> Sources, CadWallCandidate Container)>>();
+        var walls = OrderForDoorSweep(
+            source, segmentsById, wallLayers, options.RailOffsetToleranceMm).ToList();
+
+        // Candidates that can merge are adjacent after the spatial sort. Sweep only that next
+        // neighbour; after a merge it occupies the same slot and can absorb the following span.
+        // This keeps candidate pairing linear after the sort instead of quadratic/cubic.
+        for (var firstIndex = 0; firstIndex + 1 < walls.Count;)
+        {
+            var firstLayer = CandidateSelectedLayer(walls[firstIndex], segmentsById, wallLayers);
+            var firstAngle = CandidateAngleBucket(walls[firstIndex]);
+            var firstOffset = CandidateLineOffset(walls[firstIndex]);
+            var secondIndex = firstIndex + 1;
+            var secondLayer = CandidateSelectedLayer(
+                walls[secondIndex], segmentsById, wallLayers);
+            var secondAngle = CandidateAngleBucket(walls[secondIndex]);
+            var secondOffset = CandidateLineOffset(walls[secondIndex]);
+            if (!string.Equals(firstLayer, secondLayer, StringComparison.OrdinalIgnoreCase)
+                || firstAngle != secondAngle
+                || secondOffset - firstOffset > options.RailOffsetToleranceMm)
+            {
+                firstIndex++;
+                continue;
+            }
+
+            var merged = TryMergeDoorSpans(walls[firstIndex], walls[secondIndex], evidenceRails,
+                segmentsById, wallLayers, options, out var evidenceUsed);
+            if (merged is null)
+            {
+                firstIndex++;
+                continue;
+            }
+
+            walls[firstIndex] = merged;
+            walls.RemoveAt(secondIndex);
+            if (evidenceUsed.Length > 0)
+            {
+                var evidenceSet = evidenceUsed.ToHashSet();
+                var entry = (Sources: evidenceSet, Container: merged);
+                foreach (var id in evidenceSet)
+                {
+                    if (!evidenceContainers.TryGetValue(id, out var entries))
+                        evidenceContainers[id] = entries = new();
+                    entries.Add(entry);
+                }
+            }
+        }
+
+        // The two bridge lines can themselves look like a short parallel-line wall. Once those
+        // source lines have been consumed as evidence by the longer wall, drop that contained
+        // duplicate rather than showing/creating a second wall inside the doorway.
+        return walls
+            .Where(candidate => !IsEvidenceOnlyDuplicate(
+                candidate, evidenceContainers, options.RailOffsetToleranceMm))
+            .ToArray();
+    }
+
+    private static bool IsEvidenceOnlyDuplicate(
+        CadWallCandidate candidate,
+        IReadOnlyDictionary<int,
+            List<(HashSet<int> Sources, CadWallCandidate Container)>> containers,
+        double tolerance)
+    {
+        if (candidate.SourceSegmentIds.Count == 0
+            || !containers.TryGetValue(candidate.SourceSegmentIds[0], out var possible))
+            return false;
+        return possible.Any(container =>
+            candidate.LengthMm + tolerance < container.Container.LengthMm
+            && candidate.SourceSegmentIds.All(container.Sources.Contains)
+            && IsSpatiallyContained(candidate, container.Container, tolerance));
+    }
+
+    private static bool IsSpatiallyContained(
+        CadWallCandidate candidate,
+        CadWallCandidate container,
+        double tolerance)
+    {
+        var direction = CadRailBuilder.CanonicalDirection(
+            CadRailBuilder.Normalize(container.EndMm - container.StartMm));
+        var normal = new CadStructurePoint2(-direction.Y, direction.X);
+        var offset = (CadRailBuilder.Dot(container.StartMm, normal)
+                      + CadRailBuilder.Dot(container.EndMm, normal)) / 2.0;
+        if (Math.Abs(CadRailBuilder.Dot(candidate.StartMm, normal) - offset) > tolerance
+            || Math.Abs(CadRailBuilder.Dot(candidate.EndMm, normal) - offset) > tolerance)
+            return false;
+        var outer = ProjectionInterval(container.StartMm, container.EndMm, direction);
+        var inner = ProjectionInterval(candidate.StartMm, candidate.EndMm, direction);
+        return inner.Start >= outer.Start - tolerance && inner.End <= outer.End + tolerance;
+    }
+
+    private static IEnumerable<CadWallCandidate> OrderForDoorSweep(
+        IReadOnlyList<CadWallCandidate> source,
+        IReadOnlyDictionary<int, CadStructureSegment> segmentsById,
+        HashSet<string> wallLayers,
+        double offsetToleranceMm)
+    {
+        var families = source.GroupBy(candidate => (
+                Layer: CandidateSelectedLayer(candidate, segmentsById, wallLayers).ToUpperInvariant(),
+                Angle: CandidateAngleBucket(candidate)))
+            .OrderBy(group => group.Key.Layer, StringComparer.Ordinal)
+            .ThenBy(group => group.Key.Angle);
+
+        foreach (var family in families)
+        {
+            var clusters = new List<List<CadWallCandidate>>();
+            foreach (var candidate in family.OrderBy(CandidateLineOffset))
+            {
+                var current = clusters.Count == 0 ? null : clusters[^1];
+                if (current is not null
+                    && CandidateLineOffset(candidate) - CandidateLineOffset(current[^1])
+                    <= offsetToleranceMm)
+                    current.Add(candidate);
+                else
+                    clusters.Add(new List<CadWallCandidate> { candidate });
+            }
+
+            foreach (var cluster in clusters)
+            foreach (var candidate in cluster.OrderBy(CandidateStartStation))
+                yield return candidate;
+        }
+    }
+
+    private static string CandidateSelectedLayer(
+        CadWallCandidate candidate,
+        IReadOnlyDictionary<int, CadStructureSegment> segmentsById,
+        HashSet<string> wallLayers) =>
+        candidate.SourceSegmentIds
+            .Where(segmentsById.ContainsKey)
+            .Select(id => segmentsById[id].Layer ?? string.Empty)
+            .FirstOrDefault(wallLayers.Contains) ?? string.Empty;
+
+    private static int CandidateAngleBucket(CadWallCandidate candidate)
+    {
+        var direction = CadRailBuilder.CanonicalDirection(
+            CadRailBuilder.Normalize(candidate.EndMm - candidate.StartMm));
+        return (int)Math.Round(CadRailBuilder.Angle(direction)
+                               / CadRailBuilder.AngleBucketDegrees);
+    }
+
+    private static double CandidateLineOffset(CadWallCandidate candidate)
+    {
+        var direction = CadRailBuilder.CanonicalDirection(
+            CadRailBuilder.Normalize(candidate.EndMm - candidate.StartMm));
+        var normal = new CadStructurePoint2(-direction.Y, direction.X);
+        return (CadRailBuilder.Dot(candidate.StartMm, normal)
+                + CadRailBuilder.Dot(candidate.EndMm, normal)) / 2.0;
+    }
+
+    private static double CandidateStartStation(CadWallCandidate candidate)
+    {
+        var direction = CadRailBuilder.CanonicalDirection(
+            CadRailBuilder.Normalize(candidate.EndMm - candidate.StartMm));
+        return Math.Min(CadRailBuilder.Dot(candidate.StartMm, direction),
+            CadRailBuilder.Dot(candidate.EndMm, direction));
+    }
+
+    private static CadWallCandidate? TryMergeDoorSpans(
+        CadWallCandidate first,
+        CadWallCandidate second,
+        IReadOnlyList<CadRail> evidenceRails,
+        IReadOnlyDictionary<int, CadStructureSegment> segmentsById,
+        HashSet<string> wallLayers,
+        CadWallAnalysisOptions options,
+        out int[] evidenceUsed)
+    {
+        evidenceUsed = Array.Empty<int>();
+        if (Math.Abs(first.ThicknessMm - second.ThicknessMm) > options.RailOffsetToleranceMm)
+            return null;
+        var commonLayers = SharedSelectedWallLayers(first, second, segmentsById, wallLayers);
+        if (commonLayers.Count == 0) return null;
+
+        var firstVector = first.EndMm - first.StartMm;
+        var secondVector = second.EndMm - second.StartMm;
+        var direction = CadRailBuilder.CanonicalDirection(CadRailBuilder.Normalize(firstVector));
+        var otherDirection = CadRailBuilder.CanonicalDirection(CadRailBuilder.Normalize(secondVector));
+        if (CadRailBuilder.AngleDifference(direction, otherDirection)
+            > CadRailBuilder.AngleBucketDegrees)
+            return null;
+
+        var normal = new CadStructurePoint2(-direction.Y, direction.X);
+        var firstOffset = (CadRailBuilder.Dot(first.StartMm, normal)
+                           + CadRailBuilder.Dot(first.EndMm, normal)) / 2.0;
+        var secondOffset = (CadRailBuilder.Dot(second.StartMm, normal)
+                            + CadRailBuilder.Dot(second.EndMm, normal)) / 2.0;
+        if (Math.Abs(firstOffset - secondOffset) > options.RailOffsetToleranceMm) return null;
+        if (Math.Abs(CadRailBuilder.Dot(second.StartMm, normal) - firstOffset)
+            > options.RailOffsetToleranceMm) return null;
+        if (Math.Abs(CadRailBuilder.Dot(second.EndMm, normal) - firstOffset)
+            > options.RailOffsetToleranceMm) return null;
+
+        var firstInterval = ProjectionInterval(first.StartMm, first.EndMm, direction);
+        var secondInterval = ProjectionInterval(second.StartMm, second.EndMm, direction);
+        if (secondInterval.Start < firstInterval.Start)
+            (firstInterval, secondInterval) = (secondInterval, firstInterval);
+
+        var gapStart = firstInterval.End;
+        var gapEnd = secondInterval.Start;
+        var evidence = Array.Empty<int>();
+        // Only a tiny snap/drift gap may close without evidence. GapJoinTolerance belongs to
+        // fragments on one rail (for example a column trim), not to separate wall candidates.
+        if (gapEnd > gapStart + options.RailOffsetToleranceMm)
+        {
+            evidence = LongitudinalBridgeEvidence(evidenceRails, commonLayers, direction, normal,
+                           (firstOffset + secondOffset) / 2.0, first.ThicknessMm,
+                           gapStart, gapEnd, options.RailOffsetToleranceMm)
+                       ?? Array.Empty<int>();
+            if (evidence.Length == 0) return null;
+            evidenceUsed = evidence;
+        }
+
+        var startStation = Math.Min(firstInterval.Start, secondInterval.Start);
+        var endStation = Math.Max(firstInterval.End, secondInterval.End);
+        var centreOffset = (firstOffset + secondOffset) / 2.0;
+        return new CadWallCandidate(0,
+            direction * startStation + normal * centreOffset,
+            direction * endStation + normal * centreOffset,
+            (first.ThicknessMm + second.ThicknessMm) / 2.0,
+            CadWallSource.ParallelLines,
+            first.SourceSegmentIds.Concat(second.SourceSegmentIds).Concat(evidence)
+                .Distinct().ToArray(),
+            CadWallCandidateStatus.Ready);
+    }
+
+    private static HashSet<string> SharedSelectedWallLayers(
+        CadWallCandidate first,
+        CadWallCandidate second,
+        IReadOnlyDictionary<int, CadStructureSegment> segmentsById,
+        HashSet<string> wallLayers)
+    {
+        var firstLayers = first.SourceSegmentIds
+            .Where(segmentsById.ContainsKey)
+            .Select(id => segmentsById[id].Layer ?? string.Empty)
+            .Where(wallLayers.Contains)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        firstLayers.IntersectWith(second.SourceSegmentIds
+            .Where(segmentsById.ContainsKey)
+            .Select(id => segmentsById[id].Layer ?? string.Empty)
+            .Where(wallLayers.Contains));
+        return firstLayers;
+    }
+
+    private static int[]? LongitudinalBridgeEvidence(
+        IReadOnlyList<CadRail> rails,
+        HashSet<string> commonLayers,
+        CadStructurePoint2 direction,
+        CadStructurePoint2 normal,
+        double centreOffset,
+        double thickness,
+        double gapStart,
+        double gapEnd,
+        double tolerance)
+    {
+        bool Covers(CadRail rail, double faceOffset)
+        {
+            if (CadRailBuilder.AngleDifference(direction, rail.Direction)
+                > CadRailBuilder.AngleBucketDegrees) return false;
+            return rail.Intervals.Any(interval =>
+            {
+                var start = rail.Direction * interval.Start + rail.Normal * rail.Offset;
+                var end = rail.Direction * interval.End + rail.Normal * rail.Offset;
+                if (Math.Abs(CadRailBuilder.Dot(start, normal) - faceOffset) > tolerance
+                    || Math.Abs(CadRailBuilder.Dot(end, normal) - faceOffset) > tolerance)
+                    return false;
+                var coverage = ProjectionInterval(start, end, direction);
+                return coverage.Start <= gapStart + tolerance
+                       && coverage.End >= gapEnd - tolerance;
+            });
+        }
+
+        foreach (var layer in rails
+                     .Where(rail => commonLayers.Contains(rail.Layer))
+                     .GroupBy(rail => rail.Layer, StringComparer.OrdinalIgnoreCase))
+        {
+            var first = layer.FirstOrDefault(rail => Covers(rail, centreOffset - thickness / 2.0));
+            var second = layer.FirstOrDefault(rail => Covers(rail, centreOffset + thickness / 2.0));
+            if (first is not null && second is not null && first.Id != second.Id)
+            {
+                IEnumerable<int> SourcesAcrossGap(CadRail rail) => rail.Sources
+                    .Where(source =>
+                    {
+                        var start = rail.Direction * source.Start + rail.Normal * rail.Offset;
+                        var end = rail.Direction * source.End + rail.Normal * rail.Offset;
+                        var coverage = ProjectionInterval(start, end, direction);
+                        return Math.Min(coverage.End, gapEnd)
+                               - Math.Max(coverage.Start, gapStart) > 1e-9;
+                    })
+                    .Select(source => source.SegmentId);
+                return SourcesAcrossGap(first).Concat(SourcesAcrossGap(second))
+                    .Distinct().ToArray();
+            }
+        }
+        return null;
+    }
+
+    private static CadRailInterval ProjectionInterval(
+        CadStructurePoint2 start,
+        CadStructurePoint2 end,
+        CadStructurePoint2 direction)
+    {
+        var first = CadRailBuilder.Dot(start, direction);
+        var second = CadRailBuilder.Dot(end, direction);
+        return new CadRailInterval(Math.Min(first, second), Math.Max(first, second));
+    }
+
+    private static bool RailCoversPartOf(CadRail rail, CadRailInterval span) =>
+        rail.Intervals.Any(interval => Math.Min(interval.End, span.End)
+                                       - Math.Max(interval.Start, span.Start) > 1e-9);
+
+    private static IReadOnlyList<CadRailInterval> FacingWallRails(
+        CadRail first,
+        CadRail second,
+        double gapToleranceMm,
+        double endpointToleranceMm)
+    {
+        var result = new List<CadRailInterval>();
+        foreach (var component in CadRailBuilder.FacingIntervals(first, second, gapToleranceMm))
+        {
+            if (!RailCoversPartOf(first, component) || !RailCoversPartOf(second, component))
+                continue;
+
+            // Preserve the proven union behavior for faces trimmed at staggered stations. The one
+            // exception is an explicit bridge segment on only one face: its exact endpoints expose
+            // the corresponding long gap on the opposite face, so that incomplete bridge must not
+            // turn the opening into a wall.
+            var incompleteBridges = GapsWithin(first, component)
+                .Where(gap => HasExplicitBridge(second, gap, endpointToleranceMm))
+                .Concat(GapsWithin(second, component)
+                    .Where(gap => HasExplicitBridge(first, gap, endpointToleranceMm)))
+                .OrderBy(gap => gap.Start)
+                .ToArray();
+            result.AddRange(SplitAroundGaps(component, incompleteBridges));
+        }
+        return result;
+    }
+
+    private static IEnumerable<CadRailInterval> GapsWithin(
+        CadRail rail,
+        CadRailInterval span)
+    {
+        var intervals = rail.Intervals
+            .Where(interval => interval.End > span.Start && interval.Start < span.End)
+            .OrderBy(interval => interval.Start)
+            .ToArray();
+        for (var index = 0; index + 1 < intervals.Length; index++)
+        {
+            var start = Math.Max(span.Start, intervals[index].End);
+            var end = Math.Min(span.End, intervals[index + 1].Start);
+            if (end - start > 1e-9) yield return new CadRailInterval(start, end);
+        }
+    }
+
+    private static bool HasExplicitBridge(
+        CadRail rail,
+        CadRailInterval gap,
+        double tolerance)
+    {
+        var inside = rail.Sources
+            .Where(source => source.Start >= gap.Start - tolerance
+                             && source.End <= gap.End + tolerance
+                             && source.End > gap.Start
+                             && source.Start < gap.End)
+            .Select(source => new CadRailInterval(source.Start, source.End));
+        return CadRailBuilder.MergeIntervals(inside, tolerance)
+            .Any(interval => interval.Start <= gap.Start + tolerance
+                             && interval.End >= gap.End - tolerance);
+    }
+
+    private static IEnumerable<CadRailInterval> SplitAroundGaps(
+        CadRailInterval span,
+        IReadOnlyList<CadRailInterval> gaps)
+    {
+        var start = span.Start;
+        foreach (var gap in gaps)
+        {
+            if (gap.End <= start || gap.Start >= span.End) continue;
+            if (gap.Start > start + 1e-9)
+                yield return new CadRailInterval(start, Math.Min(gap.Start, span.End));
+            start = Math.Max(start, gap.End);
+        }
+        if (start < span.End - 1e-9) yield return new CadRailInterval(start, span.End);
     }
 
     /// <summary>

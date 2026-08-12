@@ -17,7 +17,11 @@ public sealed record ColumnRebarFloorConfig(
     double ConfineZoneLenMm,
     bool UseDistributionBar,
     double DistributionBarDiameterMm,
-    SectionStirrupType StirrupSectionType);
+    SectionStirrupType StirrupSectionType)
+{
+    public bool UniformStirrupSpacing { get; init; }
+    public double UniformSpacingMm { get; init; } = 150;
+}
 
 /// <summary>
 ///     Toàn bộ cấu hình dialog Vẽ Thép Cột (tham số chung + danh sách cấu hình từng tầng)

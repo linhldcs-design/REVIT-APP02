@@ -32,6 +32,8 @@ public sealed partial class FloorRebarRowViewModel : ObservableObject
     [ObservableProperty] private RebarBarTypeOption _stirrupType;
     [ObservableProperty] private double _spacingEndMm = 100;
     [ObservableProperty] private double _spacingMidMm = 200;
+    [ObservableProperty] private bool _uniformStirrupSpacing;
+    [ObservableProperty] private double _uniformSpacingMm = 150;
     [ObservableProperty] private double _confineZoneLenMm;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BeamDepthLabel))]
@@ -44,7 +46,11 @@ public sealed partial class FloorRebarRowViewModel : ObservableObject
     public FloorRebarConfig ToConfig() => new(
         MainBarType.DiameterMm, BarsX, BarsY, StirrupType.DiameterMm,
         SpacingEndMm, SpacingMidMm, ConfineZoneLenMm, BeamDepthMm,
-        UseDistributionBar, DistributionBarType.DiameterMm, StirrupSectionType);
+        UseDistributionBar, DistributionBarType.DiameterMm, StirrupSectionType)
+    {
+        UniformStirrupSpacing = UniformStirrupSpacing,
+        UniformSpacingMm = UniformSpacingMm
+    };
 
     /// <summary>Dry-run qua calculator để bắt lỗi hình học; trả về true nếu hợp lệ.</summary>
     public bool Validate(double coverMm)
@@ -73,6 +79,8 @@ public sealed partial class FloorRebarRowViewModel : ObservableObject
         StirrupType = source.StirrupType;
         SpacingEndMm = source.SpacingEndMm;
         SpacingMidMm = source.SpacingMidMm;
+        UniformStirrupSpacing = source.UniformStirrupSpacing;
+        UniformSpacingMm = source.UniformSpacingMm;
         ConfineZoneLenMm = source.ConfineZoneLenMm;
         // KHÔNG copy BeamDepthMm — mỗi tầng giữ chiều cao dầm tự dò riêng.
         UseDistributionBar = source.UseDistributionBar;

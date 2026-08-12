@@ -28,19 +28,34 @@ internal sealed partial class CadWallRowViewModel : ObservableObject
 
     public double LengthMm => Source.LengthMm;
 
+    public string LengthLabel => $"{LengthMm:0} mm";
+
+    public string ThicknessLabel => $"{ThicknessMm:0} mm";
+
+    public bool IsValid => Source.CanCreate
+                           && !double.IsNaN(ThicknessMm)
+                           && !double.IsInfinity(ThicknessMm)
+                           && ThicknessMm is >= 30 and <= 3000;
+
+    public bool IsManualOverride => Math.Abs(ThicknessMm - Source.ThicknessMm) >= 0.5;
+
     public string DrawnAs => Source.Source switch
     {
         CadWallSource.Rectangle => "Rectangle",
         _ => "2 line"
     };
 
-    public string StatusLabel => Source.Status switch
-    {
-        CadWallCandidateStatus.Ready => "Ready",
-        CadWallCandidateStatus.ThicknessOutOfRange => "Bề dày ngoài dải",
-        CadWallCandidateStatus.TooShort => "Quá ngắn",
-        _ => Source.Status.ToString()
-    };
+    public string StatusLabel => !IsValid
+        ? "Bề dày không hợp lệ"
+        : IsManualOverride
+            ? "Đã chỉnh"
+            : Source.Status switch
+            {
+                CadWallCandidateStatus.Ready => "Ready",
+                CadWallCandidateStatus.ThicknessOutOfRange => "Bề dày ngoài dải",
+                CadWallCandidateStatus.TooShort => "Quá ngắn",
+                _ => Source.Status.ToString()
+            };
 
     /// <summary>
     /// The candidate as the user left it, with any thickness typed over the measured one.
@@ -49,6 +64,14 @@ internal sealed partial class CadWallRowViewModel : ObservableObject
         Math.Abs(ThicknessMm - Source.ThicknessMm) < 0.5
             ? Source
             : Source with { OverrideThicknessMm = ThicknessMm };
+
+    partial void OnThicknessMmChanged(double value)
+    {
+        OnPropertyChanged(nameof(ThicknessLabel));
+        OnPropertyChanged(nameof(IsValid));
+        OnPropertyChanged(nameof(IsManualOverride));
+        OnPropertyChanged(nameof(StatusLabel));
+    }
 }
 
 /// <summary>

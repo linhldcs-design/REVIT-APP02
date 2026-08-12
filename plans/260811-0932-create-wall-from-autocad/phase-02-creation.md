@@ -1,7 +1,7 @@
 # Phase 02 — Dựng tường trong Revit
 
 **Ưu tiên:** cao
-**Trạng thái:** chưa bắt đầu — phụ thuộc Phase 01
+**Trạng thái:** hoàn thành — chờ kiểm thử tích hợp trên Revit R25 ở Phase 04
 
 ## Liên kết
 

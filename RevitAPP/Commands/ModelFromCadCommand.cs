@@ -44,7 +44,8 @@ public sealed class ModelFromCadCommand : ExternalCommand
             var projectOptions = CadColumnProjectOptionsReader.Read(document);
             var viewModel = new ModelFromCadViewModel(
                 CadModelPreviewFactory.Empty(), projectOptions, SelectAndBuildPreview,
-                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview, SelectSlabOpeningOutlines, SelectSlabHatchRegions);
+                SelectAndBuildBeamPreview, SelectAndBuildSlabPreview, SelectSlabOpeningOutlines,
+                SelectSlabHatchRegions, SelectAndBuildWallPreview);
             var window = new ModelFromCadWindow(viewModel);
             new WindowInteropHelper(window) { Owner = Application.MainWindowHandle };
             if (window.ShowDialog() != true) return;
@@ -115,6 +116,32 @@ public sealed class ModelFromCadCommand : ExternalCommand
                 return;
             }
 
+            if (viewModel.SelectedMode == ModelFromCadMode.Wall)
+            {
+                if (!viewModel.WallCreateSettingsValid
+                    || viewModel.WallData is null
+                    || viewModel.SelectedWallType is null
+                    || viewModel.SelectedWallBaseLevel is null
+                    || viewModel.SelectedWallTopLevel is null)
+                {
+                    TaskDialog.Show(Title, "Thiết lập Wall Type, Base/Top Level hoặc Wall scan chưa hợp lệ.");
+                    return;
+                }
+
+                var wallResult = CadWallCreationService.Create(
+                    document,
+                    viewModel.SelectedWalls,
+                    viewModel.WallData.Analysis.AnchorMm,
+                    targetAnchor,
+                    viewModel.RotationDegrees,
+                    viewModel.SelectedWallType,
+                    viewModel.SelectedWallBaseLevel,
+                    viewModel.SelectedWallTopLevel,
+                    viewModel.WallBaseOffsetMm);
+                ShowWallResult(wallResult);
+                return;
+            }
+
             if (!viewModel.ColumnSettingsValid
                 || viewModel.SelectedFamily is null
                 || viewModel.SelectedBaseLevel is null
@@ -178,6 +205,15 @@ public sealed class ModelFromCadCommand : ExternalCommand
         return preview;
     }
 
+    private static CadWallPreviewData? SelectAndBuildWallPreview(
+        CadStructureTransferPackage gridPackage,
+        CadWallAnalysisOptions options)
+    {
+        var preview = CadWallPreviewFactory.SelectAndBuild(gridPackage, options, out var error);
+        if (preview is null && !string.IsNullOrWhiteSpace(error)) TaskDialog.Show(Title, error);
+        return preview;
+    }
+
     private static void ShowGridResult(CadGridCreationResult result)
     {
         var message = $"Đã tạo: {result.CreatedIds.Count} Grid"
@@ -200,6 +236,15 @@ public sealed class ModelFromCadCommand : ExternalCommand
     {
         var message = $"Đã tạo: {result.CreatedIds.Count} Beam"
                       + $"\nBeam đã tồn tại: {result.ExistingCount}"
+                      + $"\nLỗi: {result.Errors.Count}";
+        if (result.Errors.Count > 0) message += "\n\n" + string.Join("\n", result.Errors.Take(3));
+        TaskDialog.Show(Title, message);
+    }
+
+    private static void ShowWallResult(CadWallCreationResult result)
+    {
+        var message = $"Đã tạo: {result.CreatedIds.Count} Wall"
+                      + $"\nWall đã tồn tại: {result.ExistingCount}"
                       + $"\nLỗi: {result.Errors.Count}";
         if (result.Errors.Count > 0) message += "\n\n" + string.Join("\n", result.Errors.Take(3));
         TaskDialog.Show(Title, message);

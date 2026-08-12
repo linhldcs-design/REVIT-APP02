@@ -1,7 +1,7 @@
 # Phase 03 — Giao diện tab Create Wall
 
 **Ưu tiên:** trung bình
-**Trạng thái:** chưa bắt đầu — phụ thuộc Phase 02
+**Trạng thái:** hoàn thành về code — chờ smoke test trực quan R25 ở Phase 04
 
 ## Liên kết
 
@@ -53,6 +53,11 @@ quét, không phải tìm.
 - Mọi màu/khoảng cách dùng `{DynamicResource}`, không hardcode
 - Code-behind chỉ `InitializeComponent()` + `DataContext`
 - ViewModel đang ~900 dòng — nếu phần Wall làm nó phình quá, tách `ModelFromCadWallViewModel` riêng
+
+**Ngoại lệ preview của cửa sổ hiện hữu:** `ModelFromCadWindow.xaml.cs` đã sở hữu toàn bộ renderer
+2D/3D, pan/zoom/orbit của Column, Beam và Slab. Wall tiếp tục dùng đúng hạ tầng imperative này để
+không tạo hai cơ chế preview trong cùng một cửa sổ; code-behind chỉ chứa logic trình bày/tương tác,
+không gọi Revit API hay chứa nghiệp vụ phân tích/tạo tường.
 
 ## Review 2D và 3D — như tab Beam
 

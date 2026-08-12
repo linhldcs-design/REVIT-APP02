@@ -3,7 +3,7 @@
 Thêm tab `Create Wall` vào cửa sổ `Model From CAD`, bên cạnh `Create Grid`, `Create Column`,
 `Create Beam`, `Create Slab`.
 
-**Trạng thái:** chưa bắt đầu — chờ lệnh viết.
+**Trạng thái:** đang thực hiện — Phase 01–03 xong; fix nối qua cửa đạt 542/542 test. Debug.R25 và Release.R22–R27 build final đã qua với deploy tắt; còn deploy R25 và người dùng thử runtime.
 
 ## Quyết định của người dùng
 
@@ -13,6 +13,7 @@ Thêm tab `Create Wall` vào cửa sổ `Model From CAD`, bên cạnh `Create Gr
 | Bề dày | **Đo khoảng cách hai line**, không đọc text |
 | Chiều cao | **Base Level → Top Level**, chọn trong bản tùy chọn |
 | Wall Type | **Dò type có sẵn trước; không có mới sinh mới** |
+| Cửa đi/cửa sổ | Chỉ nối khi **cả hai bridge dọc** tiếp tục đúng hai mặt tường, trên chính layer tường người dùng chọn; không suy luận từ jamb/end-cap ngang |
 
 ## Vì sao làm được nhanh
 

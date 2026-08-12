@@ -4,6 +4,8 @@
 
 Status: **Released** ngày 2026-08-05; tiếp tục production smoke trên model thử.
 
+Wall tab: **code complete**. Fix nối tường qua cửa đạt `RevitAPP.Tests` **542/542**; tường chỉ nối khi cả hai bridge dọc tiếp tục đúng hai mặt tường trên chính layer tường người dùng chọn. Không suy luận từ jamb/end-cap ngang. `Debug.R25` và `Release.R22`–`Release.R27` đều build lại thành công với deploy tắt. Deploy final và runtime người dùng còn chờ vì Revit PID 17284 đang mở.
+
 - Hoàn thành luồng options-first: ribbon mở cửa sổ rỗng, sau đó người dùng chọn tab Grid/Column và bấm `Select From CAD` ngay trong tab.
 - Hoàn thành Data dùng chung trong cùng cửa sổ: có thể đổi tab để tái sử dụng một lần quét và reselect từ cả hai tab.
 - Hoàn thành nhận Grid, rectangle cột và block/nested block được hỗ trợ; preview Grid/Column, cấu hình Structural Column và phép đặt theo hai điểm móc.

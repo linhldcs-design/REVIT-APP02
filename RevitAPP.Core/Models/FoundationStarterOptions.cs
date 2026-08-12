@@ -10,11 +10,10 @@ public enum StarterBendDirection
 }
 
 /// <summary>
-///     Tùy chọn thép chờ móng (starter bar) — bẻ chữ L tại chân cột tầng dưới cùng:
-///     đoạn đứng Hm vươn lên trong cột (nối chồng với thép chủ), chân ngang Lb nằm trong móng.
+///     Tùy chọn thép chờ móng (starter bar) — bẻ chữ L trong móng rồi chạy liên tục qua cột tầng dưới cùng.
 /// </summary>
 /// <param name="Enabled">Bật sinh thép chờ móng.</param>
-/// <param name="HmMm">Chiều cao đoạn đứng vươn lên trong cột (mm).</param>
+/// <param name="HmMm">Chiều sâu đoạn đứng cắm xuống móng (mm).</param>
 /// <param name="LbMm">Chiều dài chân ngang nằm trong móng (mm).</param>
 /// <param name="Direction">Hướng bẻ chân ngang (khi không bật bẻ 2 bên).</param>
 /// <param name="SplitBothSides">

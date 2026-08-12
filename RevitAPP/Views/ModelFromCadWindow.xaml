@@ -720,6 +720,248 @@
                     </Grid>
                 </Grid>
             </TabItem>
+
+            <TabItem Header="▤  Create Wall">
+                <Grid Margin="{DynamicResource Spacing.Medium}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <WrapPanel Grid.Row="0" Margin="{DynamicResource Spacing.Medium}">
+                        <Button Content="1. Select Grid Axes"
+                                Style="{DynamicResource Button.Secondary}"
+                                Command="{Binding ReselectCommand}"/>
+                        <TextBlock Text="Bề dày min:" VerticalAlignment="Center"
+                                   Margin="{DynamicResource Spacing.Medium}"
+                                   Style="{DynamicResource TextBlock.Label}"/>
+                        <TextBox Width="72"
+                                 Text="{Binding MinimumWallThicknessText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{DynamicResource TextBox.Standard}"/>
+                        <TextBlock Text="Bề dày max:" VerticalAlignment="Center"
+                                   Margin="{DynamicResource Spacing.Medium}"
+                                   Style="{DynamicResource TextBlock.Label}"/>
+                        <TextBox Width="72"
+                                 Text="{Binding MaximumWallThicknessText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{DynamicResource TextBox.Standard}"/>
+                        <Button Content="2. Select Wall Lines"
+                                Margin="{DynamicResource Spacing.Medium}"
+                                Style="{DynamicResource Button.Primary}"
+                                Command="{Binding SelectWallLinesCommand}"/>
+                    </WrapPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="2*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TabControl Grid.Column="0"
+                                    Style="{DynamicResource TabControl.Standard}"
+                                    SelectedIndex="{Binding WallPreviewModeIndex, Mode=TwoWay}">
+                            <TabItem Header="2D" Style="{DynamicResource TabItem.Standard}">
+                                <Border Background="{DynamicResource Brush.Surface}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="1" ClipToBounds="True">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <WrapPanel Grid.Row="0" HorizontalAlignment="Right"
+                                                   Margin="{DynamicResource Spacing.Medium}">
+                                            <CheckBox Content="Lưới"
+                                                      Margin="{DynamicResource Spacing.Medium}"
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding ShowWallGridOverlay}"/>
+                                            <CheckBox Content="Nhãn"
+                                                      Margin="{DynamicResource Spacing.Medium}"
+                                                      Style="{DynamicResource CheckBox.Standard}"
+                                                      IsChecked="{Binding ShowWallLabels}"/>
+                                            <Button Content="+" Width="34"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomInCommand}"/>
+                                            <Button Content="-" Width="34"
+                                                    Margin="{DynamicResource Spacing.Small}"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomOutCommand}"/>
+                                            <Button Content="Vừa màn hình"
+                                                    Margin="{DynamicResource Spacing.Small}"
+                                                    Style="{DynamicResource Button.Secondary}"
+                                                    Command="{Binding ZoomToFitCommand}"/>
+                                        </WrapPanel>
+                                        <ScrollViewer Grid.Row="1" x:Name="WallPreviewScroll"
+                                                      HorizontalScrollBarVisibility="Auto"
+                                                      VerticalScrollBarVisibility="Auto" Cursor="SizeAll">
+                                            <Canvas x:Name="WallPreviewCanvas"
+                                                    Background="{DynamicResource Brush.Surface}"/>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Border>
+                            </TabItem>
+                            <TabItem Header="3D" Style="{DynamicResource TabItem.Standard}">
+                                <Border Background="{DynamicResource Brush.Surface}"
+                                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
+                                    <Grid x:Name="WallPreview3DHost" Background="Transparent" Cursor="SizeAll">
+                                        <Viewport3D x:Name="WallPreview3D" ClipToBounds="True"
+                                                    IsHitTestVisible="False"/>
+                                        <Button Content="Vừa màn hình" HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Margin="{DynamicResource Spacing.Medium}"
+                                                Style="{DynamicResource Button.Secondary}"
+                                                Command="{Binding ZoomToFitCommand}"/>
+                                        <TextBlock Text="3D preview — kéo chuột trái để xoay, lăn chuột để zoom"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                                   Margin="{DynamicResource Spacing.Medium}"
+                                                   Style="{DynamicResource TextBlock.Label}"/>
+                                    </Grid>
+                                </Border>
+                            </TabItem>
+                        </TabControl>
+
+                        <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch"
+                                      Background="{DynamicResource Brush.Border}"/>
+
+                        <Grid Grid.Column="2" Margin="{DynamicResource Spacing.Medium}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                                    Padding="{DynamicResource Spacing.Medium}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="88"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="82"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Wall Type:"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3"
+                                              ItemsSource="{Binding WallTypes}"
+                                              SelectedItem="{Binding SelectedWallType}"
+                                              Style="{DynamicResource ComboBox.Standard}"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Base Level:"
+                                               Margin="{DynamicResource Spacing.Medium}"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1"
+                                              Margin="{DynamicResource Spacing.Medium}"
+                                              ItemsSource="{Binding Levels}"
+                                              SelectedItem="{Binding SelectedWallBaseLevel}"
+                                              DisplayMemberPath="Name"
+                                              Style="{DynamicResource ComboBox.Standard}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Top Level:"
+                                               Margin="{DynamicResource Spacing.Medium}"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="3"
+                                              Margin="{DynamicResource Spacing.Medium}"
+                                              ItemsSource="{Binding Levels}"
+                                              SelectedItem="{Binding SelectedWallTopLevel}"
+                                              DisplayMemberPath="Name"
+                                              Style="{DynamicResource ComboBox.Standard}"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Offset:"
+                                               Margin="{DynamicResource Spacing.Medium}"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1"
+                                             Margin="{DynamicResource Spacing.Medium}"
+                                             Text="{Binding WallBaseOffsetText, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{DynamicResource TextBox.Standard}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="Min Line:"
+                                               Margin="{DynamicResource Spacing.Medium}"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <TextBox Grid.Row="2" Grid.Column="3"
+                                             Margin="{DynamicResource Spacing.Medium}"
+                                             Text="{Binding MinimumWallLengthText, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{DynamicResource TextBox.Standard}"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Dài/dày:"
+                                               Margin="{DynamicResource Spacing.Medium}"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1"
+                                             Margin="{DynamicResource Spacing.Medium}"
+                                             Text="{Binding WallLengthRatioText, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{DynamicResource TextBox.Standard}"/>
+                                    <Button Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2"
+                                            Content="Apply / Re-analyze"
+                                            Margin="{DynamicResource Spacing.Medium}"
+                                            Style="{DynamicResource Button.Secondary}"
+                                            Command="{Binding ApplyWallAnalysisCommand}"/>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="1" Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                                    Padding="{DynamicResource Spacing.Medium}"
+                                    Margin="{DynamicResource Spacing.Medium}">
+                                <StackPanel>
+                                    <TextBlock Text="Layer nào là tường?"
+                                               Style="{DynamicResource TextBlock.Label}"/>
+                                    <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding WallLayers}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox Content="{Binding Label}"
+                                                              IsChecked="{Binding IsWall, UpdateSourceTrigger=PropertyChanged}"
+                                                              Style="{DynamicResource CheckBox.Standard}"
+                                                              Margin="{DynamicResource Spacing.Small}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Border>
+
+                            <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                        Margin="{DynamicResource Spacing.Medium}">
+                                <Button Content="Chọn tất cả"
+                                        Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding SelectAllWallsCommand}"/>
+                                <Button Content="Bỏ chọn"
+                                        Margin="{DynamicResource Spacing.Medium}"
+                                        Style="{DynamicResource Button.Secondary}"
+                                        Command="{Binding ClearWallSelectionCommand}"/>
+                            </StackPanel>
+
+                            <DataGrid Grid.Row="3" ItemsSource="{Binding Walls}"
+                                      SelectedItem="{Binding SelectedWall, Mode=TwoWay}"
+                                      Style="{DynamicResource DataGrid.Standard}"
+                                      CellStyle="{DynamicResource DataGridCell.Standard}"
+                                      ColumnHeaderStyle="{DynamicResource DataGridHeader.Standard}"
+                                      HorizontalScrollBarVisibility="Auto" CanUserAddRows="False">
+                                <DataGrid.Columns>
+                                    <DataGridCheckBoxColumn Header="Tạo" Width="44"
+                                                            Binding="{Binding IsIncluded, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="#" Width="36" IsReadOnly="True"
+                                                        Binding="{Binding Number}"/>
+                                    <DataGridTextColumn Header="Dài" Width="72" IsReadOnly="True"
+                                                        Binding="{Binding LengthLabel}"/>
+                                    <DataGridTextColumn Header="Dày" Width="62"
+                                                        Binding="{Binding ThicknessMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <DataGridTextColumn Header="Vẽ bằng" Width="72" IsReadOnly="True"
+                                                        Binding="{Binding DrawnAs}"/>
+                                    <DataGridTextColumn Header="Trạng thái" Width="*" IsReadOnly="True"
+                                                        Binding="{Binding StatusLabel}"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </TabItem>
         </TabControl>
 
         <Grid Grid.Row="2" Margin="0,12,0,0">

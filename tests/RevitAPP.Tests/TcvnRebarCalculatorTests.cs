@@ -1,5 +1,6 @@
 using RevitAPP.Core.Models;
 using RevitAPP.Core.Services;
+using System.Text.Json;
 using Xunit;
 
 namespace RevitAPP.Tests;
@@ -90,6 +91,69 @@ public class TcvnRebarCalculatorTests
         Assert.Equal(7, zones.Bottom.Count);   // 600/100 + 1
         Assert.Equal(10, zones.Middle.Count);  // 1800/200 + 1
         Assert.Equal(7, zones.Top.Count);
+    }
+
+    [Fact]
+    public void ComputeZones_UniformA150_UsesOneFullHeightZoneAndPreservesLegacyInputs()
+    {
+        var section = new ColumnSection(400, 600);
+        var config = Config(sEnd: 100, sMid: 200) with
+        {
+            UniformStirrupSpacing = true,
+            UniformSpacingMm = 150
+        };
+
+        var zones = TcvnRebarCalculator.ComputeZones(clearHeightMm: 3000, section, config);
+
+        Assert.Equal((0d, 3000d, 150d, 21),
+            (zones.Bottom.StartElevationMm, zones.Bottom.LengthMm, zones.Bottom.SpacingMm, zones.Bottom.Count));
+        Assert.Equal(0, zones.Middle.Count);
+        Assert.Equal(0, zones.Top.Count);
+        Assert.Equal(100, config.SpacingEndMm);
+        Assert.Equal(200, config.SpacingMidMm);
+    }
+
+    [Fact]
+    public void ComputeZones_UniformMode_IgnoresInactiveEndAndMiddleSpacingValidation()
+    {
+        var section = new ColumnSection(400, 600);
+        var config = Config(sEnd: 0, sMid: 0) with
+        {
+            UniformStirrupSpacing = true,
+            UniformSpacingMm = 150
+        };
+
+        var zones = TcvnRebarCalculator.ComputeZones(3000, section, config);
+
+        Assert.Equal(21, zones.Bottom.Count);
+    }
+
+    [Fact]
+    public void ComputeZones_UniformMode_RejectsNonPositiveUniformSpacing()
+    {
+        var section = new ColumnSection(400, 600);
+        var config = Config() with { UniformStirrupSpacing = true, UniformSpacingMm = 0 };
+
+        Assert.Throws<ArgumentException>(() =>
+            TcvnRebarCalculator.ComputeZones(3000, section, config));
+    }
+
+    [Fact]
+    public void ColumnRebarFloorConfig_OldJsonWithoutUniformFields_DefaultsToLegacyModeAndA150()
+    {
+        const string oldJson = """
+            {"LevelName":"L1","MainBarDiameterMm":20,"BarsX":3,"BarsY":3,
+             "StirrupDiameterMm":8,"SpacingEndMm":100,"SpacingMidMm":200,
+             "ConfineZoneLenMm":0,"UseDistributionBar":false,
+             "DistributionBarDiameterMm":0,"StirrupSectionType":0}
+            """;
+
+        var config = JsonSerializer.Deserialize<ColumnRebarFloorConfig>(oldJson)!;
+
+        Assert.False(config.UniformStirrupSpacing);
+        Assert.Equal(150, config.UniformSpacingMm);
+        Assert.Equal(100, config.SpacingEndMm);
+        Assert.Equal(200, config.SpacingMidMm);
     }
 
     [Fact]

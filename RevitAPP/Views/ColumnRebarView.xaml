@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:v="clr-namespace:RevitAPP.Views"
         Title="Vẽ Thép Cột"
-        Width="1140" Height="640"
-        MinWidth="960" MinHeight="520"
+        Width="1280" Height="680"
+        MinWidth="1200" MinHeight="560"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Brush.Background}"
         FontFamily="{DynamicResource Font.Family}"
@@ -15,6 +15,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/RevitAPP;component/Resources/Themes/Theme.xaml"/>
+                <ResourceDictionary Source="/RevitAPP;component/Resources/Themes/ColumnRebarPreviewTheme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <v:EnumMatchConverter x:Key="EnumMatch"/>
         </ResourceDictionary>
@@ -26,16 +27,21 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0" Style="{StaticResource TabControl.Standard}">
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="740"/>
+                <ColumnDefinition Width="*" MinWidth="360"/>
+            </Grid.ColumnDefinitions>
+        <TabControl Grid.Column="0" Margin="0,0,12,0" Style="{StaticResource TabControl.Standard}">
 
             <!-- ============ TAB 1: Theo tầng (master-detail) ============ -->
             <TabItem Header="Theo tầng">
                 <Border Background="{DynamicResource Brush.Surface}" CornerRadius="0,4,4,4" Padding="14">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="190"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="290"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*" MinWidth="275"/>
+                            <ColumnDefinition Width="250"/>
                         </Grid.ColumnDefinitions>
 
                         <!-- LEFT: danh sách tầng -->
@@ -59,22 +65,24 @@
                         </DockPanel>
 
                         <!-- CENTER: thiết lập tầng đang chọn -->
-                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="0,0,12,0"
+                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" ClipToBounds="True" Margin="0,0,12,0"
                                       DataContext="{Binding SelectedFloor}">
                             <StackPanel>
                                 <TextBlock Text="Thiết lập thép tầng đang chọn" FontWeight="SemiBold"
                                            Foreground="{DynamicResource Brush.Text}" Margin="0,0,0,10"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="150"/>
-                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="145"/>
+                                        <ColumnDefinition Width="*" MinWidth="110"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="Số thanh phương X" VerticalAlignment="Center"/>
@@ -108,16 +116,47 @@
                                               DisplayMemberPath="Display"
                                               SelectedItem="{Binding StirrupType, UpdateSourceTrigger=PropertyChanged}"/>
 
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="K/c đai đầu/chân (mm)" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="6" Grid.Column="1" Style="{StaticResource TextBox.Standard}" Margin="0,2"
-                                             Text="{Binding SpacingEndMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <CheckBox Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
+                                              Style="{StaticResource CheckBox.Standard}" Margin="0,6"
+                                              Content="Đai một khoảng cách duy nhất"
+                                              IsChecked="{Binding UniformStirrupSpacing}"/>
 
-                                    <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="K/c đai thân (mm)" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Style="{StaticResource TextBlock.Label}"
+                                               Text="K/c đai duy nhất A (mm)" VerticalAlignment="Center"/>
                                     <TextBox Grid.Row="7" Grid.Column="1" Style="{StaticResource TextBox.Standard}" Margin="0,2"
-                                             Text="{Binding SpacingMidMm, UpdateSourceTrigger=PropertyChanged}"/>
+                                             IsEnabled="{Binding UniformStirrupSpacing}"
+                                             Text="{Binding UniformSpacingMm, UpdateSourceTrigger=PropertyChanged}"/>
 
-                                    <TextBlock Grid.Row="8" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="Chiều cao dầm (tự dò)" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="8" Grid.Column="1" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" Margin="0,2"
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="K/c đai đầu/chân (mm)" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="8" Grid.Column="1" Margin="0,2"
+                                             Text="{Binding SpacingEndMm, UpdateSourceTrigger=PropertyChanged}">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Standard}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding UniformStirrupSpacing}" Value="True">
+                                                        <Setter Property="IsEnabled" Value="False"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+
+                                    <TextBlock Grid.Row="9" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="K/c đai thân (mm)" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="9" Grid.Column="1" Margin="0,2"
+                                             Text="{Binding SpacingMidMm, UpdateSourceTrigger=PropertyChanged}">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Standard}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding UniformStirrupSpacing}" Value="True">
+                                                        <Setter Property="IsEnabled" Value="False"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+
+                                    <TextBlock Grid.Row="10" Grid.Column="0" Style="{StaticResource TextBlock.Label}" Text="Chiều cao dầm (tự dò)" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Row="10" Grid.Column="1" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" Margin="0,2"
                                                Text="{Binding BeamDepthLabel}"/>
                                 </Grid>
 
@@ -141,11 +180,12 @@
                         </ScrollViewer>
 
                         <!-- RIGHT: section preview + thông số -->
-                        <Border Grid.Column="2" Padding="12" Background="{DynamicResource Brush.Background}" CornerRadius="4"
+                        <Border Grid.Column="2" Padding="8" Background="{DynamicResource Brush.Background}" CornerRadius="4"
                                 BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
                             <StackPanel>
                                 <TextBlock Text="Tiết diện" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text}" Margin="0,0,0,8"/>
                                 <Border Background="{DynamicResource Brush.Surface}" CornerRadius="3" HorizontalAlignment="Center" Padding="6" Margin="0,0,0,12">
+                                    <Viewbox Width="220" Height="176" Stretch="Uniform">
                                     <Canvas Width="250" Height="200">
                                         <Rectangle Canvas.Left="{Binding SectionRectLeft}" Canvas.Top="{Binding SectionRectTop}"
                                                    Width="{Binding SectionRectWidth}" Height="{Binding SectionRectHeight}"
@@ -182,6 +222,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </Canvas>
+                                    </Viewbox>
                                 </Border>
 
                                 <Grid>
@@ -239,7 +280,7 @@
                                       IsChecked="{Binding FoundationSplitBothSides}"/>
                         </StackPanel>
 
-                        <TextBlock Text="Thép chờ bẻ chữ L: cắm XUỐNG móng đoạn Hm, foot Lb ngang ở đáy móng; đầu trên tự động vươn lên cột một đoạn nối chồng để lap với thép chủ."
+                        <TextBlock Text="Thép chữ L chạy LIÊN TỤC từ móng qua cổ móng và tầng đầu; không nối tại mặt móng. Mối nối đầu tiên nằm ở vùng nối phía trên, theo thiết lập nối thép."
                                    TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"
                                    Margin="0,16,0,0" MaxWidth="440" HorizontalAlignment="Left"/>
                     </StackPanel>
@@ -401,6 +442,48 @@
             </TabItem>
 
         </TabControl>
+
+            <!-- Persistent faithful Review: remains visible while any settings tab is edited. -->
+            <Border Grid.Column="1" Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="4" Padding="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="2,0,2,8">
+                        <TextBlock DockPanel.Dock="Left" Text="REVIEW" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Brush.Text}" VerticalAlignment="Center"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <CheckBox Style="{DynamicResource CheckBox.Standard}" Content="Mặt bên" Margin="0,0,8,0"
+                                      VerticalAlignment="Center" IsChecked="{Binding PreviewSideView}"/>
+                            <Button Style="{DynamicResource Button.Secondary}" Content="Fit" MinWidth="58"
+                                    Command="{Binding FitPreviewCommand}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <TabControl Grid.Row="1" Style="{DynamicResource TabControl.Standard}">
+                        <TabItem Header="2D">
+                            <v:ColumnRebarPreview2D x:Name="ColumnReview2D"
+                                Plan="{Binding PreviewPlan}" SideView="{Binding PreviewSideView}"
+                                SelectedStoreyIndex="{Binding SelectedStoreyIndex}"/>
+                        </TabItem>
+                        <TabItem Header="3D">
+                            <v:ColumnRebarPreview3D x:Name="ColumnReview3D" Plan="{Binding PreviewPlan}"/>
+                        </TabItem>
+                    </TabControl>
+                    <Grid Grid.Row="2" Margin="2,8,2,0">
+                        <TextBlock Text="Thép: đỏ · Bê tông: xám trong · Level: xanh"
+                                   FontSize="11" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <Border Background="{DynamicResource Brush.Background}" Opacity="0.94" CornerRadius="3" Padding="6,4"
+                                Visibility="{Binding PreviewValidationMessage, Converter={StaticResource StringToVisibility}}">
+                            <TextBlock Text="{Binding PreviewValidationMessage}" Foreground="{DynamicResource Brush.Warning}"
+                                       FontSize="11" TextWrapping="Wrap"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- Footer: preset (trái) + hành động (phải) -->
         <Grid Grid.Row="1" Margin="0,16,0,0">
