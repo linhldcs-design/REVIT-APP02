@@ -5,6 +5,8 @@ public partial class MainWindow : System.Windows.Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new InstallerViewModel();
+        var viewModel = new InstallerViewModel();
+        viewModel.RestartInstallerRequested += (_, _) => System.Windows.Application.Current.Shutdown();
+        DataContext = viewModel;
     }
 }

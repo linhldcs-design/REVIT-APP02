@@ -4,6 +4,10 @@ namespace RevitAPP.Installer;
 
 internal static class SelfInstaller
 {
+    public static string InstalledPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Programs", "RevitAPP Installer", "RevitAPP.Installer.exe");
+
     public static void EnsureInstalled()
     {
         try
@@ -11,9 +15,8 @@ internal static class SelfInstaller
             var source = Environment.ProcessPath;
             if (string.IsNullOrWhiteSpace(source) || !File.Exists(source)) return;
 
-            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Programs", "RevitAPP Installer");
-            var target = Path.Combine(folder, "RevitAPP.Installer.exe");
+            var target = InstalledPath;
+            var folder = Path.GetDirectoryName(target)!;
             Directory.CreateDirectory(folder);
             if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
                 File.Copy(source, target, true);

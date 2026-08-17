@@ -20,6 +20,7 @@
                     <TextBlock Text="{Binding LicenseStatus}" Foreground="{DynamicResource Brush.TextSecondary}" Margin="0,6,0,0"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Đăng nhập Google" Command="{Binding SignInCommand}"
+                        IsEnabled="{Binding IsNotBusy}"
                         Style="{DynamicResource SecondaryButton}"/>
             </Grid>
         </Border>
@@ -27,7 +28,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <TextBlock Text="Phiên bản Revit" VerticalAlignment="Center"/>
             <ComboBox Grid.Column="1" ItemsSource="{Binding RevitYears}" SelectedItem="{Binding SelectedRevitYear}"
-                      Height="32" Padding="8,4"/>
+                      IsEnabled="{Binding IsNotBusy}" Height="32" Padding="8,4"/>
         </Grid>
         <Border Grid.Row="3" Background="{DynamicResource Brush.Accent}" CornerRadius="5" Padding="12"
                 Margin="0,14,0,0" Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVisibility}}">
@@ -36,6 +37,7 @@
                 <TextBlock Text="{Binding UpdateNotice}" Foreground="White" FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
                 <Button Grid.Column="1" Content="Cập nhật ngay" Command="{Binding InstallCommand}"
+                        IsEnabled="{Binding IsNotBusy}"
                         Style="{DynamicResource SecondaryButton}" Margin="12,0,0,0"/>
             </Grid>
         </Border>

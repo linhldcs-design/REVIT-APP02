@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   build:
+    needs: installer
     runs-on: windows-latest
     strategy:
       matrix:
@@ -20,6 +21,10 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: bundled-installer
       - name: Resolve version
         shell: pwsh
         run: |
@@ -39,6 +44,7 @@ jobs:
           Copy-Item "$out/RevitAPP.DwgExportWorker.exe" $pkg
           Get-ChildItem $out -Filter 'RevitAPP.*.json' | Copy-Item -Destination $pkg
           Copy-Item 'updater/RevitAPP.Updater.exe' $pkg
+          Copy-Item 'bundled-installer/RevitAPP.Installer.exe' $pkg
           Compress-Archive -Path 'package/*' -DestinationPath "RevitAPP-R${{ matrix.revit }}-$env:VERSION.zip"
           $hash=(Get-FileHash "RevitAPP-R${{ matrix.revit }}-$env:VERSION.zip" -Algorithm SHA256).Hash
           @{ year="20${{ matrix.revit }}"; file="RevitAPP-R${{ matrix.revit }}-$env:VERSION.zip"; sha256=$hash } | ConvertTo-Json | Set-Content "asset-${{ matrix.revit }}.json"
@@ -85,7 +91,10 @@ jobs:
             $a=Get-Content $_ | ConvertFrom-Json
             $packages[$a.year]=@{ url="https://github.com/${{ github.repository }}/releases/download/v$version/$($a.file)"; sha256=$a.sha256 }
           }
-          @{ version=$version; notes="RevitAPP $version"; packages=$packages } | ConvertTo-Json -Depth 5 | Set-Content artifacts/latest.json
+          $installerFile='RevitAPP.Installer.exe'
+          $installerHash=(Get-FileHash "artifacts/$installerFile" -Algorithm SHA256).Hash
+          $installer=@{ url="https://github.com/${{ github.repository }}/releases/download/v$version/$installerFile"; sha256=$installerHash }
+          @{ version=$version; notes="RevitAPP $version"; packages=$packages; installer=$installer } | ConvertTo-Json -Depth 5 | Set-Content artifacts/latest.json
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true

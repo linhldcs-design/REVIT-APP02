@@ -21,6 +21,7 @@ namespace RevitAPP
         public override void OnStartup()
         {
             CreateLogger();
+            InstallerBootstrapService.EnsureBundledInstallerInstalled();
             BeamRebarPro.Host.Start();
             IsolatedFootingRebar.Host.Start();
             WallRebar.Host.Start();

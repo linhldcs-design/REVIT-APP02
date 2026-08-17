@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RevitAPP.Core.Models.Updates;
@@ -26,6 +28,7 @@ public sealed partial class InstallerViewModel : ObservableObject
     [ObservableProperty] private string _updateNotice = string.Empty;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(IsNotBusy))] private bool _isBusy;
     public bool IsNotBusy => !IsBusy;
+    public event EventHandler? RestartInstallerRequested;
 
     public InstallerViewModel()
     {
@@ -41,6 +44,7 @@ public sealed partial class InstallerViewModel : ObservableObject
     [RelayCommand]
     private async Task SignInAsync()
     {
+        if (IsBusy) return;
         IsBusy = true;
         try { ApplyLicense(await LicenseService.Instance.SignInAsync()); }
         catch (Exception ex) { LicenseStatus = "Đăng nhập lỗi: " + ex.Message; }
@@ -50,28 +54,30 @@ public sealed partial class InstallerViewModel : ObservableObject
     [RelayCommand]
     private async Task CheckUpdatesAsync()
     {
-        if (IsBusy || string.IsNullOrWhiteSpace(SelectedRevitYear)) return;
+        var year = SelectedRevitYear;
+        if (IsBusy || string.IsNullOrWhiteSpace(year)) return;
         IsBusy = true;
         try
         {
             StatusText = "Đang kiểm tra GitHub Releases...";
-            var json = await Http.GetStringAsync(ManifestUrl);
+            var json = await DownloadStringWithRetryAsync(ManifestUrl, "manifest cập nhật");
             var manifest = JsonSerializer.Deserialize<UpdateManifest>(json,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                            ?? throw new InvalidDataException("Manifest không hợp lệ.");
-            var installed = InstalledVersion(SelectedRevitYear);
-            if (!manifest.Packages.ContainsKey(SelectedRevitYear))
+            if (await TryStartInstallerUpdateAsync(manifest)) return;
+            var installed = InstalledVersion(year);
+            if (!manifest.Packages.ContainsKey(year))
             {
                 UpdateAvailable = false;
-                StatusText = $"GitHub có bản {manifest.Version}, nhưng chưa có gói cho Revit {SelectedRevitYear}.";
+                StatusText = $"GitHub có bản {manifest.Version}, nhưng chưa có gói cho Revit {year}.";
                 return;
             }
             UpdateAvailable = installed != null && UpdatePackageVerifier.IsNewer(manifest.Version, installed);
             UpdateNotice = UpdateAvailable
-                ? $"CÓ PHIÊN BẢN MỚI: {installed}  →  {manifest.Version} (Revit {SelectedRevitYear})"
+                ? $"CÓ PHIÊN BẢN MỚI: {installed}  →  {manifest.Version} (Revit {year})"
                 : string.Empty;
             StatusText = installed == null
-                ? $"Có thể cài RevitAPP {manifest.Version} cho Revit {SelectedRevitYear}."
+                ? $"Có thể cài RevitAPP {manifest.Version} cho Revit {year}."
                 : UpdateAvailable
                     ? $"Có bản mới {manifest.Version}; máy đang dùng {installed}."
                     : $"RevitAPP {installed} đang là bản mới nhất.";
@@ -89,36 +95,55 @@ public sealed partial class InstallerViewModel : ObservableObject
     [RelayCommand]
     private async Task InstallAsync()
     {
-        if (IsBusy || string.IsNullOrWhiteSpace(SelectedRevitYear)) return;
-        var state = await LicenseService.Instance.GetStateAsync();
-        ApplyLicense(state);
-        if (state.Status != RevitAPP.Licensing.LicenseStatus.Valid) { StatusText = "Hãy đăng nhập license hợp lệ trước khi cài."; return; }
-        if (Process.GetProcessesByName("Revit").Length > 0) { StatusText = "Hãy đóng tất cả Revit trước khi cài/cập nhật."; return; }
-
+        var year = SelectedRevitYear;
+        if (IsBusy || string.IsNullOrWhiteSpace(year)) return;
         IsBusy = true;
+        string? temp = null;
         try
         {
+            StatusText = "Đang xác nhận license...";
+            var state = await LicenseService.Instance.GetStateAsync();
+            ApplyLicense(state);
+            if (state.Status != RevitAPP.Licensing.LicenseStatus.Valid)
+                throw new InvalidOperationException("Hãy đăng nhập license hợp lệ trước khi cài.");
+
+            var revitProcesses = Process.GetProcessesByName("Revit");
+            if (revitProcesses.Length > 0)
+                throw new InvalidOperationException(
+                    $"Hãy đóng tất cả Revit trước khi cài/cập nhật (đang chạy PID {string.Join(", ", revitProcesses.Select(process => process.Id))}).");
+
             StatusText = "Đang kiểm tra phiên bản mới...";
-            var json = await Http.GetStringAsync(ManifestUrl);
+            var json = await DownloadStringWithRetryAsync(ManifestUrl, "manifest cập nhật");
             var manifest = JsonSerializer.Deserialize<UpdateManifest>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                            ?? throw new InvalidDataException("Manifest không hợp lệ.");
-            if (!manifest.Packages.TryGetValue(SelectedRevitYear, out var package))
-                throw new InvalidOperationException($"Không có gói cho Revit {SelectedRevitYear}.");
-            var temp = Path.Combine(Path.GetTempPath(), "RevitAPP-" + Guid.NewGuid().ToString("N"));
+            if (await TryStartInstallerUpdateAsync(manifest)) return;
+            if (!manifest.Packages.TryGetValue(year, out var package))
+                throw new InvalidOperationException($"Không có gói cho Revit {year}.");
+            temp = Path.Combine(Path.GetTempPath(), "RevitAPP-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(temp);
             var zip = Path.Combine(temp, "package.zip");
             StatusText = $"Đang tải RevitAPP {manifest.Version}...";
-            await File.WriteAllBytesAsync(zip, await Http.GetByteArrayAsync(package.Url));
+            await File.WriteAllBytesAsync(zip,
+                await DownloadBytesWithRetryAsync(package.Url, $"gói RevitAPP {manifest.Version}"));
             if (!UpdatePackageVerifier.VerifySha256(zip, package.Sha256)) throw new InvalidDataException("SHA-256 không khớp.");
             var extract = Path.Combine(temp, "extract");
             ZipFile.ExtractToDirectory(zip, extract);
             var payload = Directory.Exists(Path.Combine(extract, "RevitAPP")) ? Path.Combine(extract, "RevitAPP") : extract;
-            InstallPayload(payload, SelectedRevitYear, manifest.Version);
-            Directory.Delete(temp, true);
-            StatusText = $"Đã cài RevitAPP {manifest.Version} cho Revit {SelectedRevitYear}.";
+            InstallPayload(payload, year, manifest.Version);
+            UpdateAvailable = false;
+            UpdateNotice = string.Empty;
+            StatusText = $"Đã cài RevitAPP {manifest.Version} cho Revit {year}.";
         }
         catch (Exception ex) { StatusText = "Cài đặt thất bại: " + ex.Message; }
-        finally { IsBusy = false; }
+        finally
+        {
+            if (temp is not null && Directory.Exists(temp))
+            {
+                try { Directory.Delete(temp, true); }
+                catch { /* Temp cleanup must not hide the actual update result. */ }
+            }
+            IsBusy = false;
+        }
     }
 
     [RelayCommand]
@@ -167,15 +192,127 @@ public sealed partial class InstallerViewModel : ObservableObject
     {
         var root = AddinsRoot(year);
         var target = Path.Combine(root, "RevitAPP");
-        Directory.CreateDirectory(target);
-        foreach (var source in Directory.EnumerateFiles(payload, "*", SearchOption.AllDirectories))
+        var staging = Path.Combine(root, ".RevitAPP.install-" + Guid.NewGuid().ToString("N"));
+        var backup = Path.Combine(root, ".RevitAPP.backup-" + Guid.NewGuid().ToString("N"));
+        var manifest = Path.Combine(root, "RevitAPP.addin");
+        var manifestStaging = Path.Combine(root, ".RevitAPP.addin.install-" + Guid.NewGuid().ToString("N"));
+        var manifestBackup = Path.Combine(root, ".RevitAPP.addin.backup-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(staging);
+        try
         {
-            var destination = Path.Combine(target, Path.GetRelativePath(payload, source));
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(source, destination, true);
+            foreach (var source in Directory.EnumerateFiles(payload, "*", SearchOption.AllDirectories))
+            {
+                var destination = Path.Combine(staging, Path.GetRelativePath(payload, source));
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(source, destination, true);
+            }
+            File.WriteAllText(Path.Combine(staging, "installed-version.txt"), version);
+            File.WriteAllText(manifestStaging, AddinManifest());
+
+            var targetBackedUp = false;
+            var manifestBackedUp = false;
+            var newTargetInstalled = false;
+            var newManifestInstalled = false;
+            try
+            {
+                if (Directory.Exists(target))
+                {
+                    Directory.Move(target, backup);
+                    targetBackedUp = true;
+                }
+                if (File.Exists(manifest))
+                {
+                    File.Move(manifest, manifestBackup);
+                    manifestBackedUp = true;
+                }
+                Directory.Move(staging, target);
+                newTargetInstalled = true;
+                File.Move(manifestStaging, manifest);
+                newManifestInstalled = true;
+            }
+            catch
+            {
+                if (newTargetInstalled && Directory.Exists(target)) Directory.Delete(target, true);
+                if (targetBackedUp && Directory.Exists(backup)) Directory.Move(backup, target);
+                if (newManifestInstalled && File.Exists(manifest)) File.Delete(manifest);
+                if (manifestBackedUp && File.Exists(manifestBackup)) File.Move(manifestBackup, manifest);
+                throw;
+            }
+
+            if (Directory.Exists(backup))
+            {
+                try { Directory.Delete(backup, true); }
+                catch { /* A complete new target is already live; stale backup cleanup is non-fatal. */ }
+            }
+            if (File.Exists(manifestBackup))
+            {
+                try { File.Delete(manifestBackup); }
+                catch { /* The new manifest is already live; stale backup cleanup is non-fatal. */ }
+            }
         }
-        File.WriteAllText(Path.Combine(target, "installed-version.txt"), version);
-        File.WriteAllText(Path.Combine(root, "RevitAPP.addin"), AddinManifest());
+        finally
+        {
+            if (Directory.Exists(staging))
+            {
+                try { Directory.Delete(staging, true); }
+                catch { /* Staging cleanup must not turn a successful installation into a failure. */ }
+            }
+            if (File.Exists(manifestStaging))
+            {
+                try { File.Delete(manifestStaging); }
+                catch { /* Manifest staging cleanup is best effort. */ }
+            }
+        }
+    }
+
+    private async Task<bool> TryStartInstallerUpdateAsync(UpdateManifest manifest)
+    {
+        if (manifest.Installer is null) return false;
+        var current = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        if (!UpdatePackageVerifier.IsNewer(manifest.Version, current)) return false;
+
+        var updateDirectory = Path.Combine(Path.GetTempPath(), "RevitAPP-Installer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(updateDirectory);
+        try
+        {
+            var candidate = Path.Combine(updateDirectory, "RevitAPP.Installer.exe");
+            StatusText = $"Đang tải Installer {manifest.Version}...";
+            await File.WriteAllBytesAsync(candidate,
+                await DownloadBytesWithRetryAsync(manifest.Installer.Url, $"Installer {manifest.Version}"));
+            if (!UpdatePackageVerifier.VerifySha256(candidate, manifest.Installer.Sha256))
+                throw new InvalidDataException("SHA-256 của Installer không khớp.");
+
+            InstallerSelfUpdater.LaunchHelper(candidate, SelfInstaller.InstalledPath, Environment.ProcessId);
+            StatusText = $"Installer sẽ tự khởi động lại ở phiên bản {manifest.Version}...";
+            RestartInstallerRequested?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+        catch
+        {
+            try { Directory.Delete(updateDirectory, true); } catch { }
+            throw;
+        }
+    }
+
+    private async Task<string> DownloadStringWithRetryAsync(string url, string label) =>
+        Encoding.UTF8.GetString(await DownloadBytesWithRetryAsync(url, label));
+
+    private async Task<byte[]> DownloadBytesWithRetryAsync(string url, string label)
+    {
+        Exception? last = null;
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try { return await Http.GetByteArrayAsync(url); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                last = ex;
+                if (attempt == 3) break;
+                StatusText = $"Tải {label} chưa thành công (lần {attempt}/3), đang thử lại...";
+                await Task.Delay(TimeSpan.FromSeconds(attempt));
+            }
+        }
+        throw new HttpRequestException($"Không tải được {label} sau 3 lần thử.", last);
     }
 
     private static string AddinsRoot(string year) => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
