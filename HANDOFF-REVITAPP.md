@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.12.0`
+- Release mới nhất đã phát hành: `v1.13.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -35,7 +35,7 @@
 - RevitAPP đã build thành công cho Revit 2022–2027.
 - Revit 2022 có fallback cho `Viewport.GetProjectionToSheetTransform`.
 - Revit 2022–2024 bỏ qua Rebar Bending Detail vì API chưa hỗ trợ.
-- Test gần nhất: `RevitAPP.Tests` 495/495 đạt.
+- Test gần nhất: `RevitAPP.Tests` 582/582 và `BeamRebarPro.Tests` 128/128 đạt.
 - Chat AI có registry **57 tool duy nhất** và vẫn hoạt động từ cửa sổ Chat trên Ribbon. Cùng registry đó được mở thêm qua MCP Streamable HTTP tích hợp tại `http://127.0.0.1:8765/mcp`; không cần `revit_mcp_plugin`, `commandRegistry` hay MCP server ngoài. Cả Chat AI và MCP dùng chung `ExternalEvent`, license gate và transaction ownership hiện có.
 - Build xác nhận gần nhất: đủ Revit 2022–2027 đều thành công; bản Revit 2025 đã được triển khai thực tế.
 - `send_code_to_revit` giới hạn tối đa 1.200 ký tự và luôn yêu cầu người dùng xác nhận trước khi chạy C#.
@@ -73,6 +73,11 @@
 - **Bài học `v1.11.0`:** công thức cung tròn ban đầu được dò dấu bằng script rời, tám vòng không hội tụ. Viết `CadArcChordsTests` (30 ca: nửa tròn, 1/4, cung nông, cung lớn, cạnh xiên, cả hai chiều) trước rồi mới sửa — ba lần là xanh.
 - `v1.11.1`: `Create Slab` tự sinh Floor Type đúng chiều dày CAD ghi. Cơ chế nhân bản đã có từ `v1.10.0` nhưng tìm nhầm type: mọi Floor Type trong Revit đều có `FamilyName = "Floor"`, nên điều kiện `FamilyName == seed.FamilyName` khớp với bất kỳ type nào cùng chiều dày — chọn sàn bê tông có thể lấy nhầm sàn metal deck. Nay hai type là một khi cấu tạo giống nhau (cùng số lớp, chức năng lớp, vật liệu, thứ tự); chiều dày khác là thứ đang được thay đổi. Tên type sinh ra lấy theo type gốc thay vì family: `160mm Concrete With 50mm Metal Deck (210 mm)` sinh ra `Concrete With Metal Deck 120mm`, không còn `Floor 120`. Thêm `CadSlabTypeNaming` + 13 test (gồm ca sao chép hai lần không được thành `Concrete 150mm 200mm 250mm`). Kiểm thử 495/495; build R22–R27 thành công.
 - `v1.12.0`: thêm tab `Create Wall` trong `Model From CAD`, nhận tường từ hai biên/rectangle theo layer, review 2D/3D và dựng Wall theo Level/Wall Type; đồng thời nâng cấp `Vẽ Thép Cột` với review 2D/3D có level, hình học dùng chung với Revit, thép móng chạy liên tục và so le, nối thép theo nguyên tắc 2, chuyển tiết diện, móc/uốn, đai một khoảng cách duy nhất và giao diện responsive. Preset/license người dùng được giữ nguyên khi cập nhật. GitHub Actions run `31571123045` thành công; đủ 8 asset và `latest.json` v1.12.0 trả HTTP 200.
+- `v1.13.0`: `Vẽ Thép Dầm` có khung xem trước 2D/3D trong cả Quick Setting và Detail Rebar Forms, dựng từ cùng một mô tả hình học với thép được tạo trong Revit. Hình học tách thành factory thuần trong `RevitAPP.Core`: `RebarLayoutMath` nhân bản thanh theo đúng ngữ nghĩa `SetLayoutAsMaximumSpacing`/`SetLayoutAsFixedNumber` (bước co lại để phủ hết vùng, không giữ bước danh nghĩa rồi hở ở cuối), `PureSpanFrame` dựng hệ trục nhịp độc lập Revit. Builder giữ nguyên cơ chế layout của Revit nên thép tạo ra không đổi. Bản xem trước dùng tiết diện, cao độ và toạ độ thật của dầm đang chọn nên khớp cả khi dầm nằm xiên. Kiểm thử 710/710 đạt; build R22–R27 thành công.
+- Các lỗi đã sửa trong `v1.13.0` sau khi người dùng thử trên mô hình thật: thanh chủ bị cắt tại gối giữa (thực tế chạy suốt cả dầm vật lý); thép gia cường trên vẽ thành hai cây bẻ móc tại cột giữa thay vì một cây chạy xuyên — quy tắc thật là mỗi gối một thanh vắt qua, chỉ hai gối biên mới có móc (`DLeftMm = support == 0 ? … : 0`); đoạn bẻ đầu thép chủ bỏ qua `Anchor Left/Right` mà chỉ đọc `Bend down`, và thép dưới bẻ ngược lên chứ không xuống; đai phụ chưa hề được dựng; màn Detail đọc cấu hình gộp thay vì `TopAdditionalItems`/`BottomAdditionalItems` nên mọi thao tác thêm/xoá/sửa trong Detail không hiện ra.
+- **Bài học `v1.13.0`:** bốn vòng sửa đầu cho lỗi "Detail chưa ăn" đều đoán sai (dispatcher, nguồn nhịp, ô nhập, thẻ ẩn) vì add-in tạo logger nhưng không gán `Log.Logger`, nên mọi lời gọi ghi nhật ký rơi vào hư không và không có gì để lần. Sau khi ghi nhật ký ra file tại `%LocalAppData%\BeamRebarPro\logs`, log chỉ ra ngay trong một vòng: dữ liệu đúng, khung vẽ không được gọi. Bật ghi nhật ký trước khi suy đoán.
+- **Bài học `v1.13.0`:** chỉ verify `Debug.R25` suốt quá trình phát triển nên `Math.Clamp` và `Split(char, StringSplitOptions)` lọt vào `RevitAPP.Core` — cả hai chỉ có từ .NET Core, làm R22–R24 (net48) build hỏng ở bước 4 của quy trình phát hành. `RevitAPP.Core/Services/MathCompat.cs` đã có sẵn polyfill cho đúng việc này.
+- **Runtime smoke `v1.13.0`:** người dùng đã xác nhận khung xem trước chạy đúng trên Revit 2025 trước khi phát hành.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
