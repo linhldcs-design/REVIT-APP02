@@ -237,6 +237,8 @@ public sealed partial class BeamRebarDetailViewModel : ObservableObject
             SaveEditorToSelectedTab();
 
         _isSyncingParent = true;
+        // Ghi hàng chục thông số một lượt: gom lại để màn ngoài chỉ dựng lại bản xem trước một lần.
+        using var _ = _parent.SuspendPreview();
         _parent.MainTopDiameterMm = _mainTopDiameterMmState;
         _parent.MainBottomDiameterMm = _mainBottomDiameterMmState;
         _parent.MainTopCount = _mainTopNumberState;
@@ -270,9 +272,51 @@ public sealed partial class BeamRebarDetailViewModel : ObservableObject
         _isSyncingParent = false;
     }
 
+    /// <summary>
+    /// Các thông số ở màn ngoài mà khi đổi thì màn chi tiết phải nạp lại. Đúng những giá trị mà
+    /// <see cref="LoadFromParent"/> đọc — mọi thứ khác không được phép dựng lại danh sách thép.
+    /// </summary>
+    private static readonly HashSet<string> ReloadTriggers =
+    [
+        nameof(BeamRebarProViewModel.PickedSpans),
+        nameof(BeamRebarProViewModel.SavedConfig),
+        nameof(BeamRebarProViewModel.MainTopCount),
+        nameof(BeamRebarProViewModel.MainTopDiameterMm),
+        nameof(BeamRebarProViewModel.MainBottomCount),
+        nameof(BeamRebarProViewModel.MainBottomDiameterMm),
+        nameof(BeamRebarProViewModel.MainAnchorLengthMm),
+        nameof(BeamRebarProViewModel.MainTopBendDownLengthMm),
+        nameof(BeamRebarProViewModel.TopAdditionalEnabled),
+        nameof(BeamRebarProViewModel.TopAdditionalCount),
+        nameof(BeamRebarProViewModel.TopAdditionalDiameterMm),
+        nameof(BeamRebarProViewModel.TopAdditionalEdgeHookDownLengthMm),
+        nameof(BeamRebarProViewModel.TopAdditionalLayer2Enabled),
+        nameof(BeamRebarProViewModel.TopAdditionalLayer2Count),
+        nameof(BeamRebarProViewModel.TopAdditionalLayer2DiameterMm),
+        nameof(BeamRebarProViewModel.BottomAdditionalEnabled),
+        nameof(BeamRebarProViewModel.BottomAdditionalCount),
+        nameof(BeamRebarProViewModel.BottomAdditionalDiameterMm),
+        nameof(BeamRebarProViewModel.BottomAdditionalLayer2Enabled),
+        nameof(BeamRebarProViewModel.BottomAdditionalLayer2Count),
+        nameof(BeamRebarProViewModel.BottomAdditionalLayer2DiameterMm),
+        nameof(BeamRebarProViewModel.StirrupDiameterMm),
+        nameof(BeamRebarProViewModel.StirrupTwoEnds),
+        nameof(BeamRebarProViewModel.StirrupSpacingEndMm),
+        nameof(BeamRebarProViewModel.StirrupSpacingMidMm),
+        nameof(BeamRebarProViewModel.StirrupFirstDistanceMm),
+        nameof(BeamRebarProViewModel.AntiBulgeDiameterMm),
+        nameof(BeamRebarProViewModel.AntiBulgeColumnEmbedMm)
+    ];
+
     private void ReloadFromParentIfExternal(string? propertyName = null)
     {
         if (_isSyncingParent || _isLoadingEditor) return;
+
+        // Chỉ nạp lại khi đúng một thông số thép ở màn ngoài đổi. Nạp lại vì thứ khác — chẳng hạn hình
+        // xem trước hay dòng trạng thái — sẽ dựng lại toàn bộ danh sách thép gia cường và làm mất
+        // những cây người dùng vừa thêm hoặc xoá.
+        if (propertyName is not null && !ReloadTriggers.Contains(propertyName)) return;
+
         var spansChanged = propertyName == nameof(BeamRebarProViewModel.PickedSpans);
         if (spansChanged)
             SyncSpanRowsFromParent(resetSpanDependentItems: false);
@@ -1787,6 +1831,9 @@ public sealed partial class BeamRebarDetailViewModel : ObservableObject
 
     private void RefreshElevationPreview()
     {
+        // Sơ đồ nhịp và khung xem trước hình học dựng lại cùng lúc để hai bên không lệch nhau.
+        RefreshPreview();
+
         PreviewLines.Clear();
         PreviewRects.Clear();
         PreviewTexts.Clear();

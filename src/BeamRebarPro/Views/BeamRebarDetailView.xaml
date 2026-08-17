@@ -5,12 +5,14 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:viewModel="clr-namespace:BeamRebarPro.ViewModels"
+    xmlns:views="clr-namespace:BeamRebarPro.Views"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance viewModel:BeamRebarDetailViewModel}"
     WindowStartupLocation="CenterScreen"
     Title="Beam Rebar"
-    Height="700"
+    Height="860"
     Width="1280"
+    MinHeight="700"
     Background="#F6F7F8">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -70,7 +72,7 @@
         <Grid Margin="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
-                <RowDefinition Height="240" />
+                <RowDefinition Height="380" MinHeight="240" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="200" />
@@ -134,21 +136,21 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Anchor Left:" Style="{StaticResource FieldLabel}" Width="70" />
-                                <TextBox Text="{Binding AnchorLeftMm}" />
+                                <TextBox Text="{Binding AnchorLeftMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Anchor Right:" Style="{StaticResource FieldLabel}" Width="64" />
-                                <TextBox Text="{Binding AnchorRightMm}" />
+                                <TextBox Text="{Binding AnchorRightMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Anchor X Left:" Style="{StaticResource FieldLabel}" Width="88" />
-                                <TextBox Text="{Binding AnchorXLeftMm}" />
+                                <TextBox Text="{Binding AnchorXLeftMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Anchor X Right:" Style="{StaticResource FieldLabel}" Width="92" />
-                                <TextBox Text="{Binding AnchorXRightMm}" />
+                                <TextBox Text="{Binding AnchorXRightMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Anchor Y:" Style="{StaticResource FieldLabel}" Width="70" />
-                                <TextBox Text="{Binding TopBendDownLengthMm}" IsEnabled="{Binding DiagramHighlightTop}" />
+                                <TextBox Text="{Binding TopBendDownLengthMm, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding DiagramHighlightTop}" />
                                 <TextBlock Text="Position In Section:" Style="{StaticResource FieldLabel}" Width="112" />
-                                <TextBox Text="{Binding MainPositionInSection}" />
+                                <TextBox Text="{Binding MainPositionInSection, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -174,27 +176,27 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Left Ratio:" Style="{StaticResource FieldLabel}" Width="70" />
-                                <TextBox Text="{Binding AddLeftRatio}" />
+                                <TextBox Text="{Binding AddLeftRatio, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Right Ratio:" Style="{StaticResource FieldLabel}" Width="80" />
-                                <TextBox Text="{Binding AddRightRatio}" />
+                                <TextBox Text="{Binding AddRightRatio, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Left Length:" Style="{StaticResource FieldLabel}" Width="70" />
-                                <TextBox Text="{Binding AddLeftLengthMm}" />
+                                <TextBox Text="{Binding AddLeftLengthMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Right Length:" Style="{StaticResource FieldLabel}" Width="80" />
-                                <TextBox Text="{Binding AddRightLengthMm}" />
+                                <TextBox Text="{Binding AddRightLengthMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Visibility="{Binding DiagramHighlightTop, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="D Left:" Style="{StaticResource FieldLabel}" Width="70" />
-                                <TextBox Text="{Binding AddDLeftMm}" />
+                                <TextBox Text="{Binding AddDLeftMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="D Right:" Style="{StaticResource FieldLabel}" Width="80" />
-                                <TextBox Text="{Binding AddDRightMm}" />
+                                <TextBox Text="{Binding AddDRightMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Visibility="{Binding DiagramHighlightBottom, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Anchor Left:" Style="{StaticResource FieldLabel}" Width="70" />
-                                <TextBox Text="{Binding AddAnchorLeftMm}" />
+                                <TextBox Text="{Binding AddAnchorLeftMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Anchor Right:" Style="{StaticResource FieldLabel}" Width="80" />
-                                <TextBox Text="{Binding AddAnchorRightMm}" />
+                                <TextBox Text="{Binding AddAnchorRightMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Visibility="{Binding DiagramHighlightBottom, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Total:" Style="{StaticResource FieldLabel}" Width="70" />
@@ -205,7 +207,7 @@
                                 <TextBlock Text="Number:" Style="{StaticResource FieldLabel}" Width="70" />
                                 <ComboBox ItemsSource="{Binding NumberOptions}" SelectedItem="{Binding AddNumber}" />
                                 <TextBlock Text="Position In Section:" Style="{StaticResource FieldLabel}" Width="112" />
-                                <TextBox Text="{Binding AddPositionInSection}" />
+                                <TextBox Text="{Binding AddPositionInSection, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <!-- Đai C giữ thép gia cường lớp 2 (≥3 cây): đường kính + khoảng cách. -->
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
@@ -213,7 +215,7 @@
                                 <TextBlock Text="Đai C giữ:" Style="{StaticResource FieldLabel}" Width="70" />
                                 <ComboBox ItemsSource="{Binding StirrupDiameterOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding AddTieCDiameterMm}" />
                                 <TextBlock Text="@ (mm):" Style="{StaticResource FieldLabel}" Width="64" />
-                                <TextBox Text="{Binding AddTieCSpacingMm}" />
+                                <TextBox Text="{Binding AddTieCSpacingMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="(0 = không tạo)" Style="{StaticResource FieldLabel}" Foreground="#9AA5B1" />
                             </StackPanel>
                         </StackPanel>
@@ -232,31 +234,31 @@
                                     <RadioButton GroupName="StDist" Margin="0,2" IsChecked="{Binding StirrupUniform}">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="2. Stirrup distributed uniform — A1:" Style="{StaticResource FieldLabel}" />
-                                            <TextBox Width="70" Text="{Binding StirrupSpacingEndMm}" IsEnabled="{Binding StirrupUniform}" />
+                                            <TextBox Width="70" Text="{Binding StirrupSpacingEndMm, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding StirrupUniform}" />
                                         </StackPanel>
                                     </RadioButton>
 
                                     <RadioButton GroupName="StDist" Margin="0,2" IsChecked="{Binding StirrupTwoEnds}">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="3. Stirrup distributed 2 ends — A1:" Style="{StaticResource FieldLabel}" />
-                                            <TextBox Width="60" Text="{Binding StirrupSpacingEndMm}" IsEnabled="{Binding StirrupTwoEnds}" />
+                                            <TextBox Width="60" Text="{Binding StirrupSpacingEndMm, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding StirrupTwoEnds}" />
                                             <TextBlock Text="A2:" Style="{StaticResource FieldLabel}" />
-                                            <TextBox Width="60" Text="{Binding StirrupSpacingMidMm}" IsEnabled="{Binding StirrupTwoEnds}" />
+                                            <TextBox Width="60" Text="{Binding StirrupSpacingMidMm, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding StirrupTwoEnds}" />
                                         </StackPanel>
                                     </RadioButton>
 
                                     <StackPanel Orientation="Horizontal" Margin="20,2,0,0" IsEnabled="{Binding StirrupTwoEnds}">
                                         <TextBlock Text="3.1. Length of End1 + End2" Style="{StaticResource FieldLabel}" Width="170" />
                                         <TextBlock Text="End 1:" Style="{StaticResource FieldLabel}" />
-                                        <TextBox Width="70" Text="{Binding StirrupEndZoneStartMm}" />
+                                        <TextBox Width="70" Text="{Binding StirrupEndZoneStartMm, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBlock Text="(mm) End 2:" Style="{StaticResource FieldLabel}" />
-                                        <TextBox Width="70" Text="{Binding StirrupEndZoneEndMm}" />
+                                        <TextBox Width="70" Text="{Binding StirrupEndZoneEndMm, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBlock Text="(mm)" Style="{StaticResource FieldLabel}" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                         <TextBlock Text="4. Distance of first stirrup to the column (mm):" Style="{StaticResource FieldLabel}" Width="270" />
-                                        <TextBox Width="70" Text="{Binding StirrupFirstDistanceMm}" />
+                                        <TextBox Width="70" Text="{Binding StirrupFirstDistanceMm, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
@@ -352,7 +354,7 @@
                         <StackPanel Visibility="{Binding IsAntiBulgeTab, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                 <TextBlock Text="Anti-Shrinkage reinforcement When H > :" Style="{StaticResource FieldLabel}" Width="250" />
-                                <TextBox Width="70" Text="{Binding AntiBulgeHeightThresholdMm}" />
+                                <TextBox Width="70" Text="{Binding AntiBulgeHeightThresholdMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="(mm)" Style="{StaticResource FieldLabel}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
@@ -365,11 +367,11 @@
                                 <TextBlock Text="Tie D:" Style="{StaticResource FieldLabel}" Width="70" />
                                 <ComboBox ItemsSource="{Binding StirrupDiameterOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding AntiBulgeTieDiameterMm}" />
                                 <TextBlock Text="@ (mm):" Style="{StaticResource FieldLabel}" Width="64" />
-                                <TextBox Text="{Binding AntiBulgeSpacingMm}" />
+                                <TextBox Text="{Binding AntiBulgeSpacingMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Column embed:" Style="{StaticResource FieldLabel}" Width="100" />
-                                <TextBox Width="70" Text="{Binding AntiBulgeColumnEmbedMm}" />
+                                <TextBox Width="70" Text="{Binding AntiBulgeColumnEmbedMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="(mm)" Style="{StaticResource FieldLabel}" />
                             </StackPanel>
                         </StackPanel>
@@ -466,8 +468,18 @@
 
             <!-- Dưới: mặt đứng dầm (preview) — vẽ thanh thép đỏ theo thông số, giống form mẫu. Dầm đã chọn
                  từ Ribbon (pick-first) nên không cần nút Pick Beam. -->
-            <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0"
-                    BorderBrush="#D9DEE3" BorderThickness="1" CornerRadius="3" Background="White" Padding="10">
+            <TabControl Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,12,0,0"
+                        SelectionChanged="PreviewTab_SelectionChanged">
+                <!-- Thẻ xem trước đứng đầu để mở sẵn: thẻ bị ẩn không được vẽ lại khi thông số đổi. -->
+                <TabItem Header="Review 2D">
+                    <views:BeamRebarPreview2D x:Name="Preview2D" Plan="{Binding PreviewPlan}" />
+                </TabItem>
+                <TabItem Header="Review 3D">
+                    <views:BeamRebarPreview3D x:Name="Preview3D" Plan="{Binding PreviewPlan}" />
+                </TabItem>
+
+                <TabItem Header="Sơ đồ nhịp">
+                    <Border BorderBrush="#D9DEE3" BorderThickness="0,1,0,0" Background="White" Padding="10">
                 <Canvas Background="White" ClipToBounds="True">
                     <ItemsControl ItemsSource="{Binding PreviewRects}">
                         <ItemsControl.ItemsPanel>
@@ -525,7 +537,11 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </Canvas>
-            </Border>
+                    </Border>
+                </TabItem>
+
+                <!-- Cùng hình học với thép sẽ tạo, dựng lại theo cấu hình chi tiết đang chỉnh. -->
+            </TabControl>
         </Grid>
     </DockPanel>
 </Window>

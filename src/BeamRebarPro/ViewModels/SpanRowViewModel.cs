@@ -23,6 +23,9 @@ public sealed partial class SpanRowViewModel : ObservableObject
     public string SpanName => $"Span {_info.Index}";
     public double LengthMm => _info.LengthMm;
 
+    /// <summary>Nhịp gốc kèm hình học thật đọc từ mô hình, để bản xem trước dựng đúng dầm đang chọn.</summary>
+    public SpanInfo Info => _info;
+
     /// <summary>Auto = tính theo TCVN; bỏ tick → nhập tay.</summary>
     [ObservableProperty] private bool _topAuto = true;
     [ObservableProperty] private bool _bottomAuto = true;

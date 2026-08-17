@@ -5,14 +5,15 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:viewModel="clr-namespace:BeamRebarPro.ViewModels"
+    xmlns:views="clr-namespace:BeamRebarPro.Views"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance viewModel:BeamRebarProViewModel}"
     WindowStartupLocation="CenterScreen"
     Title="Quick Setting"
-    Height="525"
-    Width="1025"
-    MinHeight="525"
-    MinWidth="1025"
+    Height="720"
+    Width="1480"
+    MinHeight="600"
+    MinWidth="1180"
     Background="#F6F7F8">
     <Window.Resources>
         <Style TargetType="TextBlock" x:Key="Label">
@@ -63,7 +64,8 @@
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="290" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="420" />
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,2,8,0">
@@ -73,7 +75,7 @@
                        Stretch="Uniform" Width="285" HorizontalAlignment="Left" />
             </StackPanel>
 
-            <Grid Grid.Row="0" Grid.Column="1">
+            <Grid Grid.Row="0" Grid.Column="1" Width="700">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="320" />
                     <ColumnDefinition Width="*" />
@@ -91,7 +93,7 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                 <TextBlock Text="Edge hook (mm):" Style="{StaticResource Label}" />
-                                <TextBox Width="58" Text="{Binding TopAdditionalEdgeHookDownLengthMm}" IsEnabled="{Binding TopAdditionalEnabled}" />
+                                <TextBox Width="58" Text="{Binding TopAdditionalEdgeHookDownLengthMm, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding TopAdditionalEnabled}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -105,7 +107,7 @@
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                 <TextBlock Text="Bend down (mm):" Style="{StaticResource Label}" />
-                                <TextBox Width="58" Text="{Binding MainTopBendDownLengthMm}" />
+                                <TextBox Width="58" Text="{Binding MainTopBendDownLengthMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -134,20 +136,20 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <ComboBox Width="62" ItemsSource="{Binding DiameterMmOptions}" ItemStringFormat="'D'0" SelectedItem="{Binding StirrupDiameterMm}" />
                                 <RadioButton Content="A1 :" GroupName="StirrupMode" IsChecked="{Binding StirrupUniform}" VerticalAlignment="Center" Margin="8,0,4,0" />
-                                <TextBox Width="50" Text="{Binding StirrupSpacingEndMm}" />
+                                <TextBox Width="50" Text="{Binding StirrupSpacingEndMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="L :" Style="{StaticResource Label}" />
                                 <TextBox Width="58" Text="1000" IsEnabled="False" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Width="70" />
                                 <RadioButton Content="A1 :" GroupName="StirrupMode" IsChecked="{Binding StirrupTwoEnds}" VerticalAlignment="Center" Margin="8,0,4,0" />
-                                <TextBox Width="50" Text="{Binding StirrupSpacingEndMm}" />
+                                <TextBox Width="50" Text="{Binding StirrupSpacingEndMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="A2 :" Style="{StaticResource Label}" />
-                                <TextBox Width="50" Text="{Binding StirrupSpacingMidMm}" />
+                                <TextBox Width="50" Text="{Binding StirrupSpacingMidMm, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                 <TextBlock Text="First to column:" Style="{StaticResource Label}" />
-                                <TextBox Width="50" Text="{Binding StirrupFirstDistanceMm}" />
+                                <TextBox Width="50" Text="{Binding StirrupFirstDistanceMm, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="mm" Style="{StaticResource Label}" />
                             </StackPanel>
                         </StackPanel>
@@ -243,7 +245,41 @@
                 </Grid>
             </Grid>
 
-            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <!-- Khung xem trước: luôn hiện trong lúc chỉnh thông số, dựng từ cùng hình học với thép thật. -->
+            <Border Grid.Row="0" Grid.Column="2" Margin="12,2,0,0" Background="White"
+                    BorderBrush="#D8DEE4" BorderThickness="1" CornerRadius="4" Padding="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="2,0,2,8">
+                        <TextBlock DockPanel.Dock="Left" Text="REVIEW" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Foreground="#1F2933" />
+                        <Button DockPanel.Dock="Right" Content="Fit" MinWidth="58"
+                                HorizontalAlignment="Right" Command="{Binding FitPreviewCommand}" />
+                    </DockPanel>
+
+                    <TabControl Grid.Row="1" SelectionChanged="PreviewTab_SelectionChanged">
+                        <TabItem Header="2D">
+                            <views:BeamRebarPreview2D x:Name="Preview2D"
+                                Plan="{Binding PreviewPlan}"
+                                SectionStationMm="{Binding PreviewSectionStationMm}" />
+                        </TabItem>
+                        <TabItem Header="3D">
+                            <views:BeamRebarPreview3D x:Name="Preview3D" Plan="{Binding PreviewPlan}" />
+                        </TabItem>
+                    </TabControl>
+
+                    <TextBlock Grid.Row="2" Margin="2,8,2,0" FontSize="11" Foreground="#5A6672"
+                               TextWrapping="Wrap"
+                               Text="Thép chủ: đỏ · Gia cường: cam · Đai: xanh dương · Đai tăng cường: xanh lá · Bê tông: khung xám" />
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                 <Button Content="Go to Detail Rebar Forms" Command="{Binding GoToDetailRebarFormsCommand}" />
                 <Button Content="Create Rebars Immediately" Command="{Binding CreateRebarCommand}" />
                 <Button Content="Close" Click="CloseButton_Click" Width="80" />

@@ -20,6 +20,7 @@
         <!-- Logging -->
         <PackageReference Include="Serilog" Version="4.3.1"/>
         <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0"/>
+        <PackageReference Include="Serilog.Sinks.File" Version="6.0.0"/>
 
         <!-- MVVM -->
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
@@ -48,6 +49,8 @@
     <ItemGroup>
         <!-- License gate (classlib thuần, không đụng Revit API). -->
         <ProjectReference Include="..\..\RevitAPP.Licensing\RevitAPP.Licensing.csproj"/>
+        <!-- Hình học thép thuần (không đụng Revit API), dùng chung cho preview và builder. -->
+        <ProjectReference Include="..\..\RevitAPP.Core\RevitAPP.Core.csproj"/>
     </ItemGroup>
 
 </Project>

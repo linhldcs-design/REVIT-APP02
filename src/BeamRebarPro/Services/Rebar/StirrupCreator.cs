@@ -81,7 +81,9 @@ public sealed class StirrupCreator
         }
         created += addStirrupCount;
         if (config.AdditionalStirrups.Count > 0)
-            warnings.Add($"[Dai phu] yeu cau {config.AdditionalStirrups.Count} loai, mainBarCount={mainBarCount}, da tao {addStirrupCount} cum dai phu.");
+            Serilog.Log.Debug(
+                "Additional stirrups: requested={Requested}, mainBarCount={MainBarCount}, created={Created}",
+                config.AdditionalStirrups.Count, mainBarCount, addStirrupCount);
 
         return created;
     }
@@ -210,10 +212,16 @@ public sealed class StirrupCreator
             endZoneEndFeet *= scale;
         }
 
-        // [CHAN DOAN tam]
-        warnings.Add($"[DBG] stirrupFrame dai={Math.Round(length * 304.8)}mm, endZoneStart={Math.Round(endZoneStartFeet * 304.8)}mm, endZoneEnd={Math.Round(endZoneEndFeet * 304.8)}mm, so blockedRange={blockedRanges.Count}");
+        // Số liệu phân vùng đai để lần lại khi đai rải sai — thuộc về log, không phải thông báo người dùng.
+        Serilog.Log.Debug(
+            "Stirrup zones: length={LengthMm}mm, endZoneStart={StartMm}mm, endZoneEnd={EndMm}mm, blocked={BlockedCount}",
+            Math.Round(length * 304.8), Math.Round(endZoneStartFeet * 304.8),
+            Math.Round(endZoneEndFeet * 304.8), blockedRanges.Count);
         foreach (var b in blockedRanges)
-            warnings.Add($"[DBG] blocked: L[{Math.Round(b.LeftStartFeet * 304.8)}->{Math.Round(b.LeftEndFeet * 304.8)}] R[{Math.Round(b.RightStartFeet * 304.8)}->{Math.Round(b.RightEndFeet * 304.8)}]");
+            Serilog.Log.Debug(
+                "Stirrup blocked range: left=[{LeftStart}..{LeftEnd}]mm right=[{RightStart}..{RightEnd}]mm",
+                Math.Round(b.LeftStartFeet * 304.8), Math.Round(b.LeftEndFeet * 304.8),
+                Math.Round(b.RightStartFeet * 304.8), Math.Round(b.RightEndFeet * 304.8));
 
         var created = 0;
         created += CreateZone(host, frame, barType, hook, 0, endZoneStartFeet, config.SpacingEndMm, config.Diameter, warnings, blockedRanges);

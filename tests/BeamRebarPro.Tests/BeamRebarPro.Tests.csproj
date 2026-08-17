@@ -20,6 +20,11 @@
         Core thuần mới, glob tự nhận; file chạm Revit API loại trừ tường minh bên dưới.
     -->
     <ItemGroup>
+        <!-- Hình học thuần dùng chung với preview — reference thẳng, không cần link file. -->
+        <ProjectReference Include="..\..\RevitAPP.Core\RevitAPP.Core.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <Compile Include="..\..\src\BeamRebarPro\Models\**\*.cs">
             <Link>Core\Models\%(RecursiveDir)%(Filename)%(Extension)</Link>
         </Compile>
@@ -31,6 +36,9 @@
         </Compile>
         <Compile Include="..\..\src\BeamRebarPro\Services\QuickSettingFactory.cs">
             <Link>Core\Services\QuickSettingFactory.cs</Link>
+        </Compile>
+        <Compile Include="..\..\src\BeamRebarPro\Services\BeamRebarPreviewService.cs">
+            <Link>Core\Services\BeamRebarPreviewService.cs</Link>
         </Compile>
     </ItemGroup>
 

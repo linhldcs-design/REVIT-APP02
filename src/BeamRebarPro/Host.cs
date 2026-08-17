@@ -15,7 +15,10 @@ public static class Host
 
     public static void Start()
     {
-        _logger = Configuration.LoggerConfiguration.CreateDefaultLogger();
+        var logger = Configuration.LoggerConfiguration.CreateDefaultLogger();
+        _logger = logger;
+        // Gán cả cho logger tĩnh: các service không nhận logger qua hàm dựng vẫn ghi được nhật ký.
+        Log.Logger = logger;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
     }
 

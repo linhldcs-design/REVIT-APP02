@@ -263,25 +263,6 @@ public sealed class LongitudinalBarCreator
         return offsets;
     }
 
-    private List<double> GetLateralOffsets(string positionInSection, int mainCount, double usableHalf)
-    {
-        var offsets = new List<double>();
-        if (string.IsNullOrWhiteSpace(positionInSection))
-            return offsets;
-
-        var parts = positionInSection.Split(',', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
-        {
-            if (int.TryParse(part.Trim(), out var idx))
-            {
-                var denom = Math.Max(1, mainCount - 1);
-                var lateral = mainCount <= 1 ? 0 : -usableHalf + idx * (usableHalf * 2) / denom;
-                offsets.Add(lateral);
-            }
-        }
-        return offsets;
-    }
-
     private int CreateBars(Element host, SpanFrame frame, RebarBarType barType, RebarDiameter diameter,
         int count, bool atTop, double extraVerticalOffsetFeet, double startT, double endT,
         double leftInsetFeet, double rightInsetFeet,
@@ -323,15 +304,6 @@ public sealed class LongitudinalBarCreator
         var bp1 = frame.AxisTop(endT) + frame.Across * latBent + frame.Up * vertical - frame.Along * rightInsetFeet;
         return TryCreateMainBentEndSet(host, barType, frame, bp0, bp1, atTop, leftBendDownFeet, rightBendDownFeet, diameter, count, usableHalf, warnings)
             ? count : 0;
-    }
-
-    /// <summary>Các vị trí ngang phân bố ĐỀU của count cây trong [-usableHalf, +usableHalf].</summary>
-    private static IEnumerable<double> EvenLaterals(double usableHalf, int count)
-    {
-        if (count <= 1) { yield return 0; yield break; }
-        var step = usableHalf * 2 / (count - 1);
-        for (var i = 0; i < count; i++)
-            yield return -usableHalf + i * step;
     }
 
     private bool TryCreateMainBentEndSet(Element host, RebarBarType barType, SpanFrame frame, XYZ p0Top, XYZ p1Top,
@@ -460,26 +432,6 @@ public sealed class LongitudinalBarCreator
 
     private static double FirstLateral(double usableHalf, int count)
         => count == 1 ? 0 : -usableHalf;
-
-    private static bool IsDefaultPositionSequence(string positionInSection, int count)
-    {
-        if (string.IsNullOrWhiteSpace(positionInSection) || count <= 0)
-            return false;
-
-        var parts = positionInSection.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(p => int.TryParse(p.Trim(), out var idx) ? idx : -1)
-            .ToList();
-        if (parts.Count != count)
-            return false;
-
-        for (var i = 0; i < count; i++)
-        {
-            if (parts[i] != i)
-                return false;
-        }
-
-        return true;
-    }
 
     private static void SetFixedNumberLayout(Autodesk.Revit.DB.Structure.Rebar rebar, int count, double usableHalf, SpanFrame frame,
         List<string> warnings, double? layoutDistanceFeet = null)

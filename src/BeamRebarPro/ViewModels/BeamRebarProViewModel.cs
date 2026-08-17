@@ -15,6 +15,7 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
     private readonly ILogger _logger;
     private readonly ExternalEvent _externalEvent;
     private readonly RebarCreationHandler _handler;
+    private readonly BeamRebarPreviewCoordinator _preview;
     private IReadOnlyList<Point3> _supportPoints = [];
     private IReadOnlyList<SupportInfo> _supportInfos = [];
     private IReadOnlyList<SecondaryBeamInfo> _secondaryBeams = [];
@@ -30,6 +31,10 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
             OnSupportsSelected = OnSupportsSelected
         };
         _externalEvent = ExternalEvent.Create(_handler);
+        _preview = new BeamRebarPreviewCoordinator(() =>
+            BeamRebarPreviewService.Build(BuildModel(), PickedSpans, _secondaryBeams));
+        _preview.PlanChanged += plan => PreviewPlan = plan;
+        _preview.Invalidate();
     }
 
     [ObservableProperty] private int _mainTopCount = 3;
@@ -100,6 +105,7 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
         PickedSpans = spans;
         _handler.PreselectedBeams = beams;
         StatusMessage = $"Đã chọn dầm: {spans.Count} nhịp. Cấu hình rồi nhấn 'Tạo thép'.";
+        RefreshPreview();
     }
 
     public IReadOnlyList<RebarDiameter> DiameterOptions => RebarDiameter.Standard;
@@ -118,11 +124,16 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
         set => StirrupTwoEnds = !value;
     }
 
-    partial void OnStirrupTwoEndsChanged(bool value) => OnPropertyChanged(nameof(StirrupUniform));
+    partial void OnStirrupTwoEndsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(StirrupUniform));
+        RefreshPreview();
+    }
 
     partial void OnSupportBeamCountChanged(int value) => OnPropertyChanged(nameof(SupportBeamSummary));
 
     partial void OnSecondaryBeamCountChanged(int value) => OnPropertyChanged(nameof(SecondaryBeamSummary));
+
 
     [RelayCommand]
     private void CreateRebar()
@@ -155,6 +166,7 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
     {
         PickedSpans = spans;
         OnPropertyChanged(nameof(PickedSpans));
+        RefreshPreview();
     }
 
     [RelayCommand]
@@ -170,6 +182,7 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
     {
         _secondaryBeams = beams;
         SecondaryBeamCount = beams.Count;
+        RefreshPreview();
         StatusMessage = beams.Count == 0
             ? "Chua chon dam phu nao."
             : $"Da chon {beams.Count} dam phu. Dai dam chinh se tranh + tang cuong quanh vi tri nay.";
@@ -341,6 +354,7 @@ public sealed partial class BeamRebarProViewModel : ObservableObject
         AntiBulgeColumnEmbedMm = m.AntiBulge.ColumnEmbedMm;
         CoverMm = m.Cover.TopMm;
 
+        RefreshPreview();
         StatusMessage = "Đã tải lại cấu hình đã lưu của dầm này. Có thể chỉnh rồi tạo thép.";
     }
 }
