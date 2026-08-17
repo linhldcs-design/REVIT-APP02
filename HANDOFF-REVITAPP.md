@@ -10,7 +10,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.13.0`
+- Release mới nhất đã phát hành: `v1.13.1`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
@@ -78,6 +78,7 @@
 - **Bài học `v1.13.0`:** bốn vòng sửa đầu cho lỗi "Detail chưa ăn" đều đoán sai (dispatcher, nguồn nhịp, ô nhập, thẻ ẩn) vì add-in tạo logger nhưng không gán `Log.Logger`, nên mọi lời gọi ghi nhật ký rơi vào hư không và không có gì để lần. Sau khi ghi nhật ký ra file tại `%LocalAppData%\BeamRebarPro\logs`, log chỉ ra ngay trong một vòng: dữ liệu đúng, khung vẽ không được gọi. Bật ghi nhật ký trước khi suy đoán.
 - **Bài học `v1.13.0`:** chỉ verify `Debug.R25` suốt quá trình phát triển nên `Math.Clamp` và `Split(char, StringSplitOptions)` lọt vào `RevitAPP.Core` — cả hai chỉ có từ .NET Core, làm R22–R24 (net48) build hỏng ở bước 4 của quy trình phát hành. `RevitAPP.Core/Services/MathCompat.cs` đã có sẵn polyfill cho đúng việc này.
 - **Runtime smoke `v1.13.0`:** người dùng đã xác nhận khung xem trước chạy đúng trên Revit 2025 trước khi phát hành.
+- `v1.13.1`: sửa Installer trên máy khách phải bấm cập nhật/đóng mở nhiều lần. Tất cả thao tác mạng có retry giới hạn, UI khóa đăng nhập/chọn phiên bản/nút cập nhật khi đang bận, năm Revit được chụp cố định trước các bước bất đồng bộ, và payload add-in được thay theo staging + rollback để không để lại bản cài dở. Mỗi ZIP R22–R27 nay nhúng cùng `RevitAPP.Installer.exe`; khách đang dùng Installer cũ chỉ cần cập nhật add-in một lần rồi mở Revit để cầu nâng cấp thay Installer đã cài. Từ lần sau Installer đọc package riêng trong `latest.json`, kiểm tra SHA-256, tự thay chính nó và phục hồi EXE cũ nếu không mở được bản mới. License/preset vẫn nằm ngoài payload và được giữ nguyên. Kiểm thử 590/590 đạt; build R22–R27 và Installer đơn-file thành công. GitHub Actions run `31987499500` xanh toàn bộ; Release đủ 8 asset, `latest.json` trả HTTP 200 và gói R25 đã được kiểm tra có Installer 1.13.1.0 với SHA khớp manifest.
 - Thay đổi cho `v1.0.1`: xóa nút `Cap Nhat` khỏi Ribbon; Installer vẫn kiểm tra cập nhật.
 - Thay đổi cho `v1.0.2`: thêm tùy chọn bẻ móc thép tường vào trong/ra ngoài độc lập cho đầu trên và dưới; bản Debug không tự thay bằng Release khi khởi động.
 - Thay đổi cho `v1.1.0`: thêm Chat AI 47 tool, trí nhớ mã hóa, điều khiển toàn bộ nút RevitAPP và đọc Excel.
