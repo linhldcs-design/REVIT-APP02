@@ -22,8 +22,11 @@ function doPost(e) {
     }
 
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (body.secret !== SHARED_SECRET) {
-      return json({ allowed: false, error: 'unauthorized' });
+    // Compatibility for v1.14.0/v1.14.1 artifacts whose GitHub secret was
+    // accidentally stored with one leading UTF-8 BOM character.
+    const presentedSecret = String(body.secret || '').replace(/^\uFEFF/, '');
+    if (presentedSecret !== SHARED_SECRET) {
+      return json({ allowed: false, error: 'unauthorized_v2' });
     }
 
     const email = String(body.email || '').trim().toLowerCase();

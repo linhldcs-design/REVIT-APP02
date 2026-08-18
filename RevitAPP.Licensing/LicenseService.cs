@@ -143,6 +143,8 @@ public sealed class LicenseService
         "not_found" => "Email chua duoc cap quyen",
         "device_limit" => "Da vuot so may cho phep cho tai khoan nay. Lien he nha cung cap de tang so may hoac go bot may cu.",
         "expired" => "License da het han",
+        "unauthorized_v2" => "Cau hinh cap phep cua ung dung khong khop may chu. Vui long cap nhat RevitAPP.",
+        "unauthorized" => "Cau hinh cap phep cua ung dung khong khop may chu. Vui long cap nhat RevitAPP.",
         null => "License da het han",
         _ => $"Khong duoc phep ({error})"
     };

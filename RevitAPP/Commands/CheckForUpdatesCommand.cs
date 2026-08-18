@@ -2,7 +2,6 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.UI;
 using Nice3point.Revit.Toolkit.External;
 using RevitAPP.Services.Updates;
-using RevitAPP.Licensing;
 
 namespace RevitAPP.Commands;
 
@@ -12,13 +11,6 @@ public sealed class CheckForUpdatesCommand : ExternalCommand
 {
     public override void Execute()
     {
-        var (licenseOk, licenseMessage) = LicenseService.EnsureValid();
-        if (!licenseOk)
-        {
-            TaskDialog.Show("RevitAPP Update", licenseMessage);
-            return;
-        }
-
         try
         {
             var result = new RevitAppUpdateService().CheckAndStageAsync(Application.Application.VersionNumber)

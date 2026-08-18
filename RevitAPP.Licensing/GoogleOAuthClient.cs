@@ -124,7 +124,7 @@ public sealed class GoogleOAuthClient : IOAuthSignIn
     {
         var html = ok
             ? "<html><body style='font-family:sans-serif;text-align:center;padding-top:60px'>" +
-              "<h2>Dang nhap thanh cong</h2><p>Ban co the dong tab nay va quay lai Revit.</p></body></html>"
+              "<h2>Da xac thuc Google</h2><p>Quay lai Revit de hoan tat kiem tra ban quyen.</p></body></html>"
             : "<html><body style='font-family:sans-serif;text-align:center;padding-top:60px'>" +
               "<h2>Dang nhap that bai</h2><p>Vui long thu lai trong Revit.</p></body></html>";
         var buf = Encoding.UTF8.GetBytes(html);

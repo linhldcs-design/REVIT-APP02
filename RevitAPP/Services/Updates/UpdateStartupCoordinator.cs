@@ -1,6 +1,5 @@
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
-using RevitAPP.Licensing;
 using Serilog;
 
 namespace RevitAPP.Services.Updates;
@@ -25,8 +24,6 @@ public static class UpdateStartupCoordinator
         {
             try
             {
-                var (valid, _) = LicenseService.EnsureValid();
-                if (!valid) return;
                 var result = await new RevitAppUpdateService().CheckAndStageAsync(revitYear);
                 if (result.UpdateAvailable && result.Staged)
                     lock (Sync) _result = result;

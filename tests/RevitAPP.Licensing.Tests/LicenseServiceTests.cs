@@ -393,6 +393,20 @@ public class LicenseServiceTests
     }
 
     [Fact]
+    public async Task SignIn_secret_mismatch_reports_server_configuration_error()
+    {
+        var cache = new LicenseCache(TempCacheFile());
+        var svc = Build(cache, new FakeVerifier(false, null, "unauthorized_v2"), DateTime.UtcNow,
+            new FakeOAuth("khach@gmail.com"));
+
+        var state = await svc.SignInAsync();
+
+        Assert.Equal(LicenseStatus.Denied, state.Status);
+        Assert.Contains("Cau hinh cap phep", state.Reason);
+        Assert.Contains("cap nhat RevitAPP", state.Reason);
+    }
+
+    [Fact]
     public void SignOut_clears_cache()
     {
         var file = TempCacheFile();
