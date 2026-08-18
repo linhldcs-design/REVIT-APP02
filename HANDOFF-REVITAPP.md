@@ -1,14 +1,15 @@
 # HANDOFF REVITAPP
 
-## Thay đổi đang chờ phát hành v1.14.2
+## Phát hành v1.14.2
 
 - Root cause đăng nhập v1.14.1: GitHub Actions secret có một ký tự ẩn `U+FEFF` ở đầu; DLL nhúng 65 ký tự trong khi secret chuẩn là Base64URL 64 ký tự, nên Apps Script trả `unauthorized_v2` dù OAuth Google thành công.
 - Workflow mới chỉ chấp nhận đúng 64 ký tự Base64URL và sinh source UTF-8 không BOM. Job Add-in xác minh `RevitAPP.dll` repack cuối; job Installer xác minh DLL `RevitAPP.Licensing` trung gian dùng để publish Installer. Hai bước đều không in giá trị/hash, và cả Add-in R22–R27 lẫn standalone Installer đều phải nhúng secret.
 - Kiểm tra/cài cập nhật không còn bị license gate chặn, để bản lỗi hoặc hết hạn vẫn có đường tự cập nhật. Callback trình duyệt chỉ báo đã xác thực Google, chưa tuyên bố license thành công.
 - Apps Script phải dùng `String(body.secret || '').replace(/^\uFEFF/, '')` trước phép so sánh để cứu v1.14.0/v1.14.1 đang cài. Chỉ bỏ đúng một BOM đầu chuỗi, không `trim()` secret.
 - Gate local hiện đã đạt 600/600 test (`RevitAPP.Licensing.Tests` 18/18 và `RevitAPP.Tests` 582/582); build Release R22–R27 và publish Installer đều thành công.
-- **Đang chờ:** production Apps Script Web App chưa được xác nhận đã deploy bản tương thích BOM. Không tag/phát hành v1.14.2 cho tới khi endpoint production trả cùng kết quả xác thực cho secret chuẩn và secret có đúng một BOM đầu chuỗi.
-- GitHub secret đã được ghi lại từ Windows **User scope** (không dùng process env cũ). Sau khi Apps Script production được deploy và xác minh, chạy lại release gate trên đúng cây public trước khi tag v1.14.2.
+- Production Apps Script Web App đã deploy phiên bản tương thích BOM. Probe bằng `.NET HttpClient` xác nhận secret chuẩn và secret có một `U+FEFF` đầu chuỗi đều được chấp nhận (`not_found` với email thử), nên khách đang dùng v1.14.1 có thể xác thực và tự cập nhật mà không cần cài lại thủ công.
+- GitHub secret đã được ghi lại từ Windows **User scope** (không dùng process env cũ). GitHub Actions run `32120133734` thành công: Installer, build R22–R27, verifier secret và Release đều xanh.
+- Release public có đúng 8 asset; `latest.json` là version `1.14.2`. Gói R25 tải lại có SHA-256 khớp cả manifest và digest GitHub; `RevitAPP.dll` bên trong gói được verifier xác nhận nhúng đúng secret 64 ký tự.
 
 ## Phát hành v1.14.1
 
@@ -51,7 +52,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đang phát hành: `v1.14.1`
+- Release mới nhất đang phát hành: `v1.14.2`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
