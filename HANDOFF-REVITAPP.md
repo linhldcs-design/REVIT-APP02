@@ -7,6 +7,8 @@
 - Snapshot quá 3 phút bị từ chối ngay (fail closed). File `%AppData%\RevitAPP\license.json` vẫn chỉ lưu identity/trạng thái hiển thị và không cấp quyền offline.
 - Thay đổi `expiry`, gia hạn hoặc thu hồi trên Google Sheet thường phản ánh vào Ribbon sau một chu kỳ refresh 60 giây cộng thời gian gọi mạng (thông thường không quá khoảng 75 giây). Nếu mạng lỗi liên tục, snapshot hết hạn và fail closed sau tối đa 3 phút. Lần bấm đầu tiên trước khi startup warm-up hoàn tất có thể bị từ chối tức thì với thông báo đang cập nhật; người dùng chờ vài giây rồi bấm lại.
 - Không áp dụng snapshot RAM cho standalone MCP command gate hoặc Installer: hai đường này vẫn gọi `GetStateAsync()` để xác minh online authoritative và fail closed khi không liên lạc được server.
+- Gate phát hành đạt 608/608 test (`RevitAPP.Licensing.Tests` 26/26 và `RevitAPP.Tests` 582/582); build Release R22–R27 đều 0 lỗi, không deploy hoặc đóng/mở Revit.
+- GitHub Actions run `32126494395` phát hành thành công Installer và gói R22–R27. Release public có đúng 8 asset; `latest.json` trả version `1.14.3`, không thiếu package, và SHA-256 gói R25 khớp digest GitHub.
 
 ## Phát hành v1.14.2
 
