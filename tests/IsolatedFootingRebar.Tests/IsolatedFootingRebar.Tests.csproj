@@ -24,6 +24,18 @@
         <Compile Include="..\..\src\IsolatedFootingRebar\Services\BlindingConcreteFilter.cs">
             <Link>Core\Services\BlindingConcreteFilter.cs</Link>
         </Compile>
+        <Compile Include="..\..\src\IsolatedFootingRebar\Services\FootingRebarPreviewFactory.cs">
+            <Link>Core\Services\FootingRebarPreviewFactory.cs</Link>
+        </Compile>
+        <Compile Include="..\..\src\IsolatedFootingRebar\Services\FootingConcreteEdgeBuilder.cs">
+            <Link>Core\Services\FootingConcreteEdgeBuilder.cs</Link>
+        </Compile>
+        <Compile Include="..\..\src\IsolatedFootingRebar\Services\FootingSectionClipper.cs">
+            <Link>Core\Services\FootingSectionClipper.cs</Link>
+        </Compile>
+        <Compile Include="..\..\src\IsolatedFootingRebar\Services\FootingSectionPolygonBuilder.cs">
+            <Link>Core\Services\FootingSectionPolygonBuilder.cs</Link>
+        </Compile>
     </ItemGroup>
 
 </Project>

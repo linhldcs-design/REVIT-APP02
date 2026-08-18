@@ -43,4 +43,10 @@ public sealed class FootingFrame
         var planar = _baseCenter + offsetX + offsetY;
         return new XYZ(planar.X, planar.Y, zFeet);
     }
+
+    public XYZ PointAtLocalMm(PreviewPoint3D point)
+        => _baseCenter
+           + DirX * (point.Xmm / FootingMath.MmPerFoot)
+           + DirY * (point.Ymm / FootingMath.MmPerFoot)
+           + Up * (point.Zmm / FootingMath.MmPerFoot);
 }

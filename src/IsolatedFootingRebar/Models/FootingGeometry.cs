@@ -30,9 +30,18 @@ public sealed record FootingGeometry
     /// <summary>Cổ móng (nếu móng cốc). null = móng bằng.</summary>
     public PedestalBox? Pedestal { get; init; }
 
+    /// <summary>
+    ///     Tam giác bề mặt bê tông thật đã tessellate khi còn ở Revit API context. Preview chỉ đọc dữ liệu thuần này,
+    ///     vì vậy cửa sổ modeless không giữ hoặc truy cập GeometryObject của Revit.
+    /// </summary>
+    public IReadOnlyList<ConcreteTriangle> ConcreteTriangles { get; init; } = [];
+
     /// <summary>Chiều cao đế móng (feet).</summary>
     public double BaseHeightFeet => BaseTopZFeet - BottomZFeet;
 }
+
+/// <summary>Một tam giác bề mặt bê tông, tọa độ Revit tuyệt đối (feet).</summary>
+public readonly record struct ConcreteTriangle(Point3 A, Point3 B, Point3 C);
 
 /// <summary>Cổ móng (pedestal) hình hộp: tâm đáy + bề rộng 2 phương + cao độ đỉnh.</summary>
 public sealed record PedestalBox

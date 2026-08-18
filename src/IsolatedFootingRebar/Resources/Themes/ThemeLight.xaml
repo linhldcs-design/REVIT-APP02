@@ -15,6 +15,14 @@
     <Color x:Key="Color.TabActive.Foreground">#FFFFFFFF</Color>
     <Color x:Key="Color.Diagram.Concrete">#FFE4E4E4</Color>
     <Color x:Key="Color.Diagram.Rebar">#FFD21F1F</Color>
+    <Color x:Key="Color.Preview.BottomX">#FF2D7DFF</Color>
+    <Color x:Key="Color.Preview.BottomY">#FF1ED2DC</Color>
+    <Color x:Key="Color.Preview.TopX">#FFF54141</Color>
+    <Color x:Key="Color.Preview.TopY">#FFFF9123</Color>
+    <Color x:Key="Color.Preview.MidX">#FF9B5AF5</Color>
+    <Color x:Key="Color.Preview.MidY">#FFF550AF</Color>
+    <Color x:Key="Color.Preview.Chair">#FF46DC73</Color>
+    <Color x:Key="Color.Preview.Horizontal">#FFFAD72D</Color>
 
     <SolidColorBrush x:Key="Brush.Background" Color="{DynamicResource Color.Background}"/>
     <SolidColorBrush x:Key="Brush.Surface" Color="{DynamicResource Color.Surface}"/>
@@ -28,5 +36,13 @@
     <SolidColorBrush x:Key="Brush.TabActive.Foreground" Color="{DynamicResource Color.TabActive.Foreground}"/>
     <SolidColorBrush x:Key="Brush.Diagram.Concrete" Color="{DynamicResource Color.Diagram.Concrete}"/>
     <SolidColorBrush x:Key="Brush.Diagram.Rebar" Color="{DynamicResource Color.Diagram.Rebar}"/>
+    <SolidColorBrush x:Key="Brush.Preview.BottomX" Color="{DynamicResource Color.Preview.BottomX}"/>
+    <SolidColorBrush x:Key="Brush.Preview.BottomY" Color="{DynamicResource Color.Preview.BottomY}"/>
+    <SolidColorBrush x:Key="Brush.Preview.TopX" Color="{DynamicResource Color.Preview.TopX}"/>
+    <SolidColorBrush x:Key="Brush.Preview.TopY" Color="{DynamicResource Color.Preview.TopY}"/>
+    <SolidColorBrush x:Key="Brush.Preview.MidX" Color="{DynamicResource Color.Preview.MidX}"/>
+    <SolidColorBrush x:Key="Brush.Preview.MidY" Color="{DynamicResource Color.Preview.MidY}"/>
+    <SolidColorBrush x:Key="Brush.Preview.Chair" Color="{DynamicResource Color.Preview.Chair}"/>
+    <SolidColorBrush x:Key="Brush.Preview.Horizontal" Color="{DynamicResource Color.Preview.Horizontal}"/>
 
 </ResourceDictionary>

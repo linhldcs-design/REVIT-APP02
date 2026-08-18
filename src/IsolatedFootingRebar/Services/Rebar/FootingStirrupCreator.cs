@@ -19,6 +19,41 @@ public sealed class FootingStirrupCreator
         _families = families;
     }
 
+    /// <summary>Tạo từng đai từ đúng đường bao đa giác đã hiển thị trong Review.</summary>
+    public int CreateIndividual(Element host, FootingFrame frame,
+        IReadOnlyList<FootingPreviewPath> paths, HorizontalStirrupConfig config, List<string> warnings)
+    {
+        var created = 0;
+        foreach (var path in paths.Where(path => path.Kind == FootingPreviewBarKind.Horizontal))
+        {
+            var diameter = new RebarDiameter((int)Math.Round(path.DiameterMm));
+            var barType = _families.GetBarType(diameter);
+            if (barType is null)
+            {
+                warnings.Add($"Bỏ qua đai đa giác D{diameter.Millimeters}: thiếu RebarBarType.");
+                continue;
+            }
+
+            var curves = new List<Curve>();
+            for (var i = 1; i < path.Points.Count; i++)
+                AddLine(curves, frame.PointAtLocalMm(path.Points[i - 1]), frame.PointAtLocalMm(path.Points[i]));
+            if (path.IsClosed && path.Points.Count > 2)
+                AddLine(curves, frame.PointAtLocalMm(path.Points[^1]), frame.PointAtLocalMm(path.Points[0]));
+            if (curves.Count == 0) continue;
+
+            var hook = path.IsClosed && config.HookEnabled ? _families.GetHookType(HookAngle.Deg90) : null;
+            if (TryCreate(host, barType, hook, curves, diameter, warnings) is not null ||
+                hook is not null && TryCreate(host, barType, null, curves, diameter, warnings) is not null)
+                created++;
+        }
+        return created;
+    }
+
+    private static void AddLine(List<Curve> curves, XYZ a, XYZ b)
+    {
+        if (a.DistanceTo(b) > 1e-6) curves.Add(Line.CreateBound(a, b));
+    }
+
     public int Create(Element host, FootingFrame frame, PedestalBox? pedestal,
         HorizontalStirrupConfig config, CoverSettings cover, List<string> warnings)
     {
@@ -48,7 +83,7 @@ public sealed class FootingStirrupCreator
         for (var i = 0; i < layers; i++)
         {
             var z = LayerZ(frame, cover, diameter, layers, i);
-            var profile = StirrupProfile(frame, centerU, centerV, halfX, halfY, z);
+            var profile = StirrupProfile(frame, centerU, centerV, halfX, halfY, z, config, diameter);
             if (TryCreateProfile(host, barType, profile, config, diameter, warnings))
                 created++;
         }
@@ -70,7 +105,8 @@ public sealed class FootingStirrupCreator
     private bool TryCreateProfile(Element host, RebarBarType barType,
         IList<Curve> profile, HorizontalStirrupConfig config, RebarDiameter diameter, List<string> warnings)
     {
-        var hook = config.HookEnabled ? _families.GetHookType(HookAngle.Deg90) : null;
+        // Đai hở đã dựng đoạn móc thủ công trong profile để đúng HookLengthMm; chỉ đai kín dùng RebarHookType.
+        var hook = config.Closed && config.HookEnabled ? _families.GetHookType(HookAngle.Deg90) : null;
         var rebar = TryCreate(host, barType, hook, profile, diameter, warnings);
         if (rebar != null)
             return true;
@@ -99,7 +135,8 @@ public sealed class FootingStirrupCreator
     }
 
     private static IList<Curve> StirrupProfile(
-        FootingFrame frame, double centerU, double centerV, double halfX, double halfY, double zFeet)
+        FootingFrame frame, double centerU, double centerV, double halfX, double halfY, double zFeet,
+        HorizontalStirrupConfig config, RebarDiameter diameter)
     {
         var center = frame.PointAt(centerU, centerV, zFeet);
         XYZ Corner(double sx, double sy) => center + frame.DirX * (sx * halfX) + frame.DirY * (sy * halfY);
@@ -109,12 +146,29 @@ public sealed class FootingStirrupCreator
         var c3 = Corner(1, 1);
         var c4 = Corner(-1, 1);
 
-        return
-        [
-            Line.CreateBound(c1, c2),
-            Line.CreateBound(c2, c3),
-            Line.CreateBound(c3, c4),
-            Line.CreateBound(c4, c1)
-        ];
+        if (config.Closed)
+            return
+            [
+                Line.CreateBound(c1, c2), Line.CreateBound(c2, c3),
+                Line.CreateBound(c3, c4), Line.CreateBound(c4, c1)
+            ];
+
+        // Mở một khe nhỏ giữa cạnh -X; nếu bật móc thì hai đầu bẻ vào trong theo đúng chiều dài nhập.
+        var gap = Math.Min(2 * halfY - 1e-6, Math.Max(diameter.Feet * 6, 50.0 / 304.8));
+        var lower = center + frame.DirX * -halfX + frame.DirY * (-gap / 2);
+        var upper = center + frame.DirX * -halfX + frame.DirY * (gap / 2);
+        var hookLength = config.HookEnabled
+            ? Math.Min(Math.Max(0, config.HookLengthMm / 304.8), Math.Max(0, 2 * halfX - 1e-6))
+            : 0;
+        var start = lower + frame.DirX * hookLength;
+        var end = upper + frame.DirX * hookLength;
+
+        var points = hookLength > 1e-6
+            ? new[] { start, lower, c1, c2, c3, c4, upper, end }
+            : new[] { lower, c1, c2, c3, c4, upper };
+        var curves = new List<Curve>(points.Length - 1);
+        for (var i = 1; i < points.Length; i++)
+            curves.Add(Line.CreateBound(points[i - 1], points[i]));
+        return curves;
     }
 }

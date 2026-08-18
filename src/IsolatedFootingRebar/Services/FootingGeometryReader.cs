@@ -68,7 +68,8 @@ public sealed class FootingGeometryReader
             WidthYFeet = fullWy,
             BottomZFeet = bottomZ,
             BaseTopZFeet = baseTopZ,
-            Pedestal = pedestal
+            Pedestal = pedestal,
+            ConcreteTriangles = Triangulate(structuralSolids)
         };
         return true;
     }
@@ -181,6 +182,28 @@ public sealed class FootingGeometryReader
 
         return points;
     }
+
+    private static IReadOnlyList<ConcreteTriangle> Triangulate(IEnumerable<Solid> solids)
+    {
+        var triangles = new List<ConcreteTriangle>();
+        foreach (var solid in solids)
+        foreach (Face face in solid.Faces)
+        {
+            var mesh = face.Triangulate();
+            for (var i = 0; i < mesh.NumTriangles; i++)
+            {
+                var triangle = mesh.get_Triangle(i);
+                triangles.Add(new ConcreteTriangle(
+                    ToPoint(triangle.get_Vertex(0)),
+                    ToPoint(triangle.get_Vertex(1)),
+                    ToPoint(triangle.get_Vertex(2))));
+            }
+        }
+
+        return triangles;
+    }
+
+    private static Point3 ToPoint(XYZ point) => new(point.X, point.Y, point.Z);
 
     private static bool IsExplicitBlindingSolid(Document document, Solid solid)
     {

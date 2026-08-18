@@ -13,12 +13,25 @@ public sealed partial class FootingRebarView
         DataContext = viewModel;
         InitializeComponent();
         viewModel.RequestClose += Close;
+        viewModel.FitPreviewRequested += FitPreview;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Dispatcher.UnhandledException += OnDispatcherUnhandledException;
         Closed += (_, _) =>
         {
             viewModel.RequestClose -= Close;
+            viewModel.FitPreviewRequested -= FitPreview;
+            viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             Dispatcher.UnhandledException -= OnDispatcherUnhandledException;
         };
+    }
+
+    private void FitPreview() => Preview3D.Fit();
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(FootingRebarViewModel.PreviewPlan)) return;
+        if (DataContext is FootingRebarViewModel { PreviewPlan: { } plan })
+            Preview3D.Plan = plan;
     }
 
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

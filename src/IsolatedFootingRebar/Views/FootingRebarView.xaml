@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:IsolatedFootingRebar.Views"
-        Title="Isolated Footing v1.1" Height="742" Width="846"
+        Title="Isolated Footing v1.2 — 3D Review" Height="790" Width="1420" MinHeight="700" MinWidth="1180"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Brush.Background}"
         FontFamily="Segoe UI" FontSize="12">
@@ -13,6 +13,7 @@
                 <ResourceDictionary Source="/IsolatedFootingRebar;component/Resources/Themes/Theme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <local:InverseBoolConverter x:Key="InverseBool"/>
+            <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
 
             <Style x:Key="FootingTabItem" TargetType="TabItem">
                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="SelectTabOnHeaderClick"/>
@@ -86,13 +87,21 @@
             </DockPanel>
         </Border>
 
-        <TabControl Margin="0" BorderThickness="0" Background="#FFFFFFFF" ItemContainerStyle="{DynamicResource FootingTabItem}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="850" MinWidth="760"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="*" MinWidth="390"/>
+            </Grid.ColumnDefinitions>
+        <TabControl Grid.Column="0" Margin="0" BorderThickness="0" Background="#FFFFFFFF" ItemContainerStyle="{DynamicResource FootingTabItem}">
             <TabItem>
                 <TabItem.Header><TextBlock Text="Common Settings"/></TabItem.Header>
                 <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="392"/></Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="14,10,10,0">
-                        <TextBlock Text="Pick line to specify the direction of main Rebar:" Margin="0,0,0,48"/>
+                        <TextBlock Text="Pick line to specify the direction of main Rebar:" Margin="0,0,0,8"/>
+                        <Button Content="Pick Direction" Command="{Binding PickDirectionCommand}"
+                                Width="130" Height="30" HorizontalAlignment="Left" Margin="0,0,0,10"/>
                         <Image Source="/IsolatedFootingRebar;component/Resources/Images/CommonSettingsReal.png"
                                Width="390"
                                Height="430"
@@ -109,13 +118,13 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="100"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="50"/><RowDefinition Height="50"/><RowDefinition Height="50"/></Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="Bottom Concrete Cover:" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBox Grid.Row="0" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding BottomCoverMm}"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding BottomCoverMm, UpdateSourceTrigger=PropertyChanged}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 <TextBlock Grid.Row="1" Text="Top Concrete Cover:" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding TopCoverMm}"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding TopCoverMm, UpdateSourceTrigger=PropertyChanged}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 <TextBlock Grid.Row="2" Text="Side Concrete Cover:" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBox Grid.Row="2" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding SideCoverMm}"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding SideCoverMm, UpdateSourceTrigger=PropertyChanged}"/>
                                 <TextBlock Grid.Row="2" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </Grid>
                         </DockPanel>
@@ -142,19 +151,62 @@
 
             <TabItem>
                 <TabItem.Header><CheckBox Content="Mid Layer" IsChecked="{Binding MidEnabled}"/></TabItem.Header>
-                <Grid Margin="8"><Grid.ColumnDefinitions><ColumnDefinition Width="405"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Style="{DynamicResource SectionBox}"><Grid><Image Source="/IsolatedFootingRebar;component/Resources/Images/MidLayerReal.png" Stretch="Uniform" SnapsToDevicePixels="True"/><TextBox Width="66" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,112" Style="{DynamicResource NumberTextBox}" Text="{Binding MidLayers}"/></Grid></Border><StackPanel Grid.Column="1" Margin="12,0,0,0" IsEnabled="{Binding MidEnabled}"><Border Style="{DynamicResource SectionBox}" Margin="0,0,0,12"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="X Direction"/></Border><ContentControl Content="{Binding MidX}" ContentTemplate="{DynamicResource DirectionTemplate}"/></DockPanel></Border><Border Style="{DynamicResource SectionBox}"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="Y Direction"/></Border><ContentControl Content="{Binding MidY}" ContentTemplate="{DynamicResource DirectionTemplate}"/></DockPanel></Border></StackPanel></Grid>
+                <Grid Margin="8"><Grid.ColumnDefinitions><ColumnDefinition Width="405"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Style="{DynamicResource SectionBox}"><Grid><Image Source="/IsolatedFootingRebar;component/Resources/Images/MidLayerReal.png" Stretch="Uniform" SnapsToDevicePixels="True"/><TextBox Width="66" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,112" Style="{DynamicResource NumberTextBox}" Text="{Binding MidLayers, UpdateSourceTrigger=PropertyChanged}"/></Grid></Border><StackPanel Grid.Column="1" Margin="12,0,0,0" IsEnabled="{Binding MidEnabled}"><Border Style="{DynamicResource SectionBox}" Margin="0,0,0,12"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="X Direction"/></Border><ContentControl Content="{Binding MidX}" ContentTemplate="{DynamicResource DirectionTemplate}"/></DockPanel></Border><Border Style="{DynamicResource SectionBox}"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="Y Direction"/></Border><ContentControl Content="{Binding MidY}" ContentTemplate="{DynamicResource DirectionTemplate}"/></DockPanel></Border></StackPanel></Grid>
             </TabItem>
 
             <TabItem>
                 <TabItem.Header><CheckBox Content="Vertical Reinforced" IsChecked="{Binding VerticalEnabled}"/></TabItem.Header>
-                <Grid Margin="8"><Grid.ColumnDefinitions><ColumnDefinition Width="405"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Style="{DynamicResource SectionBox}"><Image Source="/IsolatedFootingRebar;component/Resources/Images/VerticalLayerReal.png" Stretch="Uniform" SnapsToDevicePixels="True"/></Border><Border Grid.Column="1" Margin="12,0,0,0" Style="{DynamicResource SectionBox}" IsEnabled="{Binding VerticalEnabled}"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="Bar Chair (thép kê đỡ lưới trên)"/></Border><Grid Margin="14"><Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="150"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Diameter:" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox Grid.Column="1" ItemsSource="{Binding DiameterOptions}" SelectedItem="{Binding VerticalDiameterMm}" Height="30"/><TextBlock Grid.Row="1" Text="Rebar Spacing X:" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalSpacingXMm}"/><TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock Grid.Row="2" Text="Rebar Spacing Y:" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="2" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalSpacingYMm}"/><TextBlock Grid.Row="2" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock Grid.Row="3" Text="Chair Width (bề ngang đỉnh):" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="3" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalWidthMm}"/><TextBlock Grid.Row="3" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock Grid.Row="4" Text="Leg Length (chân ngang):" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="4" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalHookLengthMm}"/><TextBlock Grid.Row="4" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/></Grid></DockPanel></Border></Grid>
+                <Grid Margin="8"><Grid.ColumnDefinitions><ColumnDefinition Width="405"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Style="{DynamicResource SectionBox}"><Image Source="/IsolatedFootingRebar;component/Resources/Images/VerticalLayerReal.png" Stretch="Uniform" SnapsToDevicePixels="True"/></Border><Border Grid.Column="1" Margin="12,0,0,0" Style="{DynamicResource SectionBox}" IsEnabled="{Binding VerticalEnabled}"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="Bar Chair (thép kê đỡ lưới trên)"/></Border><Grid Margin="14"><Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="150"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Diameter:" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox Grid.Column="1" ItemsSource="{Binding DiameterOptions}" SelectedItem="{Binding VerticalDiameterMm}" Height="30"/><TextBlock Grid.Row="1" Text="Rebar Spacing X:" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalSpacingXMm, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock Grid.Row="2" Text="Rebar Spacing Y:" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="2" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalSpacingYMm, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Grid.Row="2" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock Grid.Row="3" Text="Chair Width (bề ngang đỉnh):" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="3" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalWidthMm, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Grid.Row="3" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><TextBlock Grid.Row="4" Text="Leg Length (chân ngang):" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="4" Grid.Column="1" Style="{DynamicResource NumberTextBox}" Text="{Binding VerticalHookLengthMm, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Grid.Row="4" Grid.Column="2" Text="(mm)" VerticalAlignment="Center" Margin="8,0,0,0"/><StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center"><RadioButton Content="Use Spacing" IsChecked="{Binding VerticalUseSpacing}" Margin="0,0,20,0"/><RadioButton Content="Use Number" IsChecked="{Binding VerticalUseSpacing, Converter={StaticResource InverseBool}}"/></StackPanel><StackPanel Grid.Row="6" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="Count X:" Width="70" VerticalAlignment="Center"/><TextBox Width="70" Style="{DynamicResource NumberTextBox}" IsEnabled="{Binding VerticalUseSpacing, Converter={StaticResource InverseBool}}" Text="{Binding VerticalCountX, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="Count Y:" Width="70" Margin="20,0,0,0" VerticalAlignment="Center"/><TextBox Width="70" Style="{DynamicResource NumberTextBox}" IsEnabled="{Binding VerticalUseSpacing, Converter={StaticResource InverseBool}}" Text="{Binding VerticalCountY, UpdateSourceTrigger=PropertyChanged}"/></StackPanel></Grid></DockPanel></Border></Grid>
             </TabItem>
 
             <TabItem>
                 <TabItem.Header><CheckBox Content="Horizontal Reinforced" IsChecked="{Binding HorizontalEnabled}" FontWeight="SemiBold"/></TabItem.Header>
-                <Grid Margin="8"><Grid.ColumnDefinitions><ColumnDefinition Width="405"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Style="{DynamicResource SectionBox}"><Grid><Image Source="/IsolatedFootingRebar;component/Resources/Images/HorizontalLayerReal.png" Stretch="Uniform" SnapsToDevicePixels="True"/><TextBox Width="66" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,112" Style="{DynamicResource NumberTextBox}" Text="{Binding HorizontalLayers}"/></Grid></Border><StackPanel Grid.Column="1" Margin="12,0,0,0"><Border Style="{DynamicResource SectionBox}" Margin="0,0,0,12"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="X Direction"/></Border><Grid Margin="14"><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="48"/><RowDefinition Height="60"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="150"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Diameter:" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox Grid.Column="1" ItemsSource="{Binding DiameterOptions}" SelectedItem="{Binding HorizontalDiameterMm}" Height="30"/><CheckBox Grid.Row="1" Content="Rebar Hook Length" IsChecked="{Binding HorizontalHookEnabled}" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" IsEnabled="{Binding HorizontalHookEnabled}" Text="{Binding HorizontalHookLengthMm}"/><TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/><StackPanel Grid.Row="2" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center"><RadioButton Content="Segmented Stirrup" IsChecked="{Binding HorizontalClosed, Converter={StaticResource InverseBool}}" Margin="0,0,16,0"/><RadioButton Content="Closed Stirrup" IsChecked="{Binding HorizontalClosed}"/></StackPanel></Grid></DockPanel></Border><Border Style="{DynamicResource SectionBox}"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="Y Direction"/></Border><Grid Margin="14"><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="48"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="150"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Diameter:" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox Grid.Column="1" ItemsSource="{Binding DiameterOptions}" SelectedItem="{Binding HorizontalDiameterMm}" Height="30"/><CheckBox Grid.Row="1" Content="Rebar Hook Length" IsChecked="{Binding HorizontalHookEnabled}" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" IsEnabled="{Binding HorizontalHookEnabled}" Text="{Binding HorizontalHookLengthMm}"/><TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/></Grid></DockPanel></Border></StackPanel></Grid>
+                <Grid Margin="8"><Grid.ColumnDefinitions><ColumnDefinition Width="405"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Style="{DynamicResource SectionBox}"><Grid><Image Source="/IsolatedFootingRebar;component/Resources/Images/HorizontalLayerReal.png" Stretch="Uniform" SnapsToDevicePixels="True"/><TextBox Width="66" Height="30" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,112" Style="{DynamicResource NumberTextBox}" Text="{Binding HorizontalLayers, UpdateSourceTrigger=PropertyChanged}"/></Grid></Border><StackPanel Grid.Column="1" Margin="12,0,0,0"><Border Style="{DynamicResource SectionBox}" Margin="0,0,0,12"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="X Direction"/></Border><Grid Margin="14"><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="48"/><RowDefinition Height="60"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="150"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Diameter:" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox Grid.Column="1" ItemsSource="{Binding DiameterOptions}" SelectedItem="{Binding HorizontalDiameterMm}" Height="30"/><CheckBox Grid.Row="1" Content="Rebar Hook Length" IsChecked="{Binding HorizontalHookEnabled}" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" IsEnabled="{Binding HorizontalHookEnabled}" Text="{Binding HorizontalHookLengthMm, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/><StackPanel Grid.Row="2" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center"><RadioButton Content="Segmented Stirrup" IsChecked="{Binding HorizontalClosed, Converter={StaticResource InverseBool}}" Margin="0,0,16,0"/><RadioButton Content="Closed Stirrup" IsChecked="{Binding HorizontalClosed}"/></StackPanel></Grid></DockPanel></Border><Border Style="{DynamicResource SectionBox}"><DockPanel><Border DockPanel.Dock="Top" Background="#FFF0F0F0" BorderBrush="#FFB8B8B8" BorderThickness="0,0,0,1" Padding="8"><TextBlock Text="Y Direction"/></Border><Grid Margin="14"><Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="48"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="150"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Diameter:" FontWeight="SemiBold" VerticalAlignment="Center"/><ComboBox Grid.Column="1" ItemsSource="{Binding DiameterOptions}" SelectedItem="{Binding HorizontalDiameterMm}" Height="30"/><CheckBox Grid.Row="1" Content="Rebar Hook Length" IsChecked="{Binding HorizontalHookEnabled}" FontWeight="SemiBold" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Style="{DynamicResource NumberTextBox}" IsEnabled="{Binding HorizontalHookEnabled}" Text="{Binding HorizontalHookLengthMm, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Grid.Row="1" Grid.Column="2" Text="(mm)" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/></Grid></DockPanel></Border></StackPanel></Grid>
             </TabItem>
         </TabControl>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource Brush.Border}"/>
+
+            <Border Grid.Column="2" Margin="10,0,10,8" BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1" Background="#FF23262A">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="10,8">
+                        <Button DockPanel.Dock="Right" Content="Fit" Width="62" Height="28"
+                                Command="{Binding FitPreviewCommand}"/>
+                        <StackPanel>
+                            <TextBlock Text="REVIEW 3D" FontWeight="SemiBold" FontSize="14" Foreground="White"/>
+                            <TextBlock Text="Kéo trái: xoay  •  Shift+kéo/chuột giữa: pan  •  Lăn: zoom"
+                                       Foreground="#FFBFC5CC" FontSize="11"/>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <local:FootingRebarPreview3D x:Name="Preview3D" Grid.Row="1"
+                        Plan="{Binding PreviewPlan}" Margin="1"/>
+
+                    <Border Grid.Row="1" VerticalAlignment="Top" Margin="12" Padding="8,5"
+                            Background="#CC7A1D1D" CornerRadius="3"
+                            Visibility="{Binding PreviewValidationMessage, Converter={StaticResource NullToVisibilityConverter}}">
+                        <TextBlock Text="{Binding PreviewValidationMessage}" Foreground="White" TextWrapping="Wrap"/>
+                    </Border>
+
+                    <WrapPanel Grid.Row="2" Margin="10,7" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.BottomX}" Width="10" Height="10"/><TextBlock Text=" Đáy X" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.BottomY}" Width="10" Height="10"/><TextBlock Text=" Đáy Y" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.TopX}" Width="10" Height="10"/><TextBlock Text=" Trên X" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.TopY}" Width="10" Height="10"/><TextBlock Text=" Trên Y" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.MidX}" Width="10" Height="10"/><TextBlock Text=" Giữa X" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.MidY}" Width="10" Height="10"/><TextBlock Text=" Giữa Y" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.Chair}" Width="10" Height="10"/><TextBlock Text=" Chân chó" Foreground="White"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="5,2"><Ellipse Fill="{DynamicResource Brush.Preview.Horizontal}" Width="10" Height="10"/><TextBlock Text=" Đai ngang" Foreground="White"/></StackPanel>
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </DockPanel>
 </Window>
 

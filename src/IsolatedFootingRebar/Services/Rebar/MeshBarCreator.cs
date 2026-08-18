@@ -21,6 +21,47 @@ public sealed class MeshBarCreator
         _families = families;
     }
 
+    public int CreateIndividual(Element host, FootingFrame frame,
+        IReadOnlyList<FootingPreviewPath> paths, List<string> warnings)
+    {
+        var created = 0;
+        foreach (var path in paths)
+        {
+            var diameter = new RebarDiameter((int)Math.Round(path.DiameterMm));
+            var barType = _families.GetBarType(diameter);
+            if (barType is null)
+            {
+                warnings.Add($"Bỏ qua thanh đa giác D{diameter.Millimeters}: thiếu RebarBarType.");
+                continue;
+            }
+
+            var curves = new List<Curve>(path.Points.Count - 1);
+            for (var i = 1; i < path.Points.Count; i++)
+            {
+                var start = frame.PointAtLocalMm(path.Points[i - 1]);
+                var end = frame.PointAtLocalMm(path.Points[i]);
+                if (start.DistanceTo(end) > 1e-6)
+                    curves.Add(Line.CreateBound(start, end));
+            }
+            if (curves.Count == 0) continue;
+
+            var alongX = path.Kind is FootingPreviewBarKind.BottomX or FootingPreviewBarKind.TopX or FootingPreviewBarKind.MidX;
+            try
+            {
+                RebarCompat.CreateFromCurves(
+                    _document, RebarStyle.Standard, barType, null, null, host,
+                    alongX ? frame.DirY : frame.DirX, curves,
+                    right: true, useExistingShapeIfPossible: false);
+                created++;
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Lỗi tạo thanh đa giác {path.Kind} D{diameter.Millimeters}: {ex.Message}");
+            }
+        }
+        return created;
+    }
+
     /// <summary>Tạo lưới (X + Y) tại mặt đáy (<paramref name="atTop"/>=false) hoặc mặt trên (=true).</summary>
     public int Create(Element host, FootingFrame frame, LayerBarConfig dirX, LayerBarConfig dirY,
         bool atTop, CoverSettings cover, List<string> warnings)
@@ -131,9 +172,10 @@ public sealed class MeshBarCreator
             return 0;
         }
 
-        var sideCoverFeet = cover.SideMm / 304.8;
-        var runWidthFeet = (alongX ? frame.WidthXFeet : frame.WidthYFeet) - 2 * sideCoverFeet;
-        var layoutWidthFeet = (alongX ? frame.WidthYFeet : frame.WidthXFeet) - 2 * sideCoverFeet;
+        // Cover được đo tới mặt ngoài thanh; centerline phải lùi thêm nửa đường kính.
+        var centerInsetFeet = (cover.SideMm + config.Diameter.Millimeters / 2d) / 304.8;
+        var runWidthFeet = (alongX ? frame.WidthXFeet : frame.WidthYFeet) - 2 * centerInsetFeet;
+        var layoutWidthFeet = (alongX ? frame.WidthYFeet : frame.WidthXFeet) - 2 * centerInsetFeet;
         if (runWidthFeet <= 1e-6 || layoutWidthFeet <= 1e-6)
         {
             warnings.Add($"Bỏ qua lưới D{config.Diameter.Millimeters}: móng quá nhỏ so với lớp bảo vệ.");
@@ -141,8 +183,8 @@ public sealed class MeshBarCreator
         }
 
         // u,v của 2 đầu thanh (chuẩn hóa). sideInsetU/V = lớp bảo vệ cạnh quy ra tỉ lệ.
-        var insetRun = sideCoverFeet / (alongX ? frame.WidthXFeet : frame.WidthYFeet);
-        var insetLayout = sideCoverFeet / (alongX ? frame.WidthYFeet : frame.WidthXFeet);
+        var insetRun = centerInsetFeet / (alongX ? frame.WidthXFeet : frame.WidthYFeet);
+        var insetLayout = centerInsetFeet / (alongX ? frame.WidthYFeet : frame.WidthXFeet);
 
         // Thanh đầu tiên đặt ở mép layout (v hoặc u = insetLayout). Hướng rải (normal) = phương vuông góc.
         var startU = alongX ? insetRun : insetLayout;

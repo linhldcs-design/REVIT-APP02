@@ -21,6 +21,50 @@ public sealed class DowelCreator
         _families = families;
     }
 
+    /// <summary>Tạo từng chân chó từ đúng centerline đã được preview kiểm tra nằm trong đa giác.</summary>
+    public int CreateIndividual(Element host, FootingFrame frame,
+        IReadOnlyList<FootingPreviewPath> paths, List<string> warnings)
+    {
+        var created = 0;
+        foreach (var path in paths.Where(path => path.Kind == FootingPreviewBarKind.Chair))
+        {
+            var diameter = new RebarDiameter((int)Math.Round(path.DiameterMm));
+            var barType = _families.GetBarType(diameter);
+            if (barType is null)
+            {
+                warnings.Add($"Bỏ qua thép kê đa giác D{diameter.Millimeters}: thiếu RebarBarType.");
+                continue;
+            }
+
+            var curves = Curves(frame, path);
+            if (curves.Count == 0) continue;
+            try
+            {
+                RebarCompat.CreateFromCurves(
+                    _document, RebarStyle.Standard, barType, null, null, host,
+                    frame.DirY, curves, right: true, useExistingShapeIfPossible: false);
+                created++;
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Lỗi tạo thép kê đa giác D{diameter.Millimeters}: {ex.Message}");
+            }
+        }
+        return created;
+    }
+
+    private static IList<Curve> Curves(FootingFrame frame, FootingPreviewPath path)
+    {
+        var curves = new List<Curve>();
+        for (var i = 1; i < path.Points.Count; i++)
+        {
+            var a = frame.PointAtLocalMm(path.Points[i - 1]);
+            var b = frame.PointAtLocalMm(path.Points[i]);
+            if (a.DistanceTo(b) > 1e-6) curves.Add(Line.CreateBound(a, b));
+        }
+        return curves;
+    }
+
     public int Create(Element host, FootingFrame frame, PedestalBox? pedestal,
         VerticalBarConfig config, CoverSettings cover,
         double bottomMeshStackFeet, double topMeshStackFeet, List<string> warnings)

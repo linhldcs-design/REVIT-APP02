@@ -35,6 +35,7 @@ public sealed partial class FootingRebarViewModel : ObservableObject
         };
         _externalEvent = ExternalEvent.Create(_handler);
         RefreshPresets();
+        InitializePreview();
     }
 
     // --- Common Settings (cover theo ảnh) ---
@@ -91,6 +92,7 @@ public sealed partial class FootingRebarViewModel : ObservableObject
     {
         _foundation = foundation;
         _handler.Foundation = foundation;
+        CapturePreviewGeometry();
         StatusMessage = $"Móng \"{foundation.Name}\" — cấu hình rồi bấm Create.";
     }
 
@@ -241,6 +243,7 @@ public sealed partial class FootingRebarViewModel : ObservableObject
     private void ApplyDirectionPicked(Point3? dir)
     {
         _dirXOverride = dir;
+        CapturePreviewGeometry();
         StatusMessage = dir is null
             ? "Không nhận được hướng — dùng hướng mặc định của móng."
             : "Đã đặt hướng thép chính theo line đã chọn.";

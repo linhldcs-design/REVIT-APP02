@@ -42,15 +42,38 @@ public sealed class FootingRebarOrchestrator
         var verticalCount = 0;
         var stirrupCount = 0;
 
-        if (model.BottomEnabled)
+        FootingRebarPreviewPlan previewPlan;
+        try
+        {
+            previewPlan = FootingRebarPreviewFactory.Build(geometry, model);
+        }
+        catch (Exception ex)
+        {
+            return new RebarCreationResult(0, 0, 0, [$"Không dựng được hình học thép: {ex.Message}"]);
+        }
+
+        var useIndividualMesh = FootingRebarPreviewFactory.RequiresIndividualMeshBars(previewPlan, geometry, model);
+        if (useIndividualMesh)
+        {
+            var meshKinds = new HashSet<FootingPreviewBarKind>
+            {
+                FootingPreviewBarKind.BottomX, FootingPreviewBarKind.BottomY,
+                FootingPreviewBarKind.TopX, FootingPreviewBarKind.TopY,
+                FootingPreviewBarKind.MidX, FootingPreviewBarKind.MidY
+            };
+            var clippedPaths = previewPlan.Paths.Where(path => meshKinds.Contains(path.Kind)).ToArray();
+            meshCount += meshCreator.CreateIndividual(foundation, frame, clippedPaths, warnings);
+        }
+
+        if (!useIndividualMesh && model.BottomEnabled)
             meshCount += meshCreator.Create(foundation, frame, model.BottomX, model.BottomY,
                 atTop: false, model.Cover, warnings);
 
-        if (model.TopEnabled)
+        if (!useIndividualMesh && model.TopEnabled)
             meshCount += meshCreator.Create(foundation, frame, model.TopX, model.TopY,
                 atTop: true, model.Cover, warnings);
 
-        if (model.MidEnabled)
+        if (!useIndividualMesh && model.MidEnabled)
             meshCount += meshCreator.CreateMid(foundation, frame, model.MidX, model.MidY,
                 model.MidLayers, model.Cover, warnings);
 
@@ -58,17 +81,13 @@ public sealed class FootingRebarOrchestrator
         {
             // Thanh kê phải nằm GIỮA 2 lưới: chân trên thép đáy, đỉnh dưới thép trên. Truyền bề dày
             // cụm lưới đáy (X+Y) và trên (X+Y) để lùi cao độ kê khỏi vùng thép chịu lực.
-            var bottomStackFeet = model.BottomEnabled
-                ? model.BottomX.Diameter.Feet + model.BottomY.Diameter.Feet : 0;
-            var topStackFeet = model.TopEnabled
-                ? model.TopX.Diameter.Feet + model.TopY.Diameter.Feet : 0;
-            verticalCount += dowelCreator.Create(foundation, frame, geometry.Pedestal,
-                model.Vertical, model.Cover, bottomStackFeet, topStackFeet, warnings);
+            // Preview đã lọc từng ghế theo tiết diện đa giác. Tạo trực tiếp cùng centerline để Preview/Create là một nguồn hình học.
+            verticalCount += dowelCreator.CreateIndividual(foundation, frame, previewPlan.Paths, warnings);
         }
 
         if (model.HorizontalEnabled)
-            stirrupCount += stirrupCreator.Create(foundation, frame, geometry.Pedestal,
-                model.Horizontal, model.Cover, warnings);
+            stirrupCount += stirrupCreator.CreateIndividual(
+                foundation, frame, previewPlan.Paths, model.Horizontal, warnings);
 
         return new RebarCreationResult(meshCount, verticalCount, stirrupCount, warnings);
     }

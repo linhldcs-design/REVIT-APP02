@@ -17,18 +17,18 @@
 
                 <RadioButton Content="Rebar Spacing" IsChecked="{Binding UseSpacing}" Margin="0,2"/>
                 <StackPanel Orientation="Horizontal" Margin="20,0,0,6" IsEnabled="{Binding UseSpacing}">
-                    <TextBox Style="{DynamicResource NumberTextBox}" Text="{Binding SpacingMm}"/>
+                    <TextBox Style="{DynamicResource NumberTextBox}" Text="{Binding SpacingMm, UpdateSourceTrigger=PropertyChanged}"/>
                     <TextBlock Text="(mm)" Style="{DynamicResource UnitLabel}"/>
                 </StackPanel>
 
                 <RadioButton Content="Rebar Number" IsChecked="{Binding UseNumber}" Margin="0,2"/>
                 <StackPanel Orientation="Horizontal" Margin="20,0,0,6" IsEnabled="{Binding UseNumber}">
-                    <TextBox Style="{DynamicResource NumberTextBox}" Text="{Binding Count}"/>
+                    <TextBox Style="{DynamicResource NumberTextBox}" Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}"/>
                 </StackPanel>
 
                 <CheckBox Content="Rebar Hook Length" IsChecked="{Binding HookEnabled}" Margin="0,4,0,4"/>
                 <StackPanel Orientation="Horizontal" Margin="20,0,0,0" IsEnabled="{Binding HookEnabled}">
-                    <TextBox Style="{DynamicResource NumberTextBox}" Text="{Binding HookLengthMm}"/>
+                    <TextBox Style="{DynamicResource NumberTextBox}" Text="{Binding HookLengthMm, UpdateSourceTrigger=PropertyChanged}"/>
                     <TextBlock Text="(mm)" Style="{DynamicResource UnitLabel}"/>
                 </StackPanel>
             </StackPanel>
