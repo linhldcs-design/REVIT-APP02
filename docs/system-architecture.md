@@ -296,6 +296,10 @@ Threading and execution invariants:
 
 - Every functional ribbon command validates the shared license before opening UI, picking elements, or changing Revit state. The License command is the sole activation-safe exception; Chat ribbon adapters apply the same gate.
 - Modeless UI code never calls the Revit API directly; all model/view access is marshalled through `ExternalEvent` onto Revit's API context.
+- Ribbon and in-process Chat license gates read only a server-verified snapshot held in RAM. They never wait for HTTP on the Revit UI thread and never treat the disk cache as proof of entitlement.
+- `Application.OnStartup()` starts an immediate online warm-up plus a 60-second background refresh loop. A snapshot older than 3 minutes is rejected immediately, preserving fail-closed behavior without blocking a command click.
+- Sheet changes normally reach Ribbon gates within about 60 seconds. A first click before warm-up completes can be denied immediately and retried after a few seconds.
+- Standalone MCP commands and the Installer remain online-authoritative through `GetStateAsync()`; they do not consume the Revit process's RAM snapshot.
 - License validation happens before tool dispatch.
 - Transaction ownership is explicit: the column tool requires a caller-owned transaction; beam, wall, footing, and beam-drawing engines own their transactions. Read tools do not open transactions.
 - The registry must not wrap engine-owned transactions, preventing nested Revit transactions.

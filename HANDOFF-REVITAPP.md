@@ -1,5 +1,13 @@
 # HANDOFF REVITAPP
 
+## Phát hành v1.14.3 — License Ribbon zero-wait
+
+- Gate của Ribbon/Chat trong tiến trình Revit chỉ đọc **snapshot trong RAM đã được server xác minh**; không đọc file cache để cấp quyền và không chờ HTTP trên UI thread. Vì vậy bấm lệnh không còn đứng chờ dò bản quyền.
+- `Application.OnStartup()` khởi động một worker xác minh online ngay khi Revit mở và lặp lại mỗi 60 giây; `OnShutdown()` chỉ hủy worker, không chờ network trên UI thread.
+- Snapshot quá 3 phút bị từ chối ngay (fail closed). File `%AppData%\RevitAPP\license.json` vẫn chỉ lưu identity/trạng thái hiển thị và không cấp quyền offline.
+- Thay đổi `expiry`, gia hạn hoặc thu hồi trên Google Sheet thường phản ánh vào Ribbon sau một chu kỳ refresh 60 giây cộng thời gian gọi mạng (thông thường không quá khoảng 75 giây). Nếu mạng lỗi liên tục, snapshot hết hạn và fail closed sau tối đa 3 phút. Lần bấm đầu tiên trước khi startup warm-up hoàn tất có thể bị từ chối tức thì với thông báo đang cập nhật; người dùng chờ vài giây rồi bấm lại.
+- Không áp dụng snapshot RAM cho standalone MCP command gate hoặc Installer: hai đường này vẫn gọi `GetStateAsync()` để xác minh online authoritative và fail closed khi không liên lạc được server.
+
 ## Phát hành v1.14.2
 
 - Root cause đăng nhập v1.14.1: GitHub Actions secret có một ký tự ẩn `U+FEFF` ở đầu; DLL nhúng 65 ký tự trong khi secret chuẩn là Base64URL 64 ký tự, nên Apps Script trả `unauthorized_v2` dù OAuth Google thành công.
@@ -52,7 +60,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đang phát hành: `v1.14.2`
+- Release mới nhất đang phát hành: `v1.14.3`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`

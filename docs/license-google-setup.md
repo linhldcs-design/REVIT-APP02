@@ -104,5 +104,6 @@ Nếu 4 trường hợp đúng → **Phase 0 xong**.
 ## Vận hành sau này (cấp / thu / gia hạn quyền)
 
 - **Cấp quyền cho khách mới**: thêm 1 dòng vào Sheet (email + ngày hết hạn), sau đó khách đăng nhập lần đầu.
-- **Gia hạn**: sửa cột `expiry`; có hiệu lực ở lần chạy lệnh được bảo vệ kế tiếp, không cần đăng xuất.
-- **Thu hồi**: đổi `expiry` về ngày quá khứ hoặc xóa dòng; có hiệu lực ở lần chạy lệnh được bảo vệ kế tiếp. Client luôn verify online và fail closed khi mất mạng; cache không cấp quyền offline.
+- **Gia hạn**: sửa cột `expiry`; Ribbon thường nhận trạng thái mới trong tối đa khoảng 60 giây qua worker nền, không cần đăng xuất.
+- **Thu hồi**: đổi `expiry` về ngày quá khứ hoặc xóa dòng; Ribbon thường nhận trạng thái mới trong tối đa khoảng 60 giây. Snapshot RAM quá 3 phút bị từ chối để fail closed.
+- Gate Ribbon không chờ HTTP khi người dùng bấm lệnh và không dùng file cache để cấp quyền. Lần bấm đầu tiên trước khi warm-up lúc khởi động hoàn tất có thể bị từ chối tức thì; MCP/Installer vẫn xác minh online authoritative ở mỗi lần kiểm tra.

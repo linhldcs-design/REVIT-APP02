@@ -1,5 +1,11 @@
 # Project Changelog
 
+## 2026-08-18 — License Ribbon zero-wait v1.14.3
+
+- Ribbon và Chat trong tiến trình Revit chuyển sang snapshot RAM đã được server xác minh, nên gate lệnh không chờ HTTP trên UI thread. File cache trên đĩa không cấp quyền.
+- Revit warm-up license lúc khởi động và refresh nền mỗi 60 giây; snapshot quá 3 phút bị chặn ngay. Thay đổi trên Sheet thường phản ánh sau một chu kỳ refresh cộng thời gian gọi mạng (thông thường không quá khoảng 75 giây); lần bấm đầu trước warm-up có thể bị từ chối tức thì.
+- Standalone MCP command gate và Installer giữ xác minh online authoritative, không dùng snapshot RAM của Revit.
+
 ## 2026-08-18 — License release secret hotfix v1.14.2
 
 - Chặn BOM, khoảng trắng và secret sai định dạng ngay trong GitHub Actions; xác minh lại secret nhúng trong DLL sau build mà không ghi giá trị ra log.

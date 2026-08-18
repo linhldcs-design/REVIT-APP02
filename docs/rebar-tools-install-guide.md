@@ -74,7 +74,9 @@ Danh sách khách hàng nằm trong **Google Sheet** (`RevitAPP Licenses`, tab `
 - **Cấp quyền mới**: thêm 1 dòng (email + ngày hết hạn). Cột `expiry` gõ dạng `'2026-12-31` (có dấu nháy đơn ở đầu để lưu là chữ, tránh lỗi ngày).
 - **Gia hạn**: sửa cột `expiry`.
 - **Thu hồi**: đổi `expiry` về quá khứ hoặc xóa dòng.
-- Hiệu lực: áp dụng ở **lần chạy lệnh được bảo vệ kế tiếp**, không cần khách đăng xuất hoặc đăng nhập lại. Client luôn hỏi server; cache chỉ nhớ email/trạng thái và không cấp quyền sử dụng.
+- Hiệu lực trên Ribbon: worker xác minh khi Revit khởi động và mỗi 60 giây, nên thay đổi trên Sheet thường áp dụng trong tối đa khoảng 60 giây mà không cần đăng xuất. Lệnh Ribbon chỉ đọc snapshot RAM đã được server xác minh, không chờ mạng; snapshot quá 3 phút bị chặn.
+- Nếu bấm lệnh ngay khi vừa mở Revit, trước khi lần xác minh nền đầu tiên hoàn tất, lệnh có thể từ chối tức thì; chờ vài giây rồi bấm lại. File cache chỉ nhớ email/trạng thái và không cấp quyền sử dụng.
+- Các MCP tool chạy độc lập và Installer vẫn xác minh online ở mỗi lần kiểm tra, fail closed khi không liên lạc được server.
 
 Chi tiết setup Google (Client ID, Sheet, Apps Script): xem [license-google-setup.md](license-google-setup.md).
 
@@ -86,7 +88,8 @@ Chi tiết setup Google (Client ID, Sheet, Apps Script): xem [license-google-set
 |-------------|-------|
 | Cài .msi báo "Revit đang chạy" | Đóng hết cửa sổ Revit rồi cài lại |
 | Không thấy panel RevitAPP | Kiểm tra `C:\ProgramData\Autodesk\Revit\Addins\2025\RevitAPP.addin` tồn tại; mở lại Revit |
+| Tool báo đang cập nhật bản quyền ngay sau khi mở Revit | Chờ vài giây để warm-up hoàn tất rồi bấm lại; lệnh từ chối ngay chứ không treo UI |
 | Tool báo lỗi License dù đã đăng nhập | Mở ribbon License xem trạng thái; nếu hết hạn → liên hệ gia hạn |
 | Đăng nhập Google không mở browser | Kiểm tra máy có trình duyệt mặc định; thử lại |
 | Tool "Method not found" | Khởi động lại Revit để nạp DLL mới |
-| Không có mạng | Lệnh được bảo vệ bị chặn vì hệ thống fail closed; cần có mạng để xác minh license |
+| Không có mạng | Ribbon có thể dùng snapshot RAM server-verified còn mới, nhưng sẽ bị chặn khi snapshot quá 3 phút; MCP/Installer bị chặn khi không thể xác minh online |
