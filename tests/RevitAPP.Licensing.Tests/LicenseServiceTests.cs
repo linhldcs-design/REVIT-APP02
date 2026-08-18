@@ -58,7 +58,7 @@ public class LicenseServiceTests
     }
 
     [Fact]
-    public async Task Valid_within_grace_does_not_call_network()
+    public async Task Recent_cached_license_reverifies_and_blocks_server_expiry_without_signout()
     {
         var now = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
         var cache = new LicenseCache(TempCacheFile());
@@ -67,7 +67,88 @@ public class LicenseServiceTests
             Email = "a@b.com",
             Expiry = "2099-01-01",
             Allowed = true,
-            LastVerifiedUtc = now.AddDays(-3).ToString("O") // 3 ngay truoc, trong grace 7
+            LastVerifiedUtc = now.ToString("O")
+        });
+        var verifier = new FakeVerifier(false, "2026-01-01", "expired");
+        var svc = Build(cache, verifier, now);
+
+        var state = await svc.GetStateAsync();
+
+        Assert.Equal(LicenseStatus.Denied, state.Status);
+        Assert.Equal(1, verifier.CallCount);
+        Assert.False(cache.Read()!.Allowed);
+        Assert.Equal("2026-01-01", cache.Read()!.Expiry);
+    }
+
+    private sealed class ThrowingWriteCache(string path) : LicenseCache(path)
+    {
+        public bool ThrowOnWrite { get; set; }
+
+        public override void Write(LicenseCacheData data)
+        {
+            if (ThrowOnWrite) throw new IOException("cache locked");
+            base.Write(data);
+        }
+
+        public override bool WriteIfSessionMatches(
+            string expectedSessionId,
+            LicenseCacheData data)
+        {
+            if (ThrowOnWrite) throw new IOException("cache locked");
+            return base.WriteIfSessionMatches(expectedSessionId, data);
+        }
+    }
+
+    private sealed class DelayedVerifier(bool allowed, string? expiry) : ILicenseVerifier
+    {
+        private readonly TaskCompletionSource<bool> _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void Complete() => _release.TrySetResult(true);
+
+        public async Task<VerifyResult> VerifyAsync(string email, CancellationToken ct = default)
+        {
+            Started.TrySetResult(true);
+            await _release.Task.WaitAsync(ct);
+            return new VerifyResult(allowed, expiry, allowed ? null : "expired");
+        }
+    }
+
+    [Fact]
+    public async Task Recent_cached_license_is_blocked_when_server_is_offline()
+    {
+        var now = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new LicenseCache(TempCacheFile());
+        cache.Write(new LicenseCacheData
+        {
+            Email = "a@b.com",
+            Expiry = "2099-01-01",
+            Allowed = true,
+            LastVerifiedUtc = now.ToString("O")
+        });
+        var verifier = new FakeVerifier(true, "2099-01-01") { ThrowOffline = true };
+        var svc = Build(cache, verifier, now);
+
+        var state = await svc.GetStateAsync();
+
+        Assert.Equal(LicenseStatus.Expired, state.Status);
+        Assert.Equal(1, verifier.CallCount);
+    }
+
+    [Fact]
+    public async Task Expired_cached_date_can_be_renewed_by_server_without_signout()
+    {
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new LicenseCache(TempCacheFile());
+        cache.Write(new LicenseCacheData
+        {
+            Email = "a@b.com",
+            Expiry = "2026-01-01",
+            Allowed = true,
+            LastVerifiedUtc = now.ToString("O")
         });
         var verifier = new FakeVerifier(true, "2099-01-01");
         var svc = Build(cache, verifier, now);
@@ -75,7 +156,167 @@ public class LicenseServiceTests
         var state = await svc.GetStateAsync();
 
         Assert.True(state.IsValid);
-        Assert.Equal(0, verifier.CallCount); // cache hit -> KHONG goi mang
+        Assert.Equal(1, verifier.CallCount);
+        Assert.Equal("2099-01-01", cache.Read()!.Expiry);
+    }
+
+    [Fact]
+    public async Task Allowed_server_result_is_not_blocked_when_cache_write_fails()
+    {
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new ThrowingWriteCache(TempCacheFile());
+        cache.Write(new LicenseCacheData
+        {
+            Email = "a@b.com",
+            Expiry = "2026-07-30",
+            Allowed = true,
+            LastVerifiedUtc = now.ToString("O")
+        });
+        cache.ThrowOnWrite = true;
+        var verifier = new FakeVerifier(true, "2026-08-30");
+        var svc = Build(cache, verifier, now);
+
+        var state = await svc.GetStateAsync();
+
+        Assert.True(state.IsValid);
+        Assert.Equal(1, verifier.CallCount);
+    }
+
+    [Fact]
+    public async Task Concurrent_cache_writes_leave_valid_json()
+    {
+        var file = TempCacheFile();
+        var cache = new LicenseCache(file);
+        var writes = Enumerable.Range(1, 20)
+            .Select(i => Task.Run(() => cache.Write(new LicenseCacheData
+            {
+                Email = "a@b.com",
+                Expiry = $"2099-01-{i:00}",
+                Allowed = true,
+                LastVerifiedUtc = DateTime.UtcNow.ToString("O")
+            })));
+
+        await Task.WhenAll(writes);
+
+        var data = cache.Read();
+        Assert.NotNull(data);
+        Assert.Equal("a@b.com", data!.Email);
+        Assert.True(data.Allowed);
+    }
+
+    [Fact]
+    public async Task SignOut_during_online_verification_cannot_recreate_cache()
+    {
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new LicenseCache(TempCacheFile());
+        cache.Write(new LicenseCacheData
+        {
+            Email = "a@b.com",
+            Expiry = "2099-01-01",
+            Allowed = true,
+            LastVerifiedUtc = now.ToString("O")
+        });
+        var verifier = new DelayedVerifier(true, "2099-01-01");
+        var svc = Build(cache, verifier, now);
+
+        var stateTask = svc.GetStateAsync();
+        await verifier.Started.Task;
+        svc.SignOut();
+        verifier.Complete();
+        var state = await stateTask;
+
+        Assert.Equal(LicenseStatus.NotSignedIn, state.Status);
+        Assert.Null(cache.Read());
+    }
+
+    [Fact]
+    public async Task SignOut_during_sign_in_cannot_recreate_cache()
+    {
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new LicenseCache(TempCacheFile());
+        cache.Write(new LicenseCacheData
+        {
+            Email = "old@b.com",
+            Expiry = "2099-01-01",
+            SessionId = "old-session",
+            Allowed = true,
+            LastVerifiedUtc = now.ToString("O")
+        });
+        var verifier = new DelayedVerifier(true, "2099-01-01");
+        var svc = Build(cache, verifier, now, new FakeOAuth("a@b.com"));
+
+        var stateTask = svc.SignInAsync();
+        await verifier.Started.Task;
+        svc.SignOut();
+        verifier.Complete();
+        var state = await stateTask;
+
+        Assert.Equal(LicenseStatus.NotSignedIn, state.Status);
+        Assert.Null(cache.Read());
+    }
+
+    [Fact]
+    public async Task First_sign_in_cannot_commit_after_concurrent_sign_out()
+    {
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new LicenseCache(TempCacheFile());
+        var verifier = new DelayedVerifier(true, "2099-01-01");
+        var svc = Build(cache, verifier, now, new FakeOAuth("a@b.com"));
+
+        var stateTask = svc.SignInAsync();
+        await verifier.Started.Task;
+        svc.SignOut();
+        verifier.Complete();
+        var state = await stateTask;
+
+        Assert.Equal(LicenseStatus.NotSignedIn, state.Status);
+        Assert.Null(cache.Read());
+    }
+
+    [Fact]
+    public async Task SignIn_repairs_malformed_cache()
+    {
+        var file = TempCacheFile();
+        File.WriteAllText(file, "{ malformed json");
+        var cache = new LicenseCache(file);
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var svc = Build(
+            cache,
+            new FakeVerifier(true, "2099-01-01"),
+            now,
+            new FakeOAuth("a@b.com"));
+
+        var state = await svc.SignInAsync();
+
+        Assert.True(state.IsValid);
+        Assert.Equal("a@b.com", cache.Read()!.Email);
+        Assert.False(string.IsNullOrEmpty(cache.Read()!.SessionId));
+    }
+
+    [Fact]
+    public async Task Concurrent_first_verifications_migrate_legacy_cache_without_false_denial()
+    {
+        var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var cache = new LicenseCache(TempCacheFile());
+        cache.Write(new LicenseCacheData
+        {
+            Email = "a@b.com",
+            Expiry = "2099-01-01",
+            SessionId = null,
+            Allowed = true,
+            LastVerifiedUtc = now.ToString("O")
+        });
+        var verifier = new DelayedVerifier(true, "2099-01-01");
+        var svc = Build(cache, verifier, now);
+
+        var first = svc.GetStateAsync();
+        var second = svc.GetStateAsync();
+        await verifier.Started.Task;
+        verifier.Complete();
+        var states = await Task.WhenAll(first, second);
+
+        Assert.All(states, state => Assert.True(state.IsValid));
+        Assert.False(string.IsNullOrEmpty(cache.Read()!.SessionId));
     }
 
     [Fact]
@@ -100,7 +341,7 @@ public class LicenseServiceTests
     }
 
     [Fact]
-    public async Task Expiry_in_past_is_expired()
+    public async Task Server_expiry_is_denied()
     {
         var now = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
         var cache = new LicenseCache(TempCacheFile());
@@ -111,11 +352,11 @@ public class LicenseServiceTests
             Allowed = true,
             LastVerifiedUtc = now.AddDays(-1).ToString("O")
         });
-        var svc = Build(cache, new FakeVerifier(true, "2026-01-01"), now);
+        var svc = Build(cache, new FakeVerifier(false, "2026-01-01", "expired"), now);
 
         var state = await svc.GetStateAsync();
 
-        Assert.Equal(LicenseStatus.Expired, state.Status);
+        Assert.Equal(LicenseStatus.Denied, state.Status);
     }
 
     [Fact]

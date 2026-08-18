@@ -22,8 +22,11 @@ public static class LicenseConfig
         GetRequiredEnvironmentVariable("REVITAPP_LICENSE_SHARED_SECRET");
 #endif
 
-    /// <summary>So ngay cache verify con hieu luc khi offline. Qua han + offline = chan.</summary>
-    public const int CacheGraceDays = 7;
+    /// <summary>
+    /// Gia tri legacy de giu tuong thich constructor. Cache khong con cap quyen offline;
+    /// moi lan chay lenh deu phai xac minh voi server.
+    /// </summary>
+    public const int CacheGraceDays = 0;
 
     /// <summary>OAuth scope toi thieu de lay email da xac thuc.</summary>
     public const string OAuthScope = "openid email profile";

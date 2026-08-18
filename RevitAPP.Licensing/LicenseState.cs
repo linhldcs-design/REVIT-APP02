@@ -8,7 +8,7 @@ public enum LicenseStatus
     /// <summary>Hop le — cho phep dung.</summary>
     Valid,
 
-    /// <summary>Het han (expiry qua khu, hoac cache qua grace + offline).</summary>
+    /// <summary>Het han hoac khong ket noi duoc server cap phep (fail closed).</summary>
     Expired,
 
     /// <summary>Server tra ve khong duoc phep (email khong co trong danh sach).</summary>
