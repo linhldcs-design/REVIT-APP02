@@ -5,6 +5,7 @@
 - `v1.14.0`: bổ sung REVIEW 3D tương tác cho Vẽ Móng Đơn. Hình bê tông lấy từ đúng móng được chọn; lưới đáy/trên/giữa, chân chó và đai ngang có màu riêng, cập nhật trực tiếp theo mọi tùy chọn. Móng tam giác và đa giác bất kỳ dùng đường thép được cắt/inset theo tiết diện thật; Preview và Create dùng chung đường tâm thanh, bảo đảm lớp bảo vệ gồm bán kính thanh. Bê tông hiển thị bán trong suốt để nhìn thấy thép bên trong.
 - An toàn cấp phép: OAuth desktop dùng PKCE và không nhúng client secret; shared secret lấy từ Script Properties và GitHub Actions secret, không còn ghi cứng trong source phát hành.
 - Gate local trước phát hành: 635/635 test đạt; build Release R22–R27 thành công. Không đóng hoặc tự mở Revit trong quy trình phát hành.
+- GitHub Actions run `32110256687` xanh toàn bộ: Installer, build R22–R27 và Release đều thành công. Release có đúng 8 asset; `latest.json` trả HTTP 200 với version `1.14.0`; SHA-256 gói R25 khớp manifest và `RevitAPP.Installer.exe` nhúng trong gói R25 cũng khớp SHA-256 của Installer độc lập.
 
 ### Vận hành License Apps Script
 
