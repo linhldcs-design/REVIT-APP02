@@ -1,5 +1,15 @@
 # HANDOFF REVITAPP
 
+## Thay đổi đang chờ phát hành v1.14.2
+
+- Root cause đăng nhập v1.14.1: GitHub Actions secret có một ký tự ẩn `U+FEFF` ở đầu; DLL nhúng 65 ký tự trong khi secret chuẩn là Base64URL 64 ký tự, nên Apps Script trả `unauthorized_v2` dù OAuth Google thành công.
+- Workflow mới chỉ chấp nhận đúng 64 ký tự Base64URL và sinh source UTF-8 không BOM. Job Add-in xác minh `RevitAPP.dll` repack cuối; job Installer xác minh DLL `RevitAPP.Licensing` trung gian dùng để publish Installer. Hai bước đều không in giá trị/hash, và cả Add-in R22–R27 lẫn standalone Installer đều phải nhúng secret.
+- Kiểm tra/cài cập nhật không còn bị license gate chặn, để bản lỗi hoặc hết hạn vẫn có đường tự cập nhật. Callback trình duyệt chỉ báo đã xác thực Google, chưa tuyên bố license thành công.
+- Apps Script phải dùng `String(body.secret || '').replace(/^\uFEFF/, '')` trước phép so sánh để cứu v1.14.0/v1.14.1 đang cài. Chỉ bỏ đúng một BOM đầu chuỗi, không `trim()` secret.
+- Gate local hiện đã đạt 600/600 test (`RevitAPP.Licensing.Tests` 18/18 và `RevitAPP.Tests` 582/582); build Release R22–R27 và publish Installer đều thành công.
+- **Đang chờ:** production Apps Script Web App chưa được xác nhận đã deploy bản tương thích BOM. Không tag/phát hành v1.14.2 cho tới khi endpoint production trả cùng kết quả xác thực cho secret chuẩn và secret có đúng một BOM đầu chuỗi.
+- GitHub secret đã được ghi lại từ Windows **User scope** (không dùng process env cũ). Sau khi Apps Script production được deploy và xác minh, chạy lại release gate trên đúng cây public trước khi tag v1.14.2.
+
 ## Phát hành v1.14.1
 
 - License đã chuyển sang **server-authoritative**: mọi lần chạy lệnh được bảo vệ đều gọi Apps Script; cache `%AppData%\RevitAPP\license.json` chỉ nhớ email/trạng thái và không cấp quyền. Đổi hạn, thu hồi hoặc gia hạn trên Google Sheet có hiệu lực ở lần bấm lệnh kế tiếp mà khách không cần đăng xuất.
@@ -22,7 +32,7 @@
 
 ### Vận hành License Apps Script
 
-- Web App đang dùng: `https://script.google.com/macros/s/AKfycbwNiaP9ZN5MJWBybhBFXz9okSkFwUIYq6diyML2fjK0wDEf-arFtI4ZyBg9vFjp5QtLpg/exec`.
+- Web App production dùng endpoint `/exec` đã cấu hình trong `LicenseConfig`; không ghi URL triển khai cụ thể vào handoff hoặc log.
 - Shared secret không được ghi vào source hoặc handoff. Giá trị hiện được lưu ở ba nơi: Apps Script Project Settings > Script Properties, GitHub Actions secret của `linhldcs-design/REVIT-APP02`, và biến môi trường Windows User `REVITAPP_LICENSE_SHARED_SECRET` trên máy phát hành.
 - Tên thuộc tính/secret ở cả ba nơi phải là `REVITAPP_LICENSE_SHARED_SECRET`.
 - Apps Script phải đọc bằng `PropertiesService.getScriptProperties().getProperty('REVITAPP_LICENSE_SHARED_SECRET')`; không khai báo chuỗi secret trực tiếp trong `Mã.gs`.

@@ -55,12 +55,11 @@ Kết quả cuối: bạn có **3 chuỗi cấu hình** để điền vào addin
 ## Phần C — Deploy Apps Script web app
 
 1. Trong Google Sheet vừa tạo: menu **Extensions** → **Apps Script**.
-2. Xóa code mẫu, dán toàn bộ nội dung file **`tools/license-appsscript/Code.gs`** (trong repo này).
-3. Sửa dòng đầu:
-   ```javascript
-   const SHARED_SECRET = 'DOI_CHUOI_NGAU_NHIEN_NAY_TRUOC_KHI_DEPLOY';
-   ```
-   → đổi thành **chuỗi ngẫu nhiên của bạn** (ví dụ tạo bằng cách gõ vài chục ký tự bất kỳ). Nhớ chuỗi này = `SharedSecret`.
+2. Xóa code mẫu, dán toàn bộ nội dung file **`tools/license-appsscript/Code.example.gs`** (trong repo này).
+3. Vào **Project Settings → Script Properties**, thêm thuộc tính:
+   - Property: `REVITAPP_LICENSE_SHARED_SECRET`
+   - Value: chuỗi Base64URL ngẫu nhiên đúng 64 ký tự, không BOM/khoảng trắng/newline.
+   Không ghi giá trị secret trực tiếp trong `Mã.gs` hoặc source Git.
 4. Bấm **Save** (biểu tượng đĩa).
 5. Bấm **Deploy** → **New deployment** → bánh răng ⚙ chọn **Web app**:
    - Description: `v1`.
@@ -88,7 +87,7 @@ Kỳ vọng:
 - Email **có trong sheet, còn hạn** → `allowed = True`, kèm `expiry`.
 - Email **hết hạn** (đổi expiry về quá khứ) → `allowed = False`.
 - Email **không có** → `allowed = False`, `error = not_found`.
-- Sai secret → `allowed = False`, `error = unauthorized`.
+- Sai secret → `allowed = False`, `error = unauthorized_v2`.
 
 Nếu 4 trường hợp đúng → **Phase 0 xong**.
 
@@ -100,7 +99,7 @@ Nếu 4 trường hợp đúng → **Phase 0 xong**.
 |-----|---------|--------|
 | `ClientId` | `....apps.googleusercontent.com` | Phần A bước 4 |
 | `AppsScriptUrl` | `https://script.google.com/macros/s/..../exec` | Phần C bước 6 |
-| `SharedSecret` | chuỗi ngẫu nhiên bạn đặt | Phần C bước 3 |
+| `SharedSecret` | Script Property `REVITAPP_LICENSE_SHARED_SECRET` | Phần C bước 3 |
 
 ## Vận hành sau này (cấp / thu / gia hạn quyền)
 
