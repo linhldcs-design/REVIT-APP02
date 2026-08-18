@@ -1,5 +1,22 @@
 # HANDOFF REVITAPP
 
+## Phát hành v1.14.0
+
+- `v1.14.0`: bổ sung REVIEW 3D tương tác cho Vẽ Móng Đơn. Hình bê tông lấy từ đúng móng được chọn; lưới đáy/trên/giữa, chân chó và đai ngang có màu riêng, cập nhật trực tiếp theo mọi tùy chọn. Móng tam giác và đa giác bất kỳ dùng đường thép được cắt/inset theo tiết diện thật; Preview và Create dùng chung đường tâm thanh, bảo đảm lớp bảo vệ gồm bán kính thanh. Bê tông hiển thị bán trong suốt để nhìn thấy thép bên trong.
+- An toàn cấp phép: OAuth desktop dùng PKCE và không nhúng client secret; shared secret lấy từ Script Properties và GitHub Actions secret, không còn ghi cứng trong source phát hành.
+- Gate local trước phát hành: 635/635 test đạt; build Release R22–R27 thành công. Không đóng hoặc tự mở Revit trong quy trình phát hành.
+
+### Vận hành License Apps Script
+
+- Web App đang dùng: `https://script.google.com/macros/s/AKfycbwNiaP9ZN5MJWBybhBFXz9okSkFwUIYq6diyML2fjK0wDEf-arFtI4ZyBg9vFjp5QtLpg/exec`.
+- Shared secret không được ghi vào source hoặc handoff. Giá trị hiện được lưu ở ba nơi: Apps Script Project Settings > Script Properties, GitHub Actions secret của `linhldcs-design/REVIT-APP02`, và biến môi trường Windows User `REVITAPP_LICENSE_SHARED_SECRET` trên máy phát hành.
+- Tên thuộc tính/secret ở cả ba nơi phải là `REVITAPP_LICENSE_SHARED_SECRET`.
+- Apps Script phải đọc bằng `PropertiesService.getScriptProperties().getProperty('REVITAPP_LICENSE_SHARED_SECRET')`; không khai báo chuỗi secret trực tiếp trong `Mã.gs`.
+- Khi cập nhật Apps Script: chọn **Triển khai > Quản lý hoạt động triển khai**, chọn đúng loại **Ứng dụng web** có URL kết thúc bằng `/exec`, bấm bút chì, chọn **Phiên bản mới**, rồi **Triển khai**. Không triển khai nhầm loại **Thư viện** (`/macros/library/...`) vì thao tác đó không cập nhật endpoint của ứng dụng.
+- Kiểm tra an toàn sau triển khai: POST một email giả cùng secret lấy từ biến môi trường. Kết quả `not_found` nghĩa là secret được chấp nhận và endpoint hoạt động; `unauthorized` nghĩa là secret/phiên bản Web App chưa khớp. Không in request body hoặc secret vào log.
+- Đồng bộ GitHub bằng cách pipe biến môi trường vào `gh secret set REVITAPP_LICENSE_SHARED_SECRET --repo linhldcs-design/REVIT-APP02`; sau đó chỉ kiểm tra tên secret bằng `gh secret list`, không đọc giá trị.
+- Nếu xoay secret: tạo ngẫu nhiên tối thiểu 32 byte, cập nhật Apps Script Property trước, triển khai Web App mới, kiểm tra endpoint đạt, rồi cập nhật GitHub secret và biến môi trường local. Không chụp màn hình ô giá trị.
+
 ## Câu lệnh bắt đầu cho AI mới
 
 > Đọc toàn bộ `HANDOFF-REVITAPP.md`, kiểm tra trạng thái Git và tiếp tục công việc hiện tại. Không đóng hoặc mở Revit nếu người dùng chưa cho phép.
@@ -10,7 +27,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đã phát hành: `v1.13.1`
+- Release mới nhất đang phát hành: `v1.14.0`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`
