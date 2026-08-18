@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <PropertyGroup Condition="'$(RevitAppEmbedLicenseSecret)' == 'true'">
+        <DefineConstants>$(DefineConstants);REVITAPP_EMBED_LICENSE_SECRET</DefineConstants>
+    </PropertyGroup>
+
     <PropertyGroup>
         <!-- Multi-target: R23/R24 (Revit .NET Framework 4.8) + R25–R27 (Revit .NET 8). -->
         <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>

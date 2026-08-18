@@ -12,17 +12,29 @@
 /artifacts/
 /_build/
 /exports/
-/install/
-/install-online/
-/install-rebar/
-/install-sheetalign/
-/source/
+#Build and installer source is versioned; only generated output is ignored.
+/build/bin/
+/build/obj/
+/build/chrome-profile/
+/build/edge-hello/
+/build/edge-icons/
+/build/ilspycmd/
+/build/installer-selfupdate-verify/
+/build/release-*-verify/
+/install/bin/
+/install/obj/
+/install-rebar/bin/
+/install-rebar/obj/
+/install-sheetalign/bin/
+/install-sheetalign/obj/
+/source/**/bin/
+/source/**/obj/
+/tmp/
+/tools/mcp-deploy/
 
 #Local agent, package and IDE state
 /.agents/
 /.antigravitycli/
-/.claude/
-/.codex/
 /.dotnet/
 /.nuget-local/
 /.nuke/
@@ -35,6 +47,32 @@
 /rebar-check.txt
 /temp_*
 *.log
+*.bak
+*.dwl
+*.dwl2
+*.db
+*.db-wal
+*.db-shm
+
+#Secrets (commit example/template files only)
+.env
+.env.*
+!.env.example
+!*.env.example
+**/credentials.json
+**/secrets.json
+/tools/license-appsscript/Code.gs
+/RevitAPP.Licensing/ReleaseLicenseSecrets.g.cs
+
+#Reusable AI skills/config are versioned; runtime artifacts stay local.
+/.codex/hooks/.logs/
+/.claude/hooks/.logs/
+/.codex/video_frames/
+/.codex/**/scripts/.coverage
+/.claude/**/scripts/.coverage
+/.codex/skills/skill-creator/scripts/debug.zip
+/.claude/skills/skill-creator/scripts/debug.zip
+/.claude/projects/
 
 #User-specific files
 *.user

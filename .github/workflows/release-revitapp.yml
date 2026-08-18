@@ -11,6 +11,8 @@ jobs:
   build:
     needs: installer
     runs-on: windows-latest
+    env:
+      REVITAPP_LICENSE_SHARED_SECRET: ${{ secrets.REVITAPP_LICENSE_SHARED_SECRET }}
     strategy:
       matrix:
         revit: [22, 23, 24, 25, 26, 27]
@@ -30,8 +32,22 @@ jobs:
         run: |
           $v = '${{ github.ref_name }}'.TrimStart('v')
           "VERSION=$v" >> $env:GITHUB_ENV
+      - name: Generate release license secret
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:REVITAPP_LICENSE_SHARED_SECRET)) {
+            throw 'Repository secret REVITAPP_LICENSE_SHARED_SECRET is required.'
+          }
+          $literal = ConvertTo-Json $env:REVITAPP_LICENSE_SHARED_SECRET -Compress
+          @"
+          namespace RevitAPP.Licensing;
+          internal static class ReleaseLicenseSecrets
+          {
+              internal const string SharedSecret = $literal;
+          }
+          "@ | Set-Content 'RevitAPP.Licensing/ReleaseLicenseSecrets.g.cs' -Encoding utf8
       - name: Build RevitAPP
-        run: dotnet build RevitAPP/RevitAPP.csproj -c Release.R${{ matrix.revit }} -p:Version=${{ env.VERSION }} -p:DeployAddin=false -p:LaunchRevit=false
+        run: dotnet build RevitAPP/RevitAPP.csproj -c Release.R${{ matrix.revit }} -p:Version=${{ env.VERSION }} -p:RevitAppEmbedLicenseSecret=true -p:DeployAddin=false -p:LaunchRevit=false
       - name: Build updater self-contained
         run: dotnet publish RevitAPP.Updater/RevitAPP.Updater.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o updater
       - name: Package

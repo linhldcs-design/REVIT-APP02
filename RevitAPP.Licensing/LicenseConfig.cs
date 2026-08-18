@@ -1,9 +1,8 @@
 namespace RevitAPP.Licensing;
 
 /// <summary>
-/// Cau hinh license. Cac gia tri ClientId/AppsScriptUrl/SharedSecret duoc deploy tren Google
-/// (xem docs/license-google-setup.md). Client secret cua Desktop app KHONG phai bi mat that su
-/// (Google coi la public) nen chap nhan nhung trong DLL.
+/// Cau hinh license. Cac gia tri cong khai duoc khai bao trong source; credentials
+/// phai duoc cung cap bang bien moi truong (xem docs/license-google-setup.md).
 /// </summary>
 public static class LicenseConfig
 {
@@ -11,16 +10,17 @@ public static class LicenseConfig
     public const string ClientId =
         "1057703492407-9854f0gv80pu5pni13jbe4l2osdn3b2u.apps.googleusercontent.com";
 
-    /// <summary>Client secret cua Desktop app. Google coi la public cho desktop flow.</summary>
-    public const string ClientSecret =
-        "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";
-
     /// <summary>URL Apps Script web app verify email (POST { email, secret }).</summary>
     public const string AppsScriptUrl =
         "https://script.google.com/macros/s/AKfycbwNiaP9ZN5MJWBybhBFXz9okSkFwUIYq6diyML2fjK0wDEf-arFtI4ZyBg9vFjp5QtLpg/exec";
 
-    /// <summary>Shared secret goi kem khi verify (chan spam, khong phai bao mat tuyet doi).</summary>
-    public const string SharedSecret = "rvtapp_9xK2mP7qL4wZ8nT3";
+    /// <summary>Shared secret sent with license verification requests.</summary>
+    public static string SharedSecret =>
+#if REVITAPP_EMBED_LICENSE_SECRET
+        ReleaseLicenseSecrets.SharedSecret;
+#else
+        GetRequiredEnvironmentVariable("REVITAPP_LICENSE_SHARED_SECRET");
+#endif
 
     /// <summary>So ngay cache verify con hieu luc khi offline. Qua han + offline = chan.</summary>
     public const int CacheGraceDays = 7;
@@ -38,4 +38,17 @@ public static class LicenseConfig
             "RevitAPP");
 
     public static string CacheFile => System.IO.Path.Combine(DataDir, "license.json");
+
+    private static string GetRequiredEnvironmentVariable(string name)
+    {
+        var value = System.Environment.GetEnvironmentVariable(name);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        throw new System.InvalidOperationException(
+            $"Missing required environment variable '{name}'. " +
+            "See docs/license-google-setup.md for configuration instructions.");
+    }
 }
