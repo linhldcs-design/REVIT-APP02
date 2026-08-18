@@ -11,6 +11,7 @@
 - `ReadOrCreateSessionSnapshot()` phải migrate nguyên tử cache legacy chưa có `sessionId`; cache JSON hỏng/không tồn tại được thay bằng tombstone hợp lệ trước khi gọi mạng. Không quay lại mô hình xóa file khi SignOut vì cặp `(absent → absent)` không thể nhận biết generation đã đổi.
 - Test hồi quy nằm trong `tests/RevitAPP.Licensing.Tests/LicenseServiceTests.cs`: thu hồi khi cache mới, offline fail closed, gia hạn cache hết hạn, cache-write failure, concurrent writes, hai race SignOut, first sign-in, cache JSON hỏng và hai verify đồng thời trên cache legacy. Trước fix ba test cốt lõi thất bại; sau redesign bộ License đạt 17/17.
 - Gate trước phát hành: `RevitAPP.Licensing.Tests` 17/17 và `RevitAPP.Tests` 582/582 đạt (tổng 599/599); build Release R22–R27 thành công với `DeployAddin=false`, `LaunchRevit=false`. Không đóng/mở Revit trong quy trình phát hành.
+- GitHub Actions run `32114497357` phát hành thành công: đủ 8 asset, `latest.json` trả HTTP 200 với version `1.14.1`; SHA-256 gói R25 khớp manifest và SHA-256 installer nhúng trong gói R25 khớp installer độc lập.
 
 ## Phát hành v1.14.0
 
