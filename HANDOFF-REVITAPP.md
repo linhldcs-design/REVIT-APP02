@@ -1,5 +1,17 @@
 # HANDOFF REVITAPP
 
+## Phát hành v1.14.1
+
+- License đã chuyển sang **server-authoritative**: mọi lần chạy lệnh được bảo vệ đều gọi Apps Script; cache `%AppData%\RevitAPP\license.json` chỉ nhớ email/trạng thái và không cấp quyền. Đổi hạn, thu hồi hoặc gia hạn trên Google Sheet có hiệu lực ở lần bấm lệnh kế tiếp mà khách không cần đăng xuất.
+- Mất mạng/timeout phải **fail closed** để không thể dùng license đã bị thu hồi. Đây là đánh đổi bắt buộc của yêu cầu cập nhật tức thì.
+- Không được khôi phục `CacheGraceDays=7` hoặc nhánh `Allowed && IsWithinGrace(...)`. `CacheGraceDays=0` chỉ còn để giữ tương thích chữ ký constructor cũ.
+- Không kiểm tra ngày hết hạn cũ trong cache trước server: server phải được phép gia hạn một cache đã hết hạn mà không bắt khách đăng nhập lại.
+- Ghi cache dùng named mutex liên tiến trình + file tạm GUID + `File.Replace`; lỗi ghi cache là best-effort và không được chặn lệnh nếu server vừa trả `allowed=true`.
+- Cache luôn có `sessionId/generation`, kể cả trạng thái đã đăng xuất (tombstone có `email=null`). Kết quả verify/sign-in chỉ được ghi nếu generation ban đầu vẫn khớp dưới cùng mutex với `Clear`. Vì vậy đăng xuất khi request đang chờ luôn thắng, response cũ không thể ghi đè lần đăng nhập mới cùng email, và first sign-in cũng không thể hồi sinh sau SignOut.
+- `ReadOrCreateSessionSnapshot()` phải migrate nguyên tử cache legacy chưa có `sessionId`; cache JSON hỏng/không tồn tại được thay bằng tombstone hợp lệ trước khi gọi mạng. Không quay lại mô hình xóa file khi SignOut vì cặp `(absent → absent)` không thể nhận biết generation đã đổi.
+- Test hồi quy nằm trong `tests/RevitAPP.Licensing.Tests/LicenseServiceTests.cs`: thu hồi khi cache mới, offline fail closed, gia hạn cache hết hạn, cache-write failure, concurrent writes, hai race SignOut, first sign-in, cache JSON hỏng và hai verify đồng thời trên cache legacy. Trước fix ba test cốt lõi thất bại; sau redesign bộ License đạt 17/17.
+- Gate trước phát hành: `RevitAPP.Licensing.Tests` 17/17 và `RevitAPP.Tests` 582/582 đạt (tổng 599/599); build Release R22–R27 thành công với `DeployAddin=false`, `LaunchRevit=false`. Không đóng/mở Revit trong quy trình phát hành.
+
 ## Phát hành v1.14.0
 
 - `v1.14.0`: bổ sung REVIEW 3D tương tác cho Vẽ Móng Đơn. Hình bê tông lấy từ đúng móng được chọn; lưới đáy/trên/giữa, chân chó và đai ngang có màu riêng, cập nhật trực tiếp theo mọi tùy chọn. Móng tam giác và đa giác bất kỳ dùng đường thép được cắt/inset theo tiết diện thật; Preview và Create dùng chung đường tâm thanh, bảo đảm lớp bảo vệ gồm bán kính thanh. Bê tông hiển thị bán trong suốt để nhìn thấy thép bên trong.
@@ -28,7 +40,7 @@
 - Repository: `https://github.com/linhldcs-design/REVIT-APP02`
 - Nhánh phát hành: `main`
 - Repository đang Public để Installer tải Release không cần đăng nhập GitHub.
-- Release mới nhất đang phát hành: `v1.14.0`
+- Release mới nhất đang phát hành: `v1.14.1`
 - Workflow: `.github/workflows/release-revitapp.yml`
 - Installer trên Desktop: `C:\Users\Admin\Desktop\RevitAPP-Installer\RevitAPP.Installer.exe`
 - Installer đã cài: `%LocalAppData%\Programs\RevitAPP Installer\RevitAPP.Installer.exe`

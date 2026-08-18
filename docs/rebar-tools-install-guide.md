@@ -74,7 +74,7 @@ Danh sách khách hàng nằm trong **Google Sheet** (`RevitAPP Licenses`, tab `
 - **Cấp quyền mới**: thêm 1 dòng (email + ngày hết hạn). Cột `expiry` gõ dạng `'2026-12-31` (có dấu nháy đơn ở đầu để lưu là chữ, tránh lỗi ngày).
 - **Gia hạn**: sửa cột `expiry`.
 - **Thu hồi**: đổi `expiry` về quá khứ hoặc xóa dòng.
-- Hiệu lực: khách re-verify sau tối đa **7 ngày** (cache offline), hoặc ngay khi họ đăng nhập lại / đăng xuất rồi đăng nhập.
+- Hiệu lực: áp dụng ở **lần chạy lệnh được bảo vệ kế tiếp**, không cần khách đăng xuất hoặc đăng nhập lại. Client luôn hỏi server; cache chỉ nhớ email/trạng thái và không cấp quyền sử dụng.
 
 Chi tiết setup Google (Client ID, Sheet, Apps Script): xem [license-google-setup.md](license-google-setup.md).
 
@@ -89,4 +89,4 @@ Chi tiết setup Google (Client ID, Sheet, Apps Script): xem [license-google-set
 | Tool báo lỗi License dù đã đăng nhập | Mở ribbon License xem trạng thái; nếu hết hạn → liên hệ gia hạn |
 | Đăng nhập Google không mở browser | Kiểm tra máy có trình duyệt mặc định; thử lại |
 | Tool "Method not found" | Khởi động lại Revit để nạp DLL mới |
-| Không có mạng | Vẫn dùng được nếu còn trong 7 ngày kể từ lần verify cuối |
+| Không có mạng | Lệnh được bảo vệ bị chặn vì hệ thống fail closed; cần có mạng để xác minh license |

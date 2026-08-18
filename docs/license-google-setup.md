@@ -104,6 +104,6 @@ Nếu 4 trường hợp đúng → **Phase 0 xong**.
 
 ## Vận hành sau này (cấp / thu / gia hạn quyền)
 
-- **Cấp quyền cho khách mới**: thêm 1 dòng vào Sheet (email + ngày hết hạn). Có hiệu lực ngay (client re-verify sau tối đa 7 ngày, hoặc khi khách đăng nhập lại).
-- **Gia hạn**: sửa cột `expiry`.
-- **Thu hồi**: đổi `expiry` về ngày quá khứ, hoặc xóa dòng. (Khách vẫn dùng được tối đa 7 ngày còn cache — nếu cần chặn ngay, giảm `CacheGraceDays` ở Phase 1.)
+- **Cấp quyền cho khách mới**: thêm 1 dòng vào Sheet (email + ngày hết hạn), sau đó khách đăng nhập lần đầu.
+- **Gia hạn**: sửa cột `expiry`; có hiệu lực ở lần chạy lệnh được bảo vệ kế tiếp, không cần đăng xuất.
+- **Thu hồi**: đổi `expiry` về ngày quá khứ hoặc xóa dòng; có hiệu lực ở lần chạy lệnh được bảo vệ kế tiếp. Client luôn verify online và fail closed khi mất mạng; cache không cấp quyền offline.

@@ -73,6 +73,16 @@
 - Thêm giới hạn số máy/tài khoản (chống chia sẻ): `MachineId.cs` sinh ID ổn định (SHA-256 từ Windows MachineGuid + tên máy), gửi kèm khi verify. Sheet Licenses thêm cột `maxDevices`; tab `Devices` (email | machineId | firstSeen | lastSeen) do Apps Script ghi. Vượt số máy → error `device_limit`. Apps Script dùng LockService chống race; tab Devices phải tạo sẵn.
 - Đóng gói lại: `RevitAPP-RebarTools-1.0.2.msi`.
 
+## 2026-08-18
+
+### License server-authoritative
+
+- Bỏ quyền sử dụng từ cache offline 7 ngày. Ribbon, Chat AI, MCP, Installer và các add-in thép dùng chung `LicenseService` nay xác minh Apps Script ở mỗi lần kiểm tra; thay đổi `expiry`/thu hồi/gia hạn trên Sheet có hiệu lực ở lần chạy lệnh được bảo vệ kế tiếp mà không cần đăng xuất.
+- Khi mất mạng hoặc timeout, lệnh được bảo vệ fail closed. Cache chỉ nhớ email và trạng thái gần nhất để hiển thị, không tự cấp quyền.
+- Ghi cache dùng named mutex liên tiến trình, file tạm riêng và atomic replace để Revit/MCP không đè nhau; lỗi lưu cache không biến kết quả server hợp lệ thành false-deny.
+- Mỗi trạng thái cache có `sessionId/generation`; SignOut ghi tombstone mới thay vì xóa file. Cache legacy/corrupt được migrate nguyên tử, nên request cũ không thể hồi sinh phiên đã đăng xuất hoặc ghi đè lần đăng nhập mới.
+- Bổ sung test hồi quy cho thu hồi khi vẫn đăng nhập, offline với cache mới, gia hạn khi cache cũ hết hạn, lỗi ghi cache, ghi đồng thời, race SignOut/SignIn, cache hỏng và migration cache legacy đồng thời.
+
 ## 2026-07-09
 
 ### License Google OAuth + Bộ cài MSI 4 công cụ vẽ thép
