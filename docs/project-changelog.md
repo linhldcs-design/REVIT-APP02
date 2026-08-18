@@ -1,5 +1,11 @@
 # Project Changelog
 
+## 2026-08-18 — License release secret hotfix v1.14.2
+
+- Chặn BOM, khoảng trắng và secret sai định dạng ngay trong GitHub Actions; xác minh lại secret nhúng trong DLL sau build mà không ghi giá trị ra log.
+- Nhúng secret cho cả Add-in và Installer; đường kiểm tra/cài cập nhật không còn phụ thuộc license để một bản lỗi hoặc hết hạn vẫn có thể tự sửa.
+- Apps Script chấp nhận đúng một BOM đầu chuỗi để cứu các bản v1.14.0/v1.14.1 đã phát hành; callback OAuth không còn báo đăng nhập hoàn tất trước khi server xác minh license.
+
 ## 2026-08-05
 
 ### RevitAPP v1.8.0 — Model From CAD: Grid và Structural Column
