@@ -7,6 +7,7 @@ using FootingRebarStartupCommand = IsolatedFootingRebar.Commands.StartupCommand;
 using WallRebarStartupCommand = WallRebar.Commands.StartupCommand;
 using RevitAPP.Services.PointCloud;
 using RevitAPP.Services.Updates;
+using RevitAPP.Licensing;
 using Serilog;
 using Serilog.Events;
 
@@ -21,6 +22,7 @@ namespace RevitAPP
         public override void OnStartup()
         {
             CreateLogger();
+            LicenseService.StartBackgroundRefresh();
             InstallerBootstrapService.EnsureBundledInstallerInstalled();
             BeamRebarPro.Host.Start();
             IsolatedFootingRebar.Host.Start();
@@ -35,6 +37,7 @@ namespace RevitAPP
 
         public override void OnShutdown()
         {
+            LicenseService.StopBackgroundRefresh();
             ChatHost.Stop();
             Log.CloseAndFlush();
         }

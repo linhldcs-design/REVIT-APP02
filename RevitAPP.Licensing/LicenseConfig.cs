@@ -28,6 +28,15 @@ public static class LicenseConfig
     /// </summary>
     public const int CacheGraceDays = 0;
 
+    /// <summary>Chu ky verify nen. Command khong cho HTTP va chi doc snapshot cuc bo.</summary>
+    public static readonly TimeSpan BackgroundRefreshInterval = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Snapshot qua tuoi nay se bi chan ngay. Khoang du phong lon hon chu ky refresh de
+    /// khong false-deny vi mot lan scheduler cham, nhung van fail closed khi mat mang.
+    /// </summary>
+    public static readonly TimeSpan MaximumSnapshotAge = TimeSpan.FromMinutes(3);
+
     /// <summary>OAuth scope toi thieu de lay email da xac thuc.</summary>
     public const string OAuthScope = "openid email profile";
 
